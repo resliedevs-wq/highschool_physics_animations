@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Traveling Wave: Period, Wavelength and Phase</title>
+<style>
+  :root {
+    --bg: #f7f7f5;
+    --panel: #ffffff;
+    --ink: #1f2328;
+    --muted: #6b7280;
+    --grid: #e5e7eb;
+    --axis: #9ca3af;
+    --time: #f4a259;        /* time part 2π/T·t (and everything about T) */
+    --time-bg: #fde7cf;
+    --space: #8b9099;       /* space part 2π/λ·x (and everything about λ) */
+    --space-bg: #e9eaec;
+    --focus: #dc2626;       /* focus point and its displacement */
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+  }
+  main { max-width: 1000px; margin: 0 auto; padding: 20px; }
+  .card {
+    background: var(--panel);
+    border-radius: 10px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.08);
+    padding: 14px 18px;
+    margin-bottom: 14px;
+  }
+  /* highlighted parts of the phase */
+  .time, .space { display: inline-block; vertical-align: middle; line-height: 1.3; border-radius: 5px; padding: 3px 6px; }
+  .time { background: var(--time-bg); }
+  .space { background: var(--space-bg); }
+  .F { color: var(--focus); font-weight: 600; }
+  /* inline stacked fraction */
+  .frac {
+    display: inline-flex; flex-direction: column;
+    vertical-align: middle; text-align: center;
+    font-size: .85em; line-height: 1.15; margin: 0 2px;
+  }
+  .frac > span { padding: 0 3px; }
+  .frac > span:first-child { border-bottom: 1.5px solid currentColor; }
+  .intro h1 { font-size: 1.25rem; margin: 0 0 8px; }
+  .intro .formula {
+    font-family: "Cambria Math", "Times New Roman", serif;
+    font-size: 1.6rem;
+    text-align: center;
+    margin: 6px 0 12px;
+  }
+  .intro dl {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 4px 14px;
+    margin: 0;
+  }
+  .intro dt { font-family: "Cambria Math", "Times New Roman", serif; font-size: 1.1rem; text-align: center; }
+  .intro dd { margin: 0; }
+  canvas { display: block; width: 100%; }
+  #plot-yx { height: 300px; cursor: crosshair; touch-action: none; }
+  #plot-yt { height: 220px; }
+  #plot-particles { height: 110px; cursor: crosshair; touch-action: none; }
+  [hidden] { display: none !important; }
+  .controls {
+    display: grid;
+    grid-template-columns: auto 1fr 1fr auto;
+    gap: 18px 28px;
+    align-items: center;
+  }
+  .slider label { display: flex; justify-content: space-between; margin-bottom: 4px; font-variant-numeric: tabular-nums; }
+  .slider input { width: 100%; }
+  #T-slider { accent-color: var(--time); }
+  #L-slider { accent-color: var(--space); }
+  .buttons { display: flex; gap: 8px; align-items: center; }
+  button {
+    font: inherit;
+    width: 2.4em; height: 2.4em;
+    border-radius: 6px;
+    border: 1px solid #d1d5db;
+    background: #fff;
+    cursor: pointer;
+  }
+  button:hover { background: #f3f4f6; }
+  /* transverse / longitudinal switch */
+  .switch { display: inline-flex; border: 1px solid #d1d5db; border-radius: 6px; overflow: hidden; }
+  .switch button { width: auto; height: 2.4em; padding: 0 12px; border: 0; border-radius: 0; }
+  .switch button + button { border-left: 1px solid #d1d5db; }
+  .switch button[aria-pressed="true"] { background: var(--ink); color: #fff; }
+  .clock { font-variant-numeric: tabular-nums; min-width: 6.5em; text-align: right; }
+  /* derivation: y = … / = … / = … with the equals signs aligned */
+  .derivation {
+    display: grid;
+    grid-template-columns: auto auto 1fr;
+    column-gap: .4em;
+    align-items: center;
+    font-family: "Cambria Math", "Times New Roman", serif;
+    font-size: 1.35rem;
+    line-height: 2.4;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    overflow-x: auto;
+  }
+  @media (max-width: 700px) {
+    .controls { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <section class="card intro">
+    <h1>Traveling wave</h1>
+    <div class="formula">
+      y = A · sin( <span class="time"><span class="frac"><span>2π</span><span>T</span></span> · t</span> − <span class="space"><span class="frac"><span>2π</span><span>λ</span></span> · x</span> )
+    </div>
+    <dl>
+      <dt>A</dt><dd>amplitude, set to 1 m here</dd>
+      <dt>T</dt><dd>period</dd>
+      <dt>λ</dt><dd>wavelength</dd>
+      <dt><span class="time">&nbsp;&nbsp;</span></dt><dd>time part of the phase: grows by 2π rad every period T</dd>
+      <dt><span class="space">&nbsp;&nbsp;</span></dt><dd>space part of the phase: grows by 2π rad every wavelength λ</dd>
+    </dl>
+  </section>
+
+  <div class="card">
+    <canvas id="plot-particles" hidden></canvas>
+    <canvas id="plot-yx"></canvas>
+    <canvas id="plot-yt"></canvas>
+  </div>
+
+  <div class="card controls">
+    <div class="switch" role="group">
+      <button id="mode-transverse" aria-pressed="true">Transverse</button>
+      <button id="mode-longitudinal" aria-pressed="false">Longitudinal</button>
+    </div>
+    <div class="slider">
+      <label for="T-slider"><span>T</span><span><span id="T-value"></span> s</span></label>
+      <input type="range" id="T-slider" min="0.5" max="6" step="0.1" value="2">
+    </div>
+    <div class="slider">
+      <label for="L-slider"><span>λ</span><span><span id="L-value"></span> m</span></label>
+      <input type="range" id="L-slider" min="1" max="8" step="0.1" value="4">
+    </div>
+    <div class="buttons">
+      <button id="pause-btn" title="Play / pause (Space)">▶</button>
+      <button id="reset-btn" title="Reset t">↺</button>
+      <span class="clock">t = <span id="t-value">0.00</span> s</span>
+    </div>
+  </div>
+
+  <div class="card derivation" id="derivation"></div>
+</main>
+
+<script>
+(() => {
+  // ---- Fixed parameters ----
+  const A = 1;               // amplitude in m
+  const X_MAX = 8;           // y–x graph shows x in [0, X_MAX] m
+  const T_WINDOW = 10;       // y–t graph shows a window this many seconds wide
+  const T_NOW_AT = 0.7;      // once running, "now" stays at this fraction of the window
+  const Y_RANGE = 1.5;       // both graphs show y in [-Y_RANGE, Y_RANGE] m
+  const PARTICLES = 1400;    // air particles in the longitudinal view
+  const S_MAX = 0.12;        // drawn particle displacement at y = A, in m along x (below λ/2π, so particles never cross)
+  const MARGIN = { left: 64, right: 24, top: 12, bottom: 44 };
+
+  // ---- State ----
+  let T = 2;                 // period in s
+  let lambda = 4;            // wavelength in m
+  let t = 0;                 // simulation time in s
+  let focusX = 1;            // x of the focus point in m
+  let running = false;
+  let longitudinal = false;
+  let lastFrame = null;
+
+  // ---- Elements ----
+  const $ = id => document.getElementById(id);
+  const tSlider = $('T-slider'), lSlider = $('L-slider');
+  const pauseBtn = $('pause-btn'), resetBtn = $('reset-btn');
+  const derivation = $('derivation');
+
+  const css = getComputedStyle(document.documentElement);
+  const color = name => css.getPropertyValue(name).trim();
+  const COLORS = {
+    ink: color('--ink'), grid: color('--grid'), axis: color('--axis'), muted: color('--muted'),
+    time: color('--time'), space: color('--space'), focus: color('--focus'),
+  };
+
+  // ---- Physics ----
+  const phase = (x, time) => 2 * Math.PI / T * time - 2 * Math.PI / lambda * x;
+  // the wave starts at x = 0 when t = 0 and spreads at v = λ/T; ahead of the front everything is still
+  const arrived = (x, time) => x <= lambda / T * time;
+  const y = (x, time) => (arrived(x, time) ? A * Math.sin(phase(x, time)) : 0);
+
+  // ---- A graph: canvas + coordinate mapping ----
+  function makeGraph(canvas) {
+    const g = { canvas, ctx: canvas.getContext('2d'), width: 0, height: 0, uMin: 0, uMax: 1 };
+    g.resize = () => {
+      const dpr = window.devicePixelRatio || 1;
+      const rect = canvas.getBoundingClientRect();
+      g.width = rect.width;
+      g.height = rect.height;
+      canvas.width = Math.round(g.width * dpr);
+      canvas.height = Math.round(g.height * dpr);
+      g.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    };
+    g.w = () => g.width - MARGIN.left - MARGIN.right;
+    g.h = () => g.height - MARGIN.top - MARGIN.bottom;
+    g.px = u => MARGIN.left + (u - g.uMin) / (g.uMax - g.uMin) * g.w();
+    g.py = v => MARGIN.top + (Y_RANGE - v) / (2 * Y_RANGE) * g.h();
+    g.u = px => g.uMin + (px - MARGIN.left) / g.w() * (g.uMax - g.uMin);
+    return g;
+  }
+  const yx = makeGraph($('plot-yx'));
+  const yt = makeGraph($('plot-yt'));
+  const pv = makeGraph($('plot-particles'));
+  pv.uMin = 0; pv.uMax = X_MAX;
+
+  // Fixed random rest positions so the air looks the same every frame
+  let seed = 7;
+  const rand = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const particles = Array.from({ length: PARTICLES }, () => ({
+    x0: -S_MAX + rand() * (X_MAX + 2 * S_MAX),
+    v: rand(),                 // vertical position as a fraction of the strip height
+  }));
+  yx.uMin = 0; yx.uMax = X_MAX;
+
+  // ---- Drawing helpers ----
+  function drawAxes(g, xLabel) {
+    const { ctx } = g;
+    ctx.lineWidth = 1;
+    ctx.font = '13px system-ui, sans-serif';
+    ctx.fillStyle = COLORS.muted;
+
+    // vertical grid lines at every whole unit
+    ctx.strokeStyle = COLORS.grid;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    for (let u = Math.ceil(g.uMin); u <= g.uMax + 1e-9; u++) {
+      const px = g.px(u);
+      ctx.beginPath(); ctx.moveTo(px, MARGIN.top); ctx.lineTo(px, MARGIN.top + g.h()); ctx.stroke();
+      ctx.fillText(String(u), px, MARGIN.top + g.h() + 6);
+    }
+    ctx.fillText(xLabel, MARGIN.left + g.w() / 2, MARGIN.top + g.h() + 24);
+
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+    for (const v of [-1, -0.5, 0, 0.5, 1]) {
+      const py = g.py(v);
+      ctx.strokeStyle = v === 0 ? COLORS.axis : COLORS.grid;
+      ctx.beginPath(); ctx.moveTo(MARGIN.left, py); ctx.lineTo(MARGIN.left + g.w(), py); ctx.stroke();
+      ctx.fillText(v.toFixed(1), MARGIN.left - 8, py);
+    }
+    ctx.save();
+    ctx.translate(16, MARGIN.top + g.h() / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.textAlign = 'center';
+    ctx.fillText('y / m', 0, 0);
+    ctx.restore();
+  }
+
+  // Plot v = f(u) for u in [u1, u2]
+  function drawCurve(g, f, u1, u2, style) {
+    const { ctx } = g;
+    ctx.strokeStyle = style.color;
+    ctx.lineWidth = style.width;
+    ctx.setLineDash(style.dash || []);
+    ctx.beginPath();
+    const steps = Math.max(100, Math.round((g.px(u2) - g.px(u1)) / 2));
+    for (let i = 0; i <= steps; i++) {
+      const u = u1 + i / steps * (u2 - u1);
+      const px = g.px(u), py = g.py(f(u));
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  // Red marker at (u, v): dashed guide line, displacement bar, dot
+  function drawFocus(g, u, v) {
+    const { ctx } = g;
+    const px = g.px(u), py = g.py(v);
+    ctx.strokeStyle = COLORS.focus;
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath(); ctx.moveTo(px, MARGIN.top); ctx.lineTo(px, MARGIN.top + g.h()); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(px, g.py(0)); ctx.lineTo(px, py); ctx.stroke();
+    ctx.fillStyle = COLORS.focus;
+    ctx.beginPath(); ctx.arc(px, py, 7, 0, 2 * Math.PI); ctx.fill();
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }
+
+  // ---- y–x graph: the whole wave at time t ----
+  function drawYX() {
+    const g = yx, { ctx } = g;
+    ctx.clearRect(0, 0, g.width, g.height);
+    drawAxes(g, 'x / m');
+
+    drawCurve(g, x => y(x, t), 0, X_MAX, { color: COLORS.ink, width: 2.5 });
+
+    drawFocus(g, focusX, y(focusX, t));
+  }
+
+  // ---- Longitudinal view: each particle moves along x by its displacement ----
+  function drawParticles() {
+    const g = pv, { ctx } = g;
+    ctx.clearRect(0, 0, g.width, g.height);
+    const top = 8, h = g.height - 16;
+    const shift = x0 => y(x0, t) / A * S_MAX;
+
+    ctx.save();
+    ctx.beginPath(); ctx.rect(MARGIN.left, 0, g.w(), g.height); ctx.clip();
+    ctx.fillStyle = COLORS.ink;
+    ctx.globalAlpha = 0.55;
+    for (const p of particles) {
+      ctx.beginPath();
+      ctx.arc(g.px(p.x0 + shift(p.x0)), top + p.v * h, 1.8, 0, 2 * Math.PI);
+      ctx.fill();
+    }
+    ctx.restore();
+
+    // focus particle: dashed line at its rest position, dot at where it is now
+    const px0 = g.px(focusX), px = g.px(focusX + shift(focusX)), py = top + h / 2;
+    ctx.strokeStyle = COLORS.focus;
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath(); ctx.moveTo(px0, 0); ctx.lineTo(px0, g.height); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(px0, py); ctx.lineTo(px, py); ctx.stroke();
+    ctx.fillStyle = COLORS.focus;
+    ctx.beginPath(); ctx.arc(px, py, 6, 0, 2 * Math.PI); ctx.fill();
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }
+
+  // ---- y–t graph: the focus point over time ----
+  function drawYT() {
+    const g = yt, { ctx } = g;
+    g.uMin = Math.max(0, t - T_NOW_AT * T_WINDOW);
+    g.uMax = g.uMin + T_WINDOW;
+    ctx.clearRect(0, 0, g.width, g.height);
+    drawAxes(g, 't / s');
+
+    const f = time => y(focusX, time);
+    // past motion solid, what is still to come faint
+    drawCurve(g, f, g.uMin, t, { color: COLORS.ink, width: 2.5 });
+    drawCurve(g, f, t, g.uMax, { color: COLORS.axis, width: 1.5, dash: [5, 5] });
+
+    drawFocus(g, t, f(t));
+  }
+
+  // ---- Readout ----
+  const f2 = v => v.toFixed(2);
+  function updateReadout() {
+    const timeTerm = 2 * Math.PI / T * t;
+    const spaceTerm = 2 * Math.PI / lambda * focusX;
+    const ph = timeTerm - spaceTerm;
+    const yv = A * Math.sin(ph);
+    const Ts = T.toFixed(1), Ls = lambda.toFixed(1);
+
+    const frac = (num, den) => `<span class="frac"><span>${num}</span><span>${den}</span></span>`;
+    const amp = String(A);
+    const line = (lhs, rhs) => `<span>${lhs}</span><span>=</span><span>${rhs}</span>`;
+    if (!arrived(focusX, t)) {
+      derivation.innerHTML = line('y', '<span class="F">+0.000 m</span>');
+      $('t-value').textContent = f2(t);
+      return;
+    }
+    derivation.innerHTML =
+      line('y', `${amp} · sin( <span class="time">${frac('2π', Ts)} · ${f2(t)}</span> − <span class="space">${frac('2π', Ls)} · ${f2(focusX)}</span> )`) +
+      line('', `${amp} · sin( <span class="time">${f2(timeTerm)} rad</span> − <span class="space">${f2(spaceTerm)} rad</span> )`) +
+      line('', `${amp} · sin( ${f2(ph)} rad )`) +
+      line('', `<span class="F">${(yv >= 0 ? '+' : '−') + Math.abs(yv).toFixed(3)} m</span>`);
+    $('t-value').textContent = f2(t);
+  }
+
+  // ---- Animation loop (real time) ----
+  function frame(now) {
+    if (lastFrame !== null && running) {
+      t += Math.min((now - lastFrame) / 1000, 0.1);   // cap jumps if the tab was in the background
+    }
+    lastFrame = now;
+    if (longitudinal) drawParticles();
+    drawYX();
+    drawYT();
+    updateReadout();
+    requestAnimationFrame(frame);
+  }
+
+  // ---- Controls ----
+  function syncSliders() {
+    T = parseFloat(tSlider.value);
+    lambda = parseFloat(lSlider.value);
+    $('T-value').textContent = T.toFixed(1);
+    $('L-value').textContent = lambda.toFixed(1);
+  }
+  tSlider.addEventListener('input', syncSliders);
+  lSlider.addEventListener('input', syncSliders);
+
+  function togglePause() {
+    running = !running;
+    pauseBtn.textContent = running ? '⏸' : '▶';
+  }
+  pauseBtn.addEventListener('click', togglePause);
+  resetBtn.addEventListener('click', () => { t = 0; });
+
+  const clampX = x => Math.min(X_MAX, Math.max(0, x));
+  for (const g of [yx, pv]) {
+    const setFocus = e => {
+      const rect = g.canvas.getBoundingClientRect();
+      focusX = clampX(g.u(e.clientX - rect.left));
+    };
+    g.canvas.addEventListener('pointerdown', e => {
+      g.canvas.setPointerCapture(e.pointerId);
+      setFocus(e);
+    });
+    g.canvas.addEventListener('pointermove', e => {
+      if (g.canvas.hasPointerCapture(e.pointerId)) setFocus(e);
+    });
+  }
+
+  const modeT = $('mode-transverse'), modeL = $('mode-longitudinal');
+  function setMode(isLongitudinal) {
+    longitudinal = isLongitudinal;
+    modeT.setAttribute('aria-pressed', String(!longitudinal));
+    modeL.setAttribute('aria-pressed', String(longitudinal));
+    pv.canvas.hidden = !longitudinal;
+    resizeAll();
+  }
+  modeT.addEventListener('click', () => setMode(false));
+  modeL.addEventListener('click', () => setMode(true));
+
+  // Capture phase so the arrow keys always work, even while a slider has keyboard focus.
+  // ← → step x by λ/16, so each press changes the phase by π/8 rad.
+  window.addEventListener('keydown', e => {
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+      e.preventDefault();
+      const step = lambda / 16;
+      focusX = clampX(focusX + (e.key === 'ArrowRight' ? step : -step));
+    } else if (e.key === ' ' || e.code === 'Space') {
+      e.preventDefault();
+      togglePause();
+    }
+  }, true);
+
+  function resizeAll() { yx.resize(); yt.resize(); if (longitudinal) pv.resize(); }
+  window.addEventListener('resize', resizeAll);
+  resizeAll();
+  syncSliders();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

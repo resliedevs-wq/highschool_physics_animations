@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Standing Wave</title>
+<style>
+  :root {
+    --bg: #f7f7f5;
+    --panel: #ffffff;
+    --ink: #1f2328;
+    --muted: #6b7280;
+    --grid: #e5e7eb;
+    --axis: #9ca3af;
+    --time-bg: #fde7cf;     /* time part 2π/T·t */
+    --space-bg: #e9eaec;    /* space part 2π/λ·s */
+    --right: #2f6fb5;       /* waves travelling to the right */
+    --left: #8e4fb8;        /* waves travelling to the left */
+    --focus: #dc2626;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+  }
+  main { max-width: 1000px; margin: 0 auto; padding: 20px; }
+  .card {
+    background: var(--panel);
+    border-radius: 10px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.08);
+    padding: 14px 18px;
+    margin-bottom: 14px;
+  }
+  .time, .space { display: inline-block; vertical-align: middle; line-height: 1.3; border-radius: 5px; padding: 3px 6px; }
+  .time { background: var(--time-bg); }
+  .space { background: var(--space-bg); }
+  .F { color: var(--focus); font-weight: 600; }
+  .frac {
+    display: inline-flex; flex-direction: column;
+    vertical-align: middle; text-align: center;
+    font-size: .85em; line-height: 1.15; margin: 0 2px;
+  }
+  .frac > span { padding: 0 3px; }
+  .frac > span:first-child { border-bottom: 1.5px solid currentColor; }
+  .key { display: inline-block; width: 1.8em; vertical-align: middle; border-top: 3px solid; }
+  .key.right { border-color: var(--right); }
+  .key.left { border-color: var(--left); }
+  .key.virtual { border-top: 2px dashed var(--muted); }
+  .key.standing { border-top-width: 4px; border-color: var(--ink); }
+  .intro h1 { font-size: 1.25rem; margin: 0 0 8px; }
+  .intro .formulas {
+    display: grid;
+    grid-template-columns: auto auto auto auto;
+    column-gap: .4em;
+    align-items: center;
+    justify-content: center;
+    font-family: "Cambria Math", "Times New Roman", serif;
+    font-size: 1.4rem;
+    line-height: 2.3;
+    margin: 4px 0 10px;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+  .intro dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; margin: 0; }
+  .intro dt { font-family: "Cambria Math", "Times New Roman", serif; font-size: 1.1rem; text-align: center; }
+  .intro dd { margin: 0; }
+  .layers { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 6px; }
+  .layers button { display: inline-flex; align-items: center; gap: 8px; }
+  .layers button[aria-pressed="false"] { opacity: .35; }
+  .layers #q-btn { margin-left: auto; opacity: 1; color: var(--focus); font-weight: 600; }
+  .layers #q-btn[aria-pressed="true"] { background: var(--focus); color: #fff; border-color: var(--focus); }
+  canvas { display: block; width: 100%; }
+  #plot-yx { height: 320px; cursor: crosshair; touch-action: none; }
+  #plot-yt { height: 200px; }
+  #plot-yt.two { height: 340px; }
+  .controls {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 18px 28px;
+    align-items: center;
+  }
+  .slider label { display: flex; justify-content: space-between; margin-bottom: 4px; font-variant-numeric: tabular-nums; }
+  .slider input { width: 100%; accent-color: var(--ink); }
+  .buttons { display: flex; gap: 8px; align-items: center; }
+  button {
+    font: inherit;
+    height: 2.4em; min-width: 2.4em; padding: 0 10px;
+    border-radius: 6px;
+    border: 1px solid #d1d5db;
+    background: #fff;
+    cursor: pointer;
+  }
+  button:hover { background: #f3f4f6; }
+  .switch { display: inline-flex; border: 1px solid #d1d5db; border-radius: 6px; overflow: hidden; }
+  .switch button { border: 0; border-radius: 0; }
+  .switch button + button { border-left: 1px solid #d1d5db; }
+  .switch button[aria-pressed="true"] { background: var(--ink); color: #fff; }
+  .clock { font-variant-numeric: tabular-nums; min-width: 9em; text-align: right; }
+  .speed { color: var(--muted); }
+  .derivation {
+    display: grid;
+    grid-template-columns: auto auto 1fr;
+    column-gap: .4em;
+    align-items: center;
+    font-family: "Cambria Math", "Times New Roman", serif;
+    font-size: 1.3rem;
+    line-height: 2.4;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    overflow-x: auto;
+  }
+  .derivation .gap { grid-column: 1 / -1; height: .4em; }
+  @media (max-width: 760px) {
+    .controls { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <section class="card intro">
+    <h1>Standing wave</h1>
+    <div class="formulas" id="intro-formulas"></div>
+    <dl>
+      <dt>A</dt><dd>amplitude, set to 1 m here</dd>
+      <dt>T</dt><dd>period</dd>
+      <dt>λ</dt><dd>wavelength</dd>
+      <dt>L</dt><dd>length, set to 8 m here</dd>
+      <dt>v</dt><dd>wave speed, set to 4 m/s here</dd>
+      <dt><span class="key virtual"></span></dt><dd>virtual wave: where the wave would go without the end</dd>
+    </dl>
+  </section>
+
+  <div class="card">
+    <div class="layers">
+      <button data-layer="right" aria-pressed="true"><span class="key right"></span>y<sub>1</sub></button>
+      <button data-layer="left" aria-pressed="true"><span class="key left"></span>y<sub>2</sub></button>
+      <button data-layer="virtual" aria-pressed="true"><span class="key virtual"></span>virtual</button>
+      <button data-layer="standing" aria-pressed="true"><span class="key standing"></span>y</button>
+      <button id="q-btn" aria-pressed="false" title="Second point">+ Q</button>
+    </div>
+    <canvas id="plot-yx"></canvas>
+    <canvas id="plot-yt"></canvas>
+  </div>
+
+  <div class="card controls">
+    <div class="switch" role="group">
+      <button id="mode-ff" aria-pressed="true">Fixed – fixed</button>
+      <button id="mode-fo" aria-pressed="false">Fixed – open</button>
+    </div>
+    <div class="slider">
+      <label for="n-slider"><span>n</span><span id="n-value"></span></label>
+      <input type="range" id="n-slider" min="1" max="6" step="1" value="2">
+    </div>
+    <div class="buttons">
+      <button id="pause-btn" title="Play / pause (Space)">▶</button>
+      <button id="reset-btn" title="Reset t">↺</button>
+      <span class="clock">t = <span id="t-value">0.00</span> s <span class="speed" id="speed"></span></span>
+    </div>
+  </div>
+
+  <div class="card derivation" id="derivation"></div>
+</main>
+
+<script>
+(() => {
+  // ---- Fixed parameters ----
+  const A = 1;               // amplitude of each travelling wave in m
+  const L = 8;               // length between the ends in m (left end at x = 0, right end at x = L)
+  const V = 4;               // wave speed in m/s
+  const DRIVER_A = 0.08;     // the vibrator at the left end only moves a little
+  const EXT = 3;             // the graph shows this much beyond each end, for the virtual waves
+  const Y_RANGE = 2.5;
+  const PANEL_GAP = 18;      // gap between the two stacked y–t graphs
+  const T_WINDOW = 10, T_NOW_AT = 0.7;
+  const MARGIN = { left: 64, right: 24, top: 12, bottom: 44 };
+
+  // ---- State ----
+  let rightOpen = false;     // false: fixed – fixed, true: fixed – open
+  let n = 2, t = 0;
+  const points = [{ name: 'P', x: 2 }, { name: 'Q', x: 6 }];   // two focus points
+  let showQ = false;
+  let active = 0;            // the point the arrow keys move
+  let running = false, lastFrame = null;
+  const layers = { right: true, left: true, virtual: true, standing: true };
+
+  const $ = id => document.getElementById(id);
+  const css = getComputedStyle(document.documentElement);
+  const color = name => css.getPropertyValue(name).trim();
+  const COLORS = {
+    ink: color('--ink'), grid: color('--grid'), axis: color('--axis'), muted: color('--muted'),
+    right: color('--right'), left: color('--left'), focus: color('--focus'),
+  };
+
+  // ---- Physics ----
+  // fixed – fixed: L = n·λ/2      fixed – open: L = (2n − 1)·λ/4
+  const lambdaOf = nn => (rightOpen ? 4 * L / (2 * nn - 1) : 2 * L / nn);
+  const lambda = () => lambdaOf(n);
+  const period = () => lambda() / V;
+  const kOf = () => 2 * Math.PI / lambda();
+  const wOf = () => 2 * Math.PI / period();
+  const deltaR = () => (rightOpen ? 0 : Math.PI);        // phase change at the right end
+  // playback slows by the frequency ratio, so every n keeps the rhythm of n = 1
+  const playRate = () => lambda() / lambdaOf(1);
+
+  // y1 starts at the left end at t = 0; y2 is y1 reflected at the right end.
+  // For whole-number n, y2 cancels y1 at the left end, so nothing further is ever reflected.
+  const path = (j, x) => (j === 0 ? x : 2 * L - x);
+  function wave(j, x, time) {
+    const s = path(j, x);
+    if (s > V * time) return null;                       // front has not arrived yet
+    return A * Math.sin(wOf() * time - kOf() * s + (j === 1 ? deltaR() : 0));
+  }
+  const yS = (x, time) => (wave(0, x, time) ?? 0) + (wave(1, x, time) ?? 0);
+
+  // ---- Graph helper ----
+  function makeGraph(canvas, yMin, yMax) {
+    const g = { canvas, ctx: canvas.getContext('2d'), width: 0, height: 0, uMin: 0, uMax: 1, yMin, yMax };
+    g.resize = () => {
+      const dpr = window.devicePixelRatio || 1;
+      const rect = canvas.getBoundingClientRect();
+      g.width = rect.width; g.height = rect.height;
+      canvas.width = Math.round(g.width * dpr);
+      canvas.height = Math.round(g.height * dpr);
+      g.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    };
+    g.w = () => g.width - MARGIN.left - MARGIN.right;
+    g.top = () => MARGIN.top;
+    g.h = () => g.height - MARGIN.top - MARGIN.bottom;
+    g.px = u => MARGIN.left + (u - g.uMin) / (g.uMax - g.uMin) * g.w();
+    g.py = v => g.top() + (g.yMax - v) / (g.yMax - g.yMin) * g.h();
+    g.u = px => g.uMin + (px - MARGIN.left) / g.w() * (g.uMax - g.uMin);
+    return g;
+  }
+  const yx = makeGraph($('plot-yx'), -Y_RANGE, Y_RANGE);
+  const yt = makeGraph($('plot-yt'), -Y_RANGE, Y_RANGE);
+  // two y–t plots stacked on the one canvas, sharing the time axis
+  const panels = [0, 1].map(i => {
+    const p = Object.create(yt);
+    const count = () => (showQ ? 2 : 1);
+    p.h = () => (yt.height - MARGIN.top - MARGIN.bottom - (count() - 1) * PANEL_GAP) / count();
+    p.top = () => MARGIN.top + i * (p.h() + PANEL_GAP);
+    p.py = v => p.top() + (p.yMax - v) / (p.yMax - p.yMin) * p.h();
+    return p;
+  });
+  yx.uMin = -EXT; yx.uMax = L + EXT;
+
+  function drawAxes(g, xLabel, yLabel, yTicks, yFmt) {
+    const top = g.top();
+    const { ctx } = g;
+    ctx.lineWidth = 1;
+    ctx.font = '13px system-ui, sans-serif';
+    ctx.fillStyle = COLORS.muted;
+    ctx.strokeStyle = COLORS.grid;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    for (let u = Math.ceil(g.uMin); u <= g.uMax + 1e-9; u++) {
+      ctx.beginPath(); ctx.moveTo(g.px(u), top); ctx.lineTo(g.px(u), top + g.h()); ctx.stroke();
+      if (xLabel) ctx.fillText(String(u), g.px(u), top + g.h() + 6);
+    }
+    if (xLabel) ctx.fillText(xLabel, MARGIN.left + g.w() / 2, top + g.h() + 24);
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+    for (const v of yTicks) {
+      ctx.strokeStyle = v === 0 ? COLORS.axis : COLORS.grid;
+      ctx.beginPath(); ctx.moveTo(MARGIN.left, g.py(v)); ctx.lineTo(MARGIN.left + g.w(), g.py(v)); ctx.stroke();
+      ctx.fillText(yFmt(v), MARGIN.left - 8, g.py(v));
+    }
+    ctx.save();
+    ctx.translate(16, top + g.h() / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.textAlign = 'center';
+    ctx.fillText(yLabel, 0, 0);
+    ctx.restore();
+  }
+  const yAxes = (g, xLabel) => drawAxes(g, xLabel, 'y / m', [-2, -1, 0, 1, 2], v => v.toFixed(1));
+
+  // Plot v = f(u) on [u1, u2]; f may return null where the curve does not exist
+  function drawCurve(g, f, u1, u2, style) {
+    if (u2 <= u1) return;
+    const { ctx } = g;
+    ctx.strokeStyle = style.color;
+    ctx.lineWidth = style.width;
+    ctx.setLineDash(style.dash || []);
+    ctx.globalAlpha = style.alpha ?? 1;
+    ctx.beginPath();
+    const steps = Math.max(60, Math.round((g.px(u2) - g.px(u1)) / 2));
+    let pen = false;
+    for (let i = 0; i <= steps; i++) {
+      const u = u1 + i / steps * (u2 - u1), v = f(u);
+      if (v === null) { pen = false; continue; }
+      if (pen) ctx.lineTo(g.px(u), g.py(v)); else ctx.moveTo(g.px(u), g.py(v));
+      pen = true;
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.globalAlpha = 1;
+  }
+
+  function drawFocus(g, u, v, { hollow = false, guide = true, tag = '' } = {}) {
+    const { ctx } = g;
+    const px = g.px(u), py = g.py(v), top = g.top();
+    ctx.strokeStyle = COLORS.focus;
+    if (guide) {
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath(); ctx.moveTo(px, top); ctx.lineTo(px, top + g.h()); ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    if (tag) {
+      ctx.fillStyle = COLORS.focus;
+      ctx.font = '600 14px system-ui, sans-serif';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'top';
+      ctx.fillText(tag, px + 5, top + 2);
+    }
+    ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(px, g.py(0)); ctx.lineTo(px, py); ctx.stroke();
+    ctx.beginPath(); ctx.arc(px, py, 7, 0, 2 * Math.PI);
+    if (hollow) {
+      ctx.fillStyle = '#fff'; ctx.fill();
+      ctx.lineWidth = 3; ctx.stroke();
+    } else {
+      ctx.fillStyle = COLORS.focus; ctx.fill();
+      ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
+    }
+  }
+
+  // fixed end: hatched wall on the outside; open end: rod with a ring that slides on it
+  function drawFixedEnd(g, x, side) {
+    const { ctx } = g;
+    const px = g.px(x), w = 12, top = g.top(), bottom = g.top() + g.h();
+    const x0 = side < 0 ? px - w : px;
+    ctx.save();
+    ctx.beginPath(); ctx.rect(x0, top, w, bottom - top); ctx.clip();
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(x0, top, w, bottom - top);
+    ctx.strokeStyle = COLORS.muted;
+    ctx.lineWidth = 1;
+    for (let yy = top - w; yy < bottom + w; yy += 7) {
+      ctx.beginPath(); ctx.moveTo(x0, yy + w); ctx.lineTo(x0 + w, yy); ctx.stroke();
+    }
+    ctx.restore();
+    ctx.strokeStyle = COLORS.ink;
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(px, top); ctx.lineTo(px, bottom); ctx.stroke();
+  }
+  function drawOpenEnd(g, x, yv) {
+    const { ctx } = g;
+    const px = g.px(x);
+    ctx.strokeStyle = COLORS.axis;
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(px, g.top()); ctx.lineTo(px, g.top() + g.h()); ctx.stroke();
+    ctx.fillStyle = '#fff';
+    ctx.strokeStyle = COLORS.ink;
+    ctx.beginPath(); ctx.ellipse(px, g.py(yv), 5, 8, 0, 0, 2 * Math.PI); ctx.fill(); ctx.stroke();
+  }
+  // the vibrator at the left end: it carries the string's end until y2 first gets back (t = 2L/v),
+  // after which y2 cancels y1 there and the vibrator only needs a small, steady motion
+  function drawDriver(g, yv) {
+    g.ctx.fillStyle = COLORS.ink;
+    g.ctx.fillRect(g.px(0) - 5, g.py(yv) - 9, 10, 18);
+  }
+
+  // ---- y–x graph ----
+  function drawYX() {
+    const g = yx, { ctx } = g;
+    ctx.clearRect(0, 0, g.width, g.height);
+    yAxes(g, 'x / m');
+
+    const f1 = x => wave(0, x, t), f2 = x => wave(1, x, t);
+    // virtual waves: y1 carries on past the right end, y2 carries on past the left end
+    if (layers.virtual && layers.right) drawCurve(g, f1, L, L + EXT, { color: COLORS.right, width: 2, dash: [6, 5], alpha: 0.8 });
+    if (layers.virtual && layers.left) drawCurve(g, f2, -EXT, 0, { color: COLORS.left, width: 2, dash: [6, 5], alpha: 0.8 });
+
+    drawFixedEnd(g, 0, -1);
+    if (rightOpen) drawOpenEnd(g, L, yS(L, t)); else drawFixedEnd(g, L, 1);
+
+    if (layers.right) drawCurve(g, f1, 0, L, { color: COLORS.right, width: 2 });
+    if (layers.left) drawCurve(g, f2, 0, L, { color: COLORS.left, width: 2 });
+    if (layers.standing) drawCurve(g, x => yS(x, t), 0, L, { color: COLORS.ink, width: 3.5 });
+    drawDriver(g, V * t < 2 * L ? yS(0, t) : DRIVER_A * Math.sin(wOf() * t));
+    visiblePoints().forEach((p, i) => drawFocus(g, p.x, yS(p.x, t), { hollow: i === 1, tag: showQ ? p.name : '' }));
+  }
+
+  const visiblePoints = () => (showQ ? points : points.slice(0, 1));
+
+  // ---- y–t graphs of P (top) and, when shown, Q (bottom) ----
+  function drawYT() {
+    const { ctx } = yt;
+    yt.uMin = Math.max(0, t - T_NOW_AT * T_WINDOW);
+    yt.uMax = yt.uMin + T_WINDOW;
+    ctx.clearRect(0, 0, yt.width, yt.height);
+    const shown = panels.slice(0, visiblePoints().length);
+    shown.forEach((g, i) => {
+      yAxes(g, i === shown.length - 1 ? 't / s' : '');
+      const f = time => yS(points[i].x, time);
+      drawCurve(g, f, g.uMin, t, { color: COLORS.ink, width: 2.5 });
+      drawCurve(g, f, t, g.uMax, { color: COLORS.axis, width: 1.5, dash: [5, 5] });
+    });
+    // the same instant in both graphs: compare where P and Q are in their oscillation
+    const px = yt.px(t);
+    ctx.strokeStyle = COLORS.focus;
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 4]);
+    const last = shown[shown.length - 1];
+    ctx.beginPath(); ctx.moveTo(px, shown[0].top()); ctx.lineTo(px, last.top() + last.h()); ctx.stroke();
+    ctx.setLineDash([]);
+    shown.forEach((g, i) => drawFocus(g, t, yS(points[i].x, t), { hollow: i === 1, guide: false }));
+    if (!showQ) return;
+    // name tags in the top-left corner of each plot
+    ctx.fillStyle = COLORS.focus;
+    ctx.font = '600 14px system-ui, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    shown.forEach((g, i) => ctx.fillText(points[i].name, MARGIN.left + 6, g.top() + 4));
+  }
+
+  // ---- Intro formulas ----
+  const frac = (num, den) => `<span class="frac"><span>${num}</span><span>${den}</span></span>`;
+  function updateIntro() {
+    const tPart = `<span class="time">${frac('2π', 'T')} · t</span>`;
+    const sPart = p => `<span class="space">${frac('2π', 'λ')} · ${p}</span>`;
+    $('intro-formulas').innerHTML =
+      `<span class="key right"></span><span>y<sub>1</sub></span><span>=</span><span>A · sin( ${tPart} − ${sPart('x')} )</span>` +
+      `<span class="key left"></span><span>y<sub>2</sub></span><span>=</span><span>A · sin( ${tPart} − ${sPart('(2L − x)')}${rightOpen ? '' : ' + π'} )</span>` +
+      `<span class="key standing"></span><span>y</span><span>=</span><span>y<sub>1</sub> + y<sub>2</sub></span>`;
+  }
+
+  // ---- Working ----
+  const f2 = v => v.toFixed(2);
+  const signed = v => (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(2);
+  const line = (lhs, ...rhs) => `<span>${lhs}</span><span>=</span><span>${rhs.join(' = ')}</span>`;
+  const gap = '<span class="gap"></span>';
+  function updateDerivation() {
+    const lam = lambda(), T = period(), k = kOf(), w = wOf();
+    const Ls = f2(lam), Ts = f2(T);
+    const timeTerm = w * t;
+    const pi = rightOpen ? '' : ' + π';
+
+    let rows =
+      (rightOpen
+        ? line('λ', frac('4L', '2n − 1'), frac(`4 · ${L}`, `2 · ${n} − 1`), `${Ls} m`)
+        : line('λ', frac('2L', 'n'), frac(`2 · ${L}`, n), `${Ls} m`)) +
+      line('T', frac('λ', 'v'), frac(Ls, V), `${Ts} s`) +
+      gap;
+
+    const P = points[0];
+    const v1 = wave(0, P.x, t), v2 = wave(1, P.x, t);
+    const term = (tt, sp, extra) => `${A} · sin( <span class="time">${tt}</span> − <span class="space">${sp}</span>${extra} )`;
+    rows += line('y<sub>1</sub>', v1 === null ? '0' :
+      [term(`${frac('2π', Ts)} · ${f2(t)}`, `${frac('2π', Ls)} · ${f2(P.x)}`, ''),
+       term(`${f2(timeTerm)} rad`, `${f2(k * P.x)} rad`, ''), `${signed(v1)} m`].join(' = '));
+    rows += line('y<sub>2</sub>', v2 === null ? '0' :
+      [term(`${frac('2π', Ts)} · ${f2(t)}`, `${frac('2π', Ls)} · (2 · ${L} − ${f2(P.x)})`, pi),
+       term(`${f2(timeTerm)} rad`, `${f2(k * (2 * L - P.x))} rad`, pi), `${signed(v2)} m`].join(' = '));
+    rows += line('y', 'y<sub>1</sub> + y<sub>2</sub>', `<span class="F">${signed(yS(P.x, t))} m</span>`);
+    rows += line(`2A · |sin(${frac('2π', 'λ')} · x)|`, `2 · |sin(${f2(k * P.x)} rad)|`, `${f2(2 * A * Math.abs(Math.sin(k * P.x)))} m`);
+
+    // phase change at the right end: y2 against y1 (the virtual wave) at x = L
+    rows += gap + line('φ<sub>2</sub> − φ<sub>1</sub> at x = L',
+      `(−${frac('2π', Ls)} · (2 · ${L} − ${L})${pi}) − (−${frac('2π', Ls)} · ${L})`, rightOpen ? '0' : 'π');
+
+    $('derivation').innerHTML = rows;
+    $('t-value').textContent = f2(t);
+    const rate = playRate();
+    $('speed').textContent = rate < 0.995 ? `×${rate.toFixed(2)}` : '';
+  }
+
+  // ---- Animation loop: real time × playRate, no end ----
+  const pauseBtn = $('pause-btn');
+  function togglePause() {
+    running = !running;
+    pauseBtn.textContent = running ? '⏸' : '▶';
+  }
+  function frame(now) {
+    if (lastFrame !== null && running) t += Math.min((now - lastFrame) / 1000, 0.1) * playRate();
+    lastFrame = now;
+    drawYX();
+    drawYT();
+    updateDerivation();
+    requestAnimationFrame(frame);
+  }
+
+  // ---- Controls ----
+  const nSlider = $('n-slider');
+  function setN(value) {
+    n = Math.min(6, Math.max(1, Math.round(value)));
+    nSlider.value = String(n);
+    $('n-value').textContent = String(n);
+  }
+  nSlider.addEventListener('input', () => setN(parseFloat(nSlider.value)));
+
+  const modeFF = $('mode-ff'), modeFO = $('mode-fo');
+  function setMode(open) {
+    rightOpen = open;
+    modeFF.setAttribute('aria-pressed', String(!open));
+    modeFO.setAttribute('aria-pressed', String(open));
+    updateIntro();
+  }
+  modeFF.addEventListener('click', () => setMode(false));
+  modeFO.addEventListener('click', () => setMode(true));
+
+  document.querySelectorAll('.layers button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const name = btn.dataset.layer;
+      layers[name] = !layers[name];
+      btn.setAttribute('aria-pressed', String(layers[name]));
+    });
+  });
+
+  const qBtn = $('q-btn');
+  qBtn.addEventListener('click', () => {
+    showQ = !showQ;
+    if (!showQ) active = 0;
+    qBtn.setAttribute('aria-pressed', String(showQ));
+    qBtn.textContent = showQ ? '− Q' : '+ Q';
+    yt.canvas.classList.toggle('two', showQ);
+    resizeAll();
+  });
+
+  pauseBtn.addEventListener('click', togglePause);
+  $('reset-btn').addEventListener('click', () => { t = 0; });
+
+  // focus points: click or drag on the y–x graph moves the nearer of P and Q
+  const clampX = x => Math.min(L, Math.max(0, x));
+  const pointerX = e => clampX(yx.u(e.clientX - yx.canvas.getBoundingClientRect().left));
+  yx.canvas.addEventListener('pointerdown', e => {
+    yx.canvas.setPointerCapture(e.pointerId);
+    const x = pointerX(e);
+    active = !showQ || Math.abs(x - points[0].x) <= Math.abs(x - points[1].x) ? 0 : 1;
+    points[active].x = x;
+  });
+  yx.canvas.addEventListener('pointermove', e => {
+    if (yx.canvas.hasPointerCapture(e.pointerId)) points[active].x = pointerX(e);
+  });
+
+  // ← step x by λ/16; capture phase so the slider never swallows them
+  window.addEventListener('keydown', e => {
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+      e.preventDefault();
+      points[active].x = clampX(points[active].x + (e.key === 'ArrowRight' ? 1 : -1) * lambda() / 16);
+    } else if (e.key === ' ' || e.code === 'Space') {
+      e.preventDefault();
+      togglePause();
+    }
+  }, true);
+
+  function resizeAll() { yx.resize(); yt.resize(); }
+  window.addEventListener('resize', resizeAll);
+  resizeAll();
+  setN(2);
+  updateIntro();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

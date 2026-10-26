@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Interference of Two Sources</title>
+<style>
+  :root {
+    --bg: #f7f7f5;
+    --panel: #ffffff;
+    --ink: #1f2328;
+    --muted: #6b7280;
+    --grid: #e5e7eb;
+    --axis: #9ca3af;
+    --time-bg: #fde7cf;     /* time part 2π/T·t */
+    --space-bg: #e9eaec;    /* space part 2π/λ·r */
+    --crest: #2f6fb5;
+    --trough: #8e4fb8;
+    --focus: #dc2626;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+  }
+  main { max-width: 1000px; margin: 0 auto; padding: 20px; }
+  .card {
+    background: var(--panel);
+    border-radius: 10px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.08);
+    padding: 14px 18px;
+    margin-bottom: 14px;
+  }
+  .time, .space { display: inline-block; vertical-align: middle; line-height: 1.3; border-radius: 5px; padding: 3px 6px; }
+  .time { background: var(--time-bg); }
+  .space { background: var(--space-bg); }
+  .swatch { display: inline-block; width: 1.6em; height: 1em; border-radius: 4px; vertical-align: middle; }
+  .F { color: var(--focus); font-weight: 600; }
+  .frac {
+    display: inline-flex; flex-direction: column;
+    vertical-align: middle; text-align: center;
+    font-size: .85em; line-height: 1.15; margin: 0 2px;
+  }
+  .frac > span { padding: 0 3px; }
+  .frac > span:first-child { border-bottom: 1.5px solid currentColor; }
+  .intro h1 { font-size: 1.25rem; margin: 0 0 8px; }
+  .intro .formula {
+    font-family: "Cambria Math", "Times New Roman", serif;
+    font-size: 1.45rem;
+    text-align: center;
+    margin: 6px 0 12px;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+  .intro dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; margin: 0; }
+  .intro dt { font-family: "Cambria Math", "Times New Roman", serif; font-size: 1.1rem; text-align: center; }
+  .intro dd { margin: 0; }
+  .view { position: relative; }
+  #gl { display: block; width: 100%; height: 480px; cursor: grab; touch-action: none; }
+  .amps {
+    position: absolute; top: 10px; left: 10px; width: 200px;
+    padding: 8px 12px; border-radius: 8px;
+    background: rgba(255, 255, 255, .88);
+    box-shadow: 0 1px 3px rgba(0,0,0,.1);
+    font-variant-numeric: tabular-nums;
+  }
+  .amp-row { display: flex; justify-content: space-between; margin-bottom: 6px; }
+  #overlay { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+  #plot-yt { display: block; width: 100%; height: 200px; }
+  .controls {
+    display: grid;
+    grid-template-columns: 1fr 1fr auto;
+    gap: 18px 28px;
+    align-items: center;
+  }
+  .slider label { display: flex; justify-content: space-between; margin-bottom: 4px; font-variant-numeric: tabular-nums; }
+  .slider input { width: 100%; accent-color: var(--ink); }
+  .buttons { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  button {
+    font: inherit;
+    height: 2.4em; min-width: 2.4em; padding: 0 10px;
+    border-radius: 6px;
+    border: 1px solid #d1d5db;
+    background: #fff;
+    cursor: pointer;
+  }
+  button:hover { background: #f3f4f6; }
+  button[aria-pressed="true"] { background: var(--ink); color: #fff; }
+  .switch { display: inline-flex; border: 1px solid #d1d5db; border-radius: 6px; overflow: hidden; }
+  .switch button { border: 0; border-radius: 0; }
+  .switch button + button { border-left: 1px solid #d1d5db; }
+  .clock { font-variant-numeric: tabular-nums; min-width: 6.5em; text-align: right; }
+  .derivation {
+    display: grid;
+    grid-template-columns: auto auto 1fr;
+    column-gap: .4em;
+    align-items: center;
+    font-family: "Cambria Math", "Times New Roman", serif;
+    font-size: 1.3rem;
+    line-height: 2.4;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    overflow-x: auto;
+  }
+  .derivation .gap { grid-column: 1 / -1; height: .4em; }
+  .no-webgl { padding: 40px; text-align: center; color: var(--muted); }
+  @media (max-width: 700px) {
+    .controls { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <section class="card intro">
+    <h1>Interference of two sources</h1>
+    <div class="formula">
+      y = A<sub>1</sub> · sin( <span class="time"><span class="frac"><span>2π</span><span>T</span></span> · t</span> − <span class="space"><span class="frac"><span>2π</span><span>λ</span></span> · r<sub>1</sub></span> )
+      + A<sub>2</sub> · sin( <span class="time"><span class="frac"><span>2π</span><span>T</span></span> · t</span> − <span class="space"><span class="frac"><span>2π</span><span>λ</span></span> · r<sub>2</sub></span> )
+    </div>
+    <dl>
+      <dt>A<sub>1</sub></dt><dd>amplitude of S<sub>1</sub>, set to 1 m here</dd>
+      <dt>A<sub>2</sub></dt><dd>amplitude of S<sub>2</sub></dd>
+      <dt>T</dt><dd>period, set to 2 s here</dd>
+      <dt>λ</dt><dd>wavelength</dd>
+      <dt>d</dt><dd>distance between the sources S<sub>1</sub> and S<sub>2</sub></dd>
+      <dt>r<sub>1</sub>, r<sub>2</sub></dt><dd>distances from S<sub>1</sub> and S<sub>2</sub></dd>
+      <dt><span class="swatch" style="background: var(--crest)"></span></dt><dd>crest</dd>
+      <dt><span class="swatch" style="background: var(--trough)"></span></dt><dd>trough</dd>
+    </dl>
+  </section>
+
+  <div class="card">
+    <div class="view">
+      <canvas id="gl"></canvas>
+      <canvas id="overlay"></canvas>
+      <div class="amps">
+        <div class="amp-row"><span>A<sub>1</sub></span><span>1.00 m</span></div>
+        <div class="slider">
+          <label for="A2-slider"><span>A<sub>2</sub></span><span><span id="A2-value"></span> m</span></label>
+          <input type="range" id="A2-slider" min="0" max="3" step="0.05" value="1">
+        </div>
+      </div>
+    </div>
+    <canvas id="plot-yt"></canvas>
+  </div>
+
+  <div class="card controls">
+    <div class="slider">
+      <label for="d-slider"><span>d</span><span><span id="d-value"></span> m</span></label>
+      <input type="range" id="d-slider" min="1" max="10" step="0.1" value="5">
+    </div>
+    <div class="slider">
+      <label for="L-slider"><span>λ</span><span><span id="L-value"></span> m</span></label>
+      <input type="range" id="L-slider" min="1.5" max="5" step="0.1" value="2.5">
+    </div>
+    <div class="buttons">
+      <div class="switch" role="group">
+        <button id="view-3d" aria-pressed="true">3D</button>
+        <button id="view-top" aria-pressed="false">Top</button>
+      </div>
+      <button id="crest-btn" aria-pressed="false">Crest lines</button>
+      <button id="pause-btn" title="Play / pause (Space)">▶</button>
+      <button id="reset-btn" title="Reset t">↺</button>
+      <span class="clock">t = <span id="t-value">0.00</span> s</span>
+    </div>
+  </div>
+
+  <div class="card derivation" id="derivation"></div>
+</main>
+
+<script>
+(() => {
+  // ---- Fixed parameters ----
+  const A1 = 1;              // amplitude of S1 in m
+  const A2_MAX = 3;          // largest amplitude the S2 slider allows
+  const T = 2;               // period in s
+  const HALF = 10;           // the water surface covers x, y in [-HALF, HALF] m
+  const GRID = 240;          // mesh segments per side
+  const Z_SCALE = 0.3;       // drawn height per metre of displacement (keeps slopes readable)
+  const T_WINDOW = 10, T_NOW_AT = 0.7;
+  const MARGIN = { left: 64, right: 24, top: 12, bottom: 44 };
+
+  // ---- State ----
+  let d = 5, lambda = 2.5, A2 = 1, t = 0;
+  let focus = { x: 0, y: 6 };
+  let running = false, lastFrame = null;
+  let crestLines = false;
+  const cam = { az: -Math.PI / 2, el: 35 * Math.PI / 180, elTarget: 35 * Math.PI / 180, dist: 32, fov: 40 * Math.PI / 180 };
+
+  const $ = id => document.getElementById(id);
+  const css = getComputedStyle(document.documentElement);
+  const color = name => css.getPropertyValue(name).trim();
+  const COLORS = {
+    ink: color('--ink'), grid: color('--grid'), axis: color('--axis'), muted: color('--muted'),
+    crest: color('--crest'), trough: color('--trough'), focus: color('--focus'),
+  };
+  const hexToRgb = hex => [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255);
+
+  // ---- Physics ----
+  const k = () => 2 * Math.PI / lambda;
+  const w = 2 * Math.PI / T;
+  const sources = () => [{ x: -d / 2, y: 0 }, { x: d / 2, y: 0 }];
+  const dist = (p, q) => Math.hypot(p.x - q.x, p.y - q.y);
+  // one source's wave: zero until the wavefront (r = v·t, v = λ/T) has reached the point
+  const waveAt = (a, r, time) => (r < w * time / k() ? a * Math.sin(w * time - k() * r) : 0);
+  function yAt(p, time) {
+    const [s1, s2] = sources();
+    return waveAt(A1, dist(p, s1), time) + waveAt(A2, dist(p, s2), time);
+  }
+
+  // ---- Small matrix helpers (column-major, as WebGL expects) ----
+  const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+  const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+  const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  const norm = a => { const l = Math.hypot(...a); return a.map(v => v / l); };
+  function perspective(fov, aspect, near, far) {
+    const f = 1 / Math.tan(fov / 2), nf = 1 / (near - far);
+    return [f / aspect, 0, 0, 0, 0, f, 0, 0, 0, 0, (far + near) * nf, -1, 0, 0, 2 * far * near * nf, 0];
+  }
+  function lookAt(eye, target, up) {
+    const z = norm(sub(eye, target)), x = norm(cross(up, z)), y = cross(z, x);
+    return [x[0], y[0], z[0], 0, x[1], y[1], z[1], 0, x[2], y[2], z[2], 0, -dot(x, eye), -dot(y, eye), -dot(z, eye), 1];
+  }
+  function mul(a, b) {
+    const o = new Array(16).fill(0);
+    for (let c = 0; c < 4; c++) for (let r = 0; r < 4; r++) for (let i = 0; i < 4; i++) o[c * 4 + r] += a[i * 4 + r] * b[c * 4 + i];
+    return o;
+  }
+  function apply(m, v) {
+    return [0, 1, 2, 3].map(r => m[r] * v[0] + m[4 + r] * v[1] + m[8 + r] * v[2] + m[12 + r] * v[3]);
+  }
+  const eyePos = () => [
+    cam.dist * Math.cos(cam.el) * Math.cos(cam.az),
+    cam.dist * Math.cos(cam.el) * Math.sin(cam.az),
+    cam.dist * Math.sin(cam.el),
+  ];
+
+  // ---- WebGL surface ----
+  const glCanvas = $('gl'), overlay = $('overlay'), octx = overlay.getContext('2d');
+  const gl = glCanvas.getContext('webgl2', { antialias: true });
+  if (!gl) {
+    glCanvas.parentElement.innerHTML = '<div class="no-webgl">This animation needs WebGL 2. Please open it in a recent Chrome, Edge, Firefox or Safari.</div>';
+    return;
+  }
+
+  const COMMON = `
+    uniform vec2 uS1, uS2;
+    uniform float uK, uW, uT, uA1, uA2, uAMax, uZ;
+    float arrived(float r) { return r < uW * uT / uK ? 1.0 : 0.0; }   // wavefront at r = v·t
+    float height(vec2 p) {
+      float r1 = distance(p, uS1), r2 = distance(p, uS2);
+      return uA1 * arrived(r1) * sin(uW * uT - uK * r1) + uA2 * arrived(r2) * sin(uW * uT - uK * r2);
+    }`;
+  const VS = `#version 300 es
+    in vec2 aPos;
+    uniform mat4 uMVP;
+    out vec2 vXY;
+    ${COMMON}
+    void main() {
+      vXY = aPos;
+      gl_Position = uMVP * vec4(aPos, height(aPos) * uZ, 1.0);
+    }`;
+  const FS = `#version 300 es
+    precision highp float;
+    in vec2 vXY;
+    uniform vec3 uCrest, uTrough, uInk;
+    uniform float uLines;
+    out vec4 outColor;
+    ${COMMON}
+    const float PI = 3.14159265;
+    float crestLine(float theta) {
+      float c = (theta - PI / 2.0) / (2.0 * PI);     // crests where this is a whole number
+      float f = abs(fract(c + 0.5) - 0.5);
+      float fw = fwidth(c);
+      return 1.0 - smoothstep(fw * 0.6, fw * 1.6, f);
+    }
+    void main() {
+      float r1 = distance(vXY, uS1), r2 = distance(vXY, uS2);
+      float th1 = uW * uT - uK * r1, th2 = uW * uT - uK * r2;
+      float a1 = uA1 * arrived(r1), a2 = uA2 * arrived(r2);
+      float z = a1 * sin(th1) + a2 * sin(th2);
+      vec2 g = -uK * (a1 * cos(th1) * (vXY - uS1) / max(r1, 1e-4) + a2 * cos(th2) * (vXY - uS2) / max(r2, 1e-4));
+      vec3 n = normalize(vec3(-g * uZ, 1.0));
+      float s = clamp(z / uAMax, -1.0, 1.0);     // fixed scale: weaker waves pale, stronger ones saturate
+      vec3 base = s > 0.0 ? mix(vec3(1.0), uCrest, s) : mix(vec3(1.0), uTrough, -s);
+      float light = 0.6 + 0.4 * max(dot(n, normalize(vec3(-0.4, -0.6, 1.0))), 0.0);
+      vec3 col = base * light;
+      if (uLines > 0.5) {
+        float l1 = a1 > 0.0 ? crestLine(th1) : 0.0;
+        float l2 = a2 > 0.0 ? crestLine(th2) : 0.0;
+        col = mix(col, uInk, 0.55 * max(l1, l2));
+      }
+      outColor = vec4(col, 1.0);
+    }`;
+
+  function compile(type, src) {
+    const sh = gl.createShader(type);
+    gl.shaderSource(sh, src);
+    gl.compileShader(sh);
+    if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(sh));
+    return sh;
+  }
+  const prog = gl.createProgram();
+  gl.attachShader(prog, compile(gl.VERTEX_SHADER, VS));
+  gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, FS));
+  gl.linkProgram(prog);
+  if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog));
+  gl.useProgram(prog);
+  const U = name => gl.getUniformLocation(prog, name);
+  const uni = Object.fromEntries(['uMVP', 'uS1', 'uS2', 'uK', 'uW', 'uT', 'uA1', 'uA2', 'uAMax', 'uZ', 'uCrest', 'uTrough', 'uInk', 'uLines'].map(n => [n, U(n)]));
+
+  // flat grid of (x, y); heights are computed in the shader
+  const verts = new Float32Array((GRID + 1) ** 2 * 2);
+  for (let j = 0, i = 0; j <= GRID; j++) for (let q = 0; q <= GRID; q++) {
+    verts[i++] = -HALF + 2 * HALF * q / GRID;
+    verts[i++] = -HALF + 2 * HALF * j / GRID;
+  }
+  const idx = new Uint16Array(GRID * GRID * 6);
+  for (let j = 0, i = 0; j < GRID; j++) for (let q = 0; q < GRID; q++) {
+    const a = j * (GRID + 1) + q, b = a + 1, c = a + GRID + 1, e = c + 1;
+    idx.set([a, b, e, a, e, c], i); i += 6;
+  }
+  gl.bindVertexArray(gl.createVertexArray());
+  gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+  gl.bufferData(gl.ARRAY_BUFFER, verts, gl.STATIC_DRAW);
+  const aPos = gl.getAttribLocation(prog, 'aPos');
+  gl.enableVertexAttribArray(aPos);
+  gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, gl.createBuffer());
+  gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, idx, gl.STATIC_DRAW);
+  gl.enable(gl.DEPTH_TEST);
+
+  gl.uniform1f(uni.uW, w);
+  gl.uniform1f(uni.uA1, A1);
+  gl.uniform1f(uni.uAMax, 2 * A1);
+  gl.uniform1f(uni.uZ, Z_SCALE);
+  gl.uniform3fv(uni.uCrest, hexToRgb(COLORS.crest));
+  gl.uniform3fv(uni.uTrough, hexToRgb(COLORS.trough));
+  gl.uniform3fv(uni.uInk, hexToRgb(COLORS.ink));
+
+  let viewW = 0, viewH = 0, mvp = null;
+  function resizeView() {
+    const dpr = window.devicePixelRatio || 1;
+    const rect = glCanvas.getBoundingClientRect();
+    viewW = rect.width; viewH = rect.height;
+    for (const c of [glCanvas, overlay]) {
+      c.width = Math.round(viewW * dpr);
+      c.height = Math.round(viewH * dpr);
+    }
+    octx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    gl.viewport(0, 0, glCanvas.width, glCanvas.height);
+  }
+
+  // world point (x, y, height in m) -> screen px, or null if behind the camera
+  function project(x, y, h) {
+    const c = apply(mvp, [x, y, h * Z_SCALE, 1]);
+    if (c[3] <= 0) return null;
+    return { x: (c[0] / c[3] + 1) / 2 * viewW, y: (1 - c[1] / c[3]) / 2 * viewH };
+  }
+
+  function drawSurface() {
+    const eye = eyePos();
+    const view = lookAt(eye, [0, 0, 0], [0, 0, 1]);
+    mvp = mul(perspective(cam.fov, viewW / viewH, 0.5, 200), view);
+    const [s1, s2] = sources();
+    gl.clearColor(1, 1, 1, 1);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+    gl.uniformMatrix4fv(uni.uMVP, false, mvp);
+    gl.uniform2f(uni.uS1, s1.x, s1.y);
+    gl.uniform2f(uni.uS2, s2.x, s2.y);
+    gl.uniform1f(uni.uK, k());
+    gl.uniform1f(uni.uA2, A2);
+    gl.uniform1f(uni.uT, t);
+    gl.uniform1f(uni.uLines, crestLines ? 1 : 0);
+    gl.drawElements(gl.TRIANGLES, idx.length, gl.UNSIGNED_SHORT, 0);
+  }
+
+  // sources, r1 / r2 lines and the focus point, drawn on top of the surface
+  function drawOverlay() {
+    octx.clearRect(0, 0, viewW, viewH);
+    const fh = yAt(focus, t);
+    const pf = project(focus.x, focus.y, fh), pf0 = project(focus.x, focus.y, 0);
+    focusScreen = pf;
+    const srcs = sources();
+
+    octx.font = '15px "Cambria Math", "Times New Roman", serif';
+    octx.textAlign = 'center';
+    octx.textBaseline = 'bottom';
+    srcs.forEach((s, i) => {
+      const ps = project(s.x, s.y, (i ? A2 : A1) * Math.sin(w * t));
+      if (!ps) return;
+      const on = i === 0 || A2 > 0;
+      octx.globalAlpha = on ? 1 : 0.3;
+      if (pf && on) {
+        octx.strokeStyle = COLORS.ink;
+        octx.lineWidth = 1.5;
+        octx.setLineDash([5, 4]);
+        octx.beginPath(); octx.moveTo(ps.x, ps.y); octx.lineTo(pf.x, pf.y); octx.stroke();
+        octx.setLineDash([]);
+      }
+      octx.fillStyle = COLORS.ink;
+      octx.beginPath(); octx.arc(ps.x, ps.y, 5, 0, 2 * Math.PI); octx.fill();
+      octx.fillText(`S${i ? '₂' : '₁'}`, ps.x, ps.y - 8);
+      octx.globalAlpha = 1;
+    });
+
+    if (pf && pf0) {
+      octx.strokeStyle = COLORS.focus;
+      octx.lineWidth = 3;
+      octx.beginPath(); octx.moveTo(pf0.x, pf0.y); octx.lineTo(pf.x, pf.y); octx.stroke();
+      octx.fillStyle = COLORS.focus;
+      octx.beginPath(); octx.arc(pf.x, pf.y, 7, 0, 2 * Math.PI); octx.fill();
+      octx.strokeStyle = '#fff';
+      octx.lineWidth = 2;
+      octx.stroke();
+    }
+  }
+
+  // ---- Picking: screen px -> point on the surface ----
+  function pick(px, py) {
+    const eye = eyePos();
+    const f = norm(sub([0, 0, 0], eye)), r = norm(cross(f, [0, 0, 1])), u = cross(r, f);
+    const th = Math.tan(cam.fov / 2), aspect = viewW / viewH;
+    const nx = px / viewW * 2 - 1, ny = 1 - py / viewH * 2;
+    const dir = norm([0, 1, 2].map(i => f[i] + nx * th * aspect * r[i] + ny * th * u[i]));
+    if (dir[2] >= 0) return null;
+    // march along the ray through the slab the surface lives in, then bisect the first crossing
+    const top = (A1 + A2_MAX) * Z_SCALE;
+    const at = s => ({ x: eye[0] + s * dir[0], y: eye[1] + s * dir[1], z: eye[2] + s * dir[2] });
+    const above = s => { const q = at(s); return q.z - yAt(q, t) * Z_SCALE; };
+    const s0 = (top - eye[2]) / dir[2], s1 = (-top - eye[2]) / dir[2];
+    const N = 400;
+    let a = s0, b = null;
+    for (let i = 1; i <= N; i++) {
+      const s = s0 + (s1 - s0) * i / N;
+      if (above(s) <= 0) { b = s; break; }
+      a = s;
+    }
+    if (b === null) return null;
+    for (let i = 0; i < 30; i++) {
+      const m = (a + b) / 2;
+      if (above(m) > 0) a = m; else b = m;
+    }
+    const p = at(b);
+    if (Math.abs(p.x) > HALF || Math.abs(p.y) > HALF) return null;
+    return { x: p.x, y: p.y };
+  }
+
+  // drag the focus point to move it; drag anywhere else to orbit; click to choose a point; wheel = zoom
+  let drag = null, focusScreen = null;
+  const localXY = e => { const r = glCanvas.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
+  const onFocus = (x, y) => focusScreen && Math.hypot(x - focusScreen.x, y - focusScreen.y) < 16;
+  function moveFocusTo(x, y) {
+    const p = pick(x, y);
+    if (p) focus = p;
+  }
+  glCanvas.addEventListener('pointerdown', e => {
+    glCanvas.setPointerCapture(e.pointerId);
+    const [x, y] = localXY(e);
+    drag = { x: e.clientX, y: e.clientY, moved: false, focus: onFocus(x, y) };
+    glCanvas.style.cursor = drag.focus ? 'move' : 'grabbing';
+  });
+  glCanvas.addEventListener('pointermove', e => {
+    const [x, y] = localXY(e);
+    if (!drag) {
+      glCanvas.style.cursor = onFocus(x, y) ? 'move' : 'grab';
+      return;
+    }
+    if (drag.focus) { moveFocusTo(x, y); return; }
+    const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+    if (!drag.moved && Math.hypot(dx, dy) < 4) return;
+    drag.moved = true;
+    drag.x = e.clientX; drag.y = e.clientY;
+    cam.az -= dx * 0.008;
+    cam.elTarget = cam.el = Math.min(89.5 * Math.PI / 180, Math.max(8 * Math.PI / 180, cam.el + dy * 0.008));
+    setViewButtons();
+  });
+  glCanvas.addEventListener('pointerup', e => {
+    if (drag && !drag.focus && !drag.moved) moveFocusTo(...localXY(e));
+    drag = null;
+    glCanvas.style.cursor = 'grab';
+  });
+  glCanvas.addEventListener('wheel', e => {
+    e.preventDefault();
+    cam.dist = Math.min(60, Math.max(12, cam.dist * Math.exp(e.deltaY * 0.001)));
+  }, { passive: false });
+
+  // ---- y–t graph of the focus point ----
+  const yt = { canvas: $('plot-yt') };
+  yt.ctx = yt.canvas.getContext('2d');
+  function resizeYT() {
+    const dpr = window.devicePixelRatio || 1;
+    const rect = yt.canvas.getBoundingClientRect();
+    yt.width = rect.width; yt.height = rect.height;
+    yt.canvas.width = Math.round(yt.width * dpr);
+    yt.canvas.height = Math.round(yt.height * dpr);
+    yt.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  function drawYT() {
+    const ctx = yt.ctx;
+    const pw = yt.width - MARGIN.left - MARGIN.right, ph = yt.height - MARGIN.top - MARGIN.bottom;
+    const uMin = Math.max(0, t - T_NOW_AT * T_WINDOW), uMax = uMin + T_WINDOW;
+    const px = u => MARGIN.left + (u - uMin) / (uMax - uMin) * pw;
+    const yRange = Math.max(2.5, A1 + A2 + 0.5);
+    const py = v => MARGIN.top + (yRange - v) / (2 * yRange) * ph;
+    ctx.clearRect(0, 0, yt.width, yt.height);
+
+    ctx.lineWidth = 1;
+    ctx.font = '13px system-ui, sans-serif';
+    ctx.fillStyle = COLORS.muted;
+    ctx.strokeStyle = COLORS.grid;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    for (let u = Math.ceil(uMin); u <= uMax + 1e-9; u++) {
+      ctx.beginPath(); ctx.moveTo(px(u), MARGIN.top); ctx.lineTo(px(u), MARGIN.top + ph); ctx.stroke();
+      ctx.fillText(String(u), px(u), MARGIN.top + ph + 6);
+    }
+    ctx.fillText('t / s', MARGIN.left + pw / 2, MARGIN.top + ph + 24);
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+    for (let v = -Math.floor(yRange); v <= Math.floor(yRange); v++) {
+      ctx.strokeStyle = v === 0 ? COLORS.axis : COLORS.grid;
+      ctx.beginPath(); ctx.moveTo(MARGIN.left, py(v)); ctx.lineTo(MARGIN.left + pw, py(v)); ctx.stroke();
+      ctx.fillText(v.toFixed(1), MARGIN.left - 8, py(v));
+    }
+    ctx.save();
+    ctx.translate(16, MARGIN.top + ph / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.textAlign = 'center';
+    ctx.fillText('y / m', 0, 0);
+    ctx.restore();
+
+    const curve = (u1, u2, stroke, width, dash) => {
+      ctx.strokeStyle = stroke; ctx.lineWidth = width; ctx.setLineDash(dash);
+      ctx.beginPath();
+      const steps = Math.max(60, Math.round((px(u2) - px(u1)) / 2));
+      for (let i = 0; i <= steps; i++) {
+        const u = u1 + i / steps * (u2 - u1);
+        if (i === 0) ctx.moveTo(px(u), py(yAt(focus, u))); else ctx.lineTo(px(u), py(yAt(focus, u)));
+      }
+      ctx.stroke();
+      ctx.setLineDash([]);
+    };
+    curve(uMin, t, COLORS.ink, 2.5, []);
+    curve(t, uMax, COLORS.axis, 1.5, [5, 5]);
+
+    const x0 = px(t), y0 = py(yAt(focus, t));
+    ctx.strokeStyle = COLORS.focus;
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath(); ctx.moveTo(x0, MARGIN.top); ctx.lineTo(x0, MARGIN.top + ph); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(x0, py(0)); ctx.lineTo(x0, y0); ctx.stroke();
+    ctx.fillStyle = COLORS.focus;
+    ctx.beginPath(); ctx.arc(x0, y0, 7, 0, 2 * Math.PI); ctx.fill();
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }
+
+  // ---- Working ----
+  const f2 = v => v.toFixed(2);
+  const signed = v => (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(2);
+  const frac = (num, den) => `<span class="frac"><span>${num}</span><span>${den}</span></span>`;
+  const line = (lhs, ...rhs) => `<span>${lhs}</span><span>=</span><span>${rhs.join(' = ')}</span>`;
+  const gap = '<span class="gap"></span>';
+  function updateDerivation() {
+    const [s1, s2] = sources();
+    const r1 = dist(focus, s1), r2 = dist(focus, s2);
+    const dr = r1 - r2, dphi = k() * dr;
+    const amp = Math.sqrt(Math.max(0, A1 * A1 + A2 * A2 + 2 * A1 * A2 * Math.cos(dphi)));
+    const timeTerm = w * t, sp1 = k() * r1, sp2 = k() * r2;
+    const yv = yAt(focus, t);
+    const a2s = A2.toFixed(2);
+    const Ls = lambda.toFixed(1);
+    const front = w * t / k();
+    const wave = (a, r, tt, sp) => (r < front && Number(a) > 0 ? `${a} · sin( <span class="time">${tt}</span> − <span class="space">${sp}</span> )` : '0');
+
+    $('derivation').innerHTML =
+      line('r<sub>1</sub> − r<sub>2</sub>', `${f2(r1)} m − ${f2(r2)} m`, `${signed(dr)} m`, `${signed(dr / lambda)} λ`) +
+      line('Δφ', `<span class="space">${frac('2π', Ls)} · (${signed(dr)})</span>`, `${signed(dphi)} rad`, `${signed(dphi / Math.PI)}π rad`) +
+      line('√(A<sub>1</sub>² + A<sub>2</sub>² + 2A<sub>1</sub>A<sub>2</sub> · cos Δφ)', `√(${A1}² + ${a2s}² + 2 · ${A1} · ${a2s} · cos(${f2(dphi)} rad))`, `${amp.toFixed(2)} m`) +
+      gap +
+      line('y', wave(A1, r1, `${frac('2π', T)} · ${f2(t)}`, `${frac('2π', Ls)} · ${f2(r1)}`) + ' + ' + wave(a2s, r2, `${frac('2π', T)} · ${f2(t)}`, `${frac('2π', Ls)} · ${f2(r2)}`)) +
+      line('', wave(A1, r1, `${f2(timeTerm)} rad`, `${f2(sp1)} rad`) + ' + ' + wave(a2s, r2, `${f2(timeTerm)} rad`, `${f2(sp2)} rad`)) +
+      line('', `<span class="F">${(yv >= 0 ? '+' : '−') + Math.abs(yv).toFixed(3)} m</span>`);
+    $('t-value').textContent = f2(t);
+  }
+
+  // ---- Animation loop (real time) ----
+  function frame(now) {
+    if (lastFrame !== null && running) t += Math.min((now - lastFrame) / 1000, 0.1);
+    lastFrame = now;
+    cam.el += (cam.elTarget - cam.el) * 0.15;     // smooth 3D <-> top transition
+    drawSurface();
+    drawOverlay();
+    drawYT();
+    updateDerivation();
+    requestAnimationFrame(frame);
+  }
+
+  // ---- Controls ----
+  const dSlider = $('d-slider'), lSlider = $('L-slider'), a2Slider = $('A2-slider');
+  function syncSliders() {
+    d = parseFloat(dSlider.value);
+    lambda = parseFloat(lSlider.value);
+    A2 = parseFloat(a2Slider.value);
+    $('A2-value').textContent = A2.toFixed(2);
+    $('d-value').textContent = d.toFixed(1);
+    $('L-value').textContent = lambda.toFixed(1);
+  }
+  dSlider.addEventListener('input', syncSliders);
+  lSlider.addEventListener('input', syncSliders);
+  a2Slider.addEventListener('input', syncSliders);
+
+  const TILT = 35 * Math.PI / 180, TOP = 89.5 * Math.PI / 180;
+  const view3d = $('view-3d'), viewTop = $('view-top');
+  function setViewButtons() {
+    const top = cam.elTarget > 89 * Math.PI / 180;
+    view3d.setAttribute('aria-pressed', String(!top));
+    viewTop.setAttribute('aria-pressed', String(top));
+  }
+  view3d.addEventListener('click', () => { cam.elTarget = TILT; setViewButtons(); });
+  viewTop.addEventListener('click', () => { cam.elTarget = TOP; cam.az = -Math.PI / 2; setViewButtons(); });
+
+  const crestBtn = $('crest-btn');
+  crestBtn.addEventListener('click', () => {
+    crestLines = !crestLines;
+    crestBtn.setAttribute('aria-pressed', String(crestLines));
+  });
+
+  const pauseBtn = $('pause-btn');
+  function togglePause() {
+    running = !running;
+    pauseBtn.textContent = running ? '⏸' : '▶';
+  }
+  pauseBtn.addEventListener('click', togglePause);
+  $('reset-btn').addEventListener('click', () => { t = 0; });
+
+  // arrows move the focus point by λ/16; capture phase so sliders never swallow them
+  const clamp = v => Math.min(HALF, Math.max(-HALF, v));
+  window.addEventListener('keydown', e => {
+    const dirs = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, 1], ArrowDown: [0, -1] };
+    if (dirs[e.key]) {
+      e.preventDefault();
+      const step = lambda / 16;
+      focus = { x: clamp(focus.x + dirs[e.key][0] * step), y: clamp(focus.y + dirs[e.key][1] * step) };
+    } else if (e.key === ' ' || e.code === 'Space') {
+      e.preventDefault();
+      togglePause();
+    }
+  }, true);
+
+  function resizeAll() { resizeView(); resizeYT(); }
+  window.addEventListener('resize', resizeAll);
+  resizeAll();
+  syncSliders();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
