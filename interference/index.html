@@ -66,6 +66,19 @@
     box-shadow: 0 1px 3px rgba(0,0,0,.1);
     font-variant-numeric: tabular-nums;
   }
+  .phase-panel {
+    position: absolute; top: 10px; right: 10px; width: 250px;
+    padding: 8px 12px; border-radius: 8px;
+    background: rgba(255, 255, 255, .88);
+    box-shadow: 0 1px 3px rgba(0,0,0,.1);
+    font-variant-numeric: tabular-nums;
+  }
+  .phase-value { display: block; margin-bottom: 4px; }
+  .phase-panel input { width: 100%; margin: 0; accent-color: var(--ink); }
+  .phase-ends {
+    display: flex; justify-content: space-between;
+    font-family: "Cambria Math", "Times New Roman", serif; font-size: 1.05rem;
+  }
   .amp-row { display: flex; justify-content: space-between; margin-bottom: 6px; }
   #overlay { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
   #plot-yt { display: block; width: 100%; height: 200px; }
@@ -117,11 +130,12 @@
     <h1>Interference of two sources</h1>
     <div class="formula">
       y = A<sub>1</sub> · sin( <span class="time"><span class="frac"><span>2π</span><span>T</span></span> · t</span> − <span class="space"><span class="frac"><span>2π</span><span>λ</span></span> · r<sub>1</sub></span> )
-      + A<sub>2</sub> · sin( <span class="time"><span class="frac"><span>2π</span><span>T</span></span> · t</span> − <span class="space"><span class="frac"><span>2π</span><span>λ</span></span> · r<sub>2</sub></span> )
+      + A<sub>2</sub> · sin( <span class="time"><span class="frac"><span>2π</span><span>T</span></span> · t</span> − <span class="space"><span class="frac"><span>2π</span><span>λ</span></span> · r<sub>2</sub></span> − φ<sub>0</sub> )
     </div>
     <dl>
       <dt>A<sub>1</sub></dt><dd>amplitude of S<sub>1</sub>, set to 1 m here</dd>
       <dt>A<sub>2</sub></dt><dd>amplitude of S<sub>2</sub></dd>
+      <dt>φ<sub>0</sub></dt><dd>phase difference between S<sub>2</sub> and S<sub>1</sub></dd>
       <dt>T</dt><dd>period, set to 2 s here</dd>
       <dt>λ</dt><dd>wavelength</dd>
       <dt>d</dt><dd>distance between the sources S<sub>1</sub> and S<sub>2</sub></dd>
@@ -135,6 +149,11 @@
     <div class="view">
       <canvas id="gl"></canvas>
       <canvas id="overlay"></canvas>
+      <div class="phase-panel">
+        <label for="phi-slider" class="phase-value">S<sub>2</sub> is behind by <span id="phi-value"></span>π rad</label>
+        <input type="range" id="phi-slider" min="-1" max="1" step="0.05" value="0">
+        <div class="phase-ends"><span>−π</span><span>π</span></div>
+      </div>
       <div class="amps">
         <div class="amp-row"><span>A<sub>1</sub></span><span>1.00 m</span></div>
         <div class="slider">
@@ -183,7 +202,7 @@
   const MARGIN = { left: 64, right: 24, top: 12, bottom: 44 };
 
   // ---- State ----
-  let d = 5, lambda = 2.5, A2 = 1, t = 0;
+  let d = 5, lambda = 2.5, A2 = 1, phi0 = 0, t = 0;    // phi0: how far S2 is behind S1, in rad
   let focus = { x: 0, y: 6 };
   let running = false, lastFrame = null;
   let crestLines = false;
@@ -204,10 +223,10 @@
   const sources = () => [{ x: -d / 2, y: 0 }, { x: d / 2, y: 0 }];
   const dist = (p, q) => Math.hypot(p.x - q.x, p.y - q.y);
   // one source's wave: zero until the wavefront (r = v·t, v = λ/T) has reached the point
-  const waveAt = (a, r, time) => (r < w * time / k() ? a * Math.sin(w * time - k() * r) : 0);
+  const waveAt = (a, r, time, ph = 0) => (r < w * time / k() ? a * Math.sin(w * time - k() * r + ph) : 0);
   function yAt(p, time) {
     const [s1, s2] = sources();
-    return waveAt(A1, dist(p, s1), time) + waveAt(A2, dist(p, s2), time);
+    return waveAt(A1, dist(p, s1), time) + waveAt(A2, dist(p, s2), time, -phi0);
   }
 
   // ---- Small matrix helpers (column-major, as WebGL expects) ----
@@ -247,11 +266,11 @@
 
   const COMMON = `
     uniform vec2 uS1, uS2;
-    uniform float uK, uW, uT, uA1, uA2, uAMax, uZ;
+    uniform float uK, uW, uT, uA1, uA2, uP2, uAMax, uZ;
     float arrived(float r) { return r < uW * uT / uK ? 1.0 : 0.0; }   // wavefront at r = v·t
     float height(vec2 p) {
       float r1 = distance(p, uS1), r2 = distance(p, uS2);
-      return uA1 * arrived(r1) * sin(uW * uT - uK * r1) + uA2 * arrived(r2) * sin(uW * uT - uK * r2);
+      return uA1 * arrived(r1) * sin(uW * uT - uK * r1) + uA2 * arrived(r2) * sin(uW * uT - uK * r2 + uP2);
     }`;
   const VS = `#version 300 es
     in vec2 aPos;
@@ -278,7 +297,7 @@
     }
     void main() {
       float r1 = distance(vXY, uS1), r2 = distance(vXY, uS2);
-      float th1 = uW * uT - uK * r1, th2 = uW * uT - uK * r2;
+      float th1 = uW * uT - uK * r1, th2 = uW * uT - uK * r2 + uP2;
       float a1 = uA1 * arrived(r1), a2 = uA2 * arrived(r2);
       float z = a1 * sin(th1) + a2 * sin(th2);
       vec2 g = -uK * (a1 * cos(th1) * (vXY - uS1) / max(r1, 1e-4) + a2 * cos(th2) * (vXY - uS2) / max(r2, 1e-4));
@@ -309,7 +328,7 @@
   if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog));
   gl.useProgram(prog);
   const U = name => gl.getUniformLocation(prog, name);
-  const uni = Object.fromEntries(['uMVP', 'uS1', 'uS2', 'uK', 'uW', 'uT', 'uA1', 'uA2', 'uAMax', 'uZ', 'uCrest', 'uTrough', 'uInk', 'uLines'].map(n => [n, U(n)]));
+  const uni = Object.fromEntries(['uMVP', 'uS1', 'uS2', 'uK', 'uW', 'uT', 'uA1', 'uA2', 'uP2', 'uAMax', 'uZ', 'uCrest', 'uTrough', 'uInk', 'uLines'].map(n => [n, U(n)]));
 
   // flat grid of (x, y); heights are computed in the shader
   const verts = new Float32Array((GRID + 1) ** 2 * 2);
@@ -372,6 +391,7 @@
     gl.uniform2f(uni.uS2, s2.x, s2.y);
     gl.uniform1f(uni.uK, k());
     gl.uniform1f(uni.uA2, A2);
+    gl.uniform1f(uni.uP2, -phi0);
     gl.uniform1f(uni.uT, t);
     gl.uniform1f(uni.uLines, crestLines ? 1 : 0);
     gl.drawElements(gl.TRIANGLES, idx.length, gl.UNSIGNED_SHORT, 0);
@@ -389,7 +409,7 @@
     octx.textAlign = 'center';
     octx.textBaseline = 'bottom';
     srcs.forEach((s, i) => {
-      const ps = project(s.x, s.y, (i ? A2 : A1) * Math.sin(w * t));
+      const ps = project(s.x, s.y, i ? A2 * Math.sin(w * t - phi0) : A1 * Math.sin(w * t));
       if (!ps) return;
       const on = i === 0 || A2 > 0;
       octx.globalAlpha = on ? 1 : 0.3;
@@ -570,22 +590,26 @@
   function updateDerivation() {
     const [s1, s2] = sources();
     const r1 = dist(focus, s1), r2 = dist(focus, s2);
-    const dr = r1 - r2, dphi = k() * dr;
+    // Δφ = φ2 − φ1: path difference minus how far S2 is behind S1
+    const dr = r1 - r2, dphi = k() * dr - phi0;
     const amp = Math.sqrt(Math.max(0, A1 * A1 + A2 * A2 + 2 * A1 * A2 * Math.cos(dphi)));
     const timeTerm = w * t, sp1 = k() * r1, sp2 = k() * r2;
     const yv = yAt(focus, t);
     const a2s = A2.toFixed(2);
     const Ls = lambda.toFixed(1);
     const front = w * t / k();
-    const wave = (a, r, tt, sp) => (r < front && Number(a) > 0 ? `${a} · sin( <span class="time">${tt}</span> − <span class="space">${sp}</span> )` : '0');
+    const wave = (a, r, tt, sp, extra = '') => (r < front && Number(a) > 0 ? `${a} · sin( <span class="time">${tt}</span> − <span class="space">${sp}</span>${extra} )` : '0');
+    const phiPi = phi0 / Math.PI;
+    const phiTerm = Math.abs(phiPi) < 1e-9 ? '' : ` ${phiPi > 0 ? '−' : '+'} ${Math.abs(phiPi).toFixed(2)}π`;
+    const phiRad = Math.abs(phiPi) < 1e-9 ? '' : ` ${phiPi > 0 ? '−' : '+'} ${Math.abs(phi0).toFixed(2)} rad`;
 
     $('derivation').innerHTML =
       line('r<sub>1</sub> − r<sub>2</sub>', `${f2(r1)} m − ${f2(r2)} m`, `${signed(dr)} m`, `${signed(dr / lambda)} λ`) +
-      line('Δφ', `<span class="space">${frac('2π', Ls)} · (${signed(dr)})</span>`, `${signed(dphi)} rad`, `${signed(dphi / Math.PI)}π rad`) +
+      line('Δφ', `<span class="space">${frac('2π', Ls)} · (${signed(dr)})</span>${phiTerm}`, `${signed(dphi)} rad`, `${signed(dphi / Math.PI)}π rad`) +
       line('√(A<sub>1</sub>² + A<sub>2</sub>² + 2A<sub>1</sub>A<sub>2</sub> · cos Δφ)', `√(${A1}² + ${a2s}² + 2 · ${A1} · ${a2s} · cos(${f2(dphi)} rad))`, `${amp.toFixed(2)} m`) +
       gap +
-      line('y', wave(A1, r1, `${frac('2π', T)} · ${f2(t)}`, `${frac('2π', Ls)} · ${f2(r1)}`) + ' + ' + wave(a2s, r2, `${frac('2π', T)} · ${f2(t)}`, `${frac('2π', Ls)} · ${f2(r2)}`)) +
-      line('', wave(A1, r1, `${f2(timeTerm)} rad`, `${f2(sp1)} rad`) + ' + ' + wave(a2s, r2, `${f2(timeTerm)} rad`, `${f2(sp2)} rad`)) +
+      line('y', wave(A1, r1, `${frac('2π', T)} · ${f2(t)}`, `${frac('2π', Ls)} · ${f2(r1)}`) + ' + ' + wave(a2s, r2, `${frac('2π', T)} · ${f2(t)}`, `${frac('2π', Ls)} · ${f2(r2)}`, phiTerm)) +
+      line('', wave(A1, r1, `${f2(timeTerm)} rad`, `${f2(sp1)} rad`) + ' + ' + wave(a2s, r2, `${f2(timeTerm)} rad`, `${f2(sp2)} rad`, phiRad)) +
       line('', `<span class="F">${(yv >= 0 ? '+' : '−') + Math.abs(yv).toFixed(3)} m</span>`);
     $('t-value').textContent = f2(t);
   }
@@ -603,18 +627,21 @@
   }
 
   // ---- Controls ----
-  const dSlider = $('d-slider'), lSlider = $('L-slider'), a2Slider = $('A2-slider');
+  const dSlider = $('d-slider'), lSlider = $('L-slider'), a2Slider = $('A2-slider'), phiSlider = $('phi-slider');
   function syncSliders() {
     d = parseFloat(dSlider.value);
     lambda = parseFloat(lSlider.value);
     A2 = parseFloat(a2Slider.value);
     $('A2-value').textContent = A2.toFixed(2);
+    phi0 = parseFloat(phiSlider.value) * Math.PI;
+    $('phi-value').textContent = (phi0 < -1e-9 ? '−' : '') + Math.abs(phi0 / Math.PI).toFixed(2);
     $('d-value').textContent = d.toFixed(1);
     $('L-value').textContent = lambda.toFixed(1);
   }
   dSlider.addEventListener('input', syncSliders);
   lSlider.addEventListener('input', syncSliders);
   a2Slider.addEventListener('input', syncSliders);
+  phiSlider.addEventListener('input', syncSliders);
 
   const TILT = 35 * Math.PI / 180, TOP = 89.5 * Math.PI / 180;
   const view3d = $('view-3d'), viewTop = $('view-top');
