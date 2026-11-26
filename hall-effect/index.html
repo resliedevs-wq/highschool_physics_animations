@@ -192,7 +192,18 @@
   // electrons drift against the current (−x); holes with it (+x). For both, Bqv pushes to −y (the front face)
   const dir = () => (carrier === 'electron' ? -1 : 1);
   let carriers = [];
-  function spawn(c, anywhere) {
+  let selectedCarrier;
+  function selectNearInlet() {
+    // Drift carries new arrivals away from the inlet in the direction dir().
+    selectedCarrier = carriers.reduce((nearest, c) =>
+      !nearest || dir() * c.x < dir() * nearest.x ? c : nearest, null);
+  }
+  // Independent arrivals from the lead. Measure waiting time in expected arrivals
+  // so changing the drift speed also changes the rate of the running clock.
+  const randomWait = () => -Math.log1p(-Math.random());
+  let untilArrival;
+  function spawn(anywhere = false) {
+    const c = {};
     const len = L, w = dv(), th = tv();
     c.x = anywhere ? (Math.random() - 0.5) * len : -dir() * len / 2;
     c.y = (Math.random() - 0.5) * w * 0.999;
@@ -202,7 +213,11 @@
     return c;
   }
   function resetCarriers() {
-    carriers = Array.from({ length: visCount() }, () => spawn({}, true));
+    untilArrival = randomWait();
+    vyEnter = 0;
+    absorbing = [];
+    carriers = Array.from({ length: visCount() }, () => spawn(true));
+    selectNearInlet();
   }
   function resetBuildUp() {
     e = 0;
@@ -224,18 +239,17 @@
     // cross a wide slab as a narrow one
     const a = 2.6 * (B / B_MAX - e) * (dv() / 8);
     // each carrier reaching a face adds the same share of the charge, however many are drawn
-    const delta = DELTA * 80 / Math.max(1, carriers.length) / slow;
+    const targetCount = visCount();
+    const delta = DELTA * 80 / targetCount / slow;
     vyEnter = -a * TAU;
-    for (let i = 0; i < carriers.length; i++) {
-      const c = carriers[i];
+    carriers = carriers.filter(c => {
       c.vy += (-a - c.vy / TAU) * dtSide;
       c.y += c.vy * dtSide;
       c.x += dir() * v * dt;
-      // out through the far end into the lead; a new carrier comes in from the lead at the near end
-      if (Math.abs(c.x) > L / 2) { spawn(c); continue; }
-      if (i === 0) { c.trail.push([c.x, c.y, c.z]); if (c.trail.length > 400) c.trail.shift(); }
+      if (Math.abs(c.x) > L / 2) return false;
+      if (c === selectedCarrier) { c.trail.push([c.x, c.y, c.z]); if (c.trail.length > 400) c.trail.shift(); }
       // A carrier pushed onto a face is absorbed into it: the front face gains its charge (the back face
-      // the opposite). It is replaced by a new carrier from the lead, so none are created or lost.
+      // the opposite).
       // One that drifts onto a face after the forces have balanced is simply held there.
       const side = c.y <= -w ? -1 : c.y >= w ? 1 : 0;
       if (side) {
@@ -243,14 +257,21 @@
         if (pushed) {
           e = side < 0 ? Math.min(B / B_MAX, e + delta) : Math.max(B / B_MAX, e - delta);
           absorbing.push({ x: c.x, y: side * w, z: c.z, t0: nowMs });
-          spawn(c);
+          return false;
         } else { c.y = side * w * 0.999; c.vy = 0; }
       }
+      return true;
+    });
+    // At balance each carrier takes L / v to cross the slab.
+    const arrivalRate = targetCount * v / L;
+    untilArrival -= arrivalRate * dt;
+    while (untilArrival <= 0) {
+      const c = spawn();
+      c.x += dir() * v * (-untilArrival / arrivalRate);
+      carriers.push(c);
+      untilArrival += randomWait();
     }
-    // a new count of carriers when n or the size of the slab changes
-    const want = visCount();
-    while (carriers.length < want) carriers.push(spawn({}, true));
-    if (carriers.length > want) carriers.length = want;
+    if (!carriers.includes(selectedCarrier)) selectNearInlet();
   }
 
   // ---- Canvas helpers ----
@@ -419,8 +440,6 @@
           ctx.fill();
         }
         ctx.globalAlpha = 1;
-        const [lx, ly] = proj([10 + R + 0.6, bArrows[1][1] * 0.55, zs]);
-        label(ctx, `B = ${B.toFixed(2)} T`, lx + 6, ly, bCol, { align: 'left' });
         return;
       }
       ctx.globalAlpha = 0.35 + 0.65 * B / B_MAX;
@@ -470,14 +489,14 @@
 
     // carriers, far ones first, and the path of the picked-out one
     const order = carriers.map((c, i) => [proj([c.x, c.y, c.z])[2], i]).sort((p, q) => p[0] - q[0]);
-    const pick = carriers[0];
+    const pick = selectedCarrier;
     if (pick && pick.trail.length > 1) {
       ctx.strokeStyle = carrier === 'electron' ? C.electron : C.hole; ctx.lineWidth = 1.5; ctx.globalAlpha = 0.6;
       ctx.beginPath();
       pick.trail.map(proj).forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y));
       ctx.stroke(); ctx.globalAlpha = 1;
     }
-    for (const [, i] of order) if (i !== 0) drawCarrier(ctx, carriers[i], false);
+    for (const [, i] of order) if (carriers[i] !== pick) drawCarrier(ctx, carriers[i], false);
 
     front.forEach(f => { fillFace(ctx, f, 0.22); tintFace(ctx, f); });
     // being absorbed: the carrier sinks into the face as a ring spreads out from it
@@ -532,29 +551,39 @@
   }
 
   // a voltmeter reading V_P − V_Q
+  // colour of the charge on a face now: red if positive, blue if negative, ink if uncharged
+  function faceColour(face) {
+    if (Math.abs(e) < 0.005) return C.ink;
+    let frontNeg = carrier === 'electron';
+    if (e < 0) frontNeg = !frontNeg;
+    const neg = face === 'front' ? frontNeg : !frontNeg;
+    return neg ? C.electron : C.hole;
+  }
   function drawVoltmeter(ctx, cx, cy) {
     const w = 196, h = 88, left = cx - w / 2, top = cy - h / 2;
     ctx.beginPath(); ctx.roundRect(left, top, w, h, 10);
     ctx.fillStyle = '#fff'; ctx.fill(); ctx.strokeStyle = C.ink; ctx.lineWidth = 2; ctx.stroke();
-    // left half: the circuit symbol, and what it measures
+    // left half: a large V, and what it measures, V_P (back face) and V_Q (front face) in their faces' colours
     const lx = left + w / 4;
-    ctx.beginPath(); ctx.arc(lx, cy - 12, 16, 0, 2 * Math.PI); ctx.stroke();
-    label(ctx, 'V', lx, cy - 11, C.ink, { size: 16, weight: '700' });
-    const parts = [['V', 'P'], [' − V', 'Q']];
-    const width = parts.reduce((acc, [txt, sub]) => {
-      ctx.font = '600 13px system-ui, sans-serif'; acc += ctx.measureText(txt).width;
-      ctx.font = '600 10px system-ui, sans-serif'; return acc + ctx.measureText(sub).width + 1;
+    label(ctx, 'V', lx, cy - 10, C.ink, { size: 34, weight: '700' });
+    const parts = [['V', 'P', faceColour('back')], [' − ', '', C.muted], ['V', 'Q', faceColour('front')]];
+    const measure = () => parts.reduce((acc, [txt, sub]) => {
+      ctx.font = '700 14px system-ui, sans-serif'; acc += ctx.measureText(txt).width;
+      ctx.font = '700 10px system-ui, sans-serif'; return acc + (sub ? ctx.measureText(sub).width + 1 : 0);
     }, 0);
-    let x = lx - width / 2;
-    ctx.fillStyle = C.muted; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-    for (const [txt, sub] of parts) {
-      ctx.font = '600 13px system-ui, sans-serif'; ctx.fillText(txt, x, cy + 22); x += ctx.measureText(txt).width;
-      ctx.font = '600 10px system-ui, sans-serif'; ctx.fillText(sub, x, cy + 27); x += ctx.measureText(sub).width + 1;
+    let x = lx - measure() / 2;
+    ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    for (const [txt, sub, col] of parts) {
+      ctx.fillStyle = col;
+      ctx.font = '700 14px system-ui, sans-serif'; ctx.fillText(txt, x, cy + 24); x += ctx.measureText(txt).width;
+      if (sub) { ctx.font = '700 10px system-ui, sans-serif'; ctx.fillText(sub, x, cy + 29); x += ctx.measureText(sub).width + 1; }
     }
-    // right half: the reading
+    // right half: the reading, its unit on a line of its own
     ctx.strokeStyle = C.grid; ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(cx, top + 10); ctx.lineTo(cx, top + h - 10); ctx.stroke();
-    label(ctx, fmtV(signedVH()), cx + w / 4, cy, C.ink, { size: 16, weight: '700' });
+    const [num, unit] = splitV(signedVH());
+    label(ctx, num, cx + w / 4, cy - 9, C.ink, { size: 22, weight: '700' });
+    label(ctx, unit, cx + w / 4, cy + 19, C.muted, { size: 14, weight: '600' });
   }
 
   // a key to the two fields, bottom left
@@ -573,13 +602,17 @@
 
   // ---- The Hall voltage now: V_P − V_Q, with P on the back face ----
   const signedVH = () => (carrier === 'electron' ? 1 : -1) * e * vhMax();
-  function fmtV(v) {
-    const a = Math.abs(v), s = v < 0 ? '−' : v > 0 ? '+' : '';
-    const ref = Math.max(Math.abs(vhFinal()), 1e-30);
-    if (ref >= 1e-3) return `${s}${(a * 1e3).toFixed(1)} mV`;
-    if (ref >= 1e-6) return `${s}${(a * 1e6).toFixed(1)} µV`;
-    return `${s}${(a * 1e9).toFixed(1)} nV`;
+  // a voltage as [number, unit], three significant figures, the unit picked from the larger of the
+  // reading and the value it is settling at (so it does not jump about while building up)
+  function splitV(v) {
+    const ref = Math.max(Math.abs(v), Math.abs(vhFinal()));
+    const [k, unit] = ref >= 1 ? [1, 'V'] : ref >= 1e-3 ? [1e3, 'mV'] : ref >= 1e-6 ? [1e6, 'µV'] : [1e9, 'nV'];
+    const a = Math.abs(v) * k;
+    const s = v < 0 ? '−' : v > 0 ? '+' : '';
+    const num = a === 0 ? '0' : a >= 100 ? a.toFixed(0) : a >= 10 ? a.toFixed(1) : a.toFixed(2);
+    return [s + num, unit];
   }
+  const fmtV = v => splitV(v).join(' ');
 
 
 
@@ -688,7 +721,7 @@
   $('reset-btn').addEventListener('click', () => {
     e = 0;
     for (const c of carriers) c.vy = 0;
-    if (carriers[0]) carriers[0].trail = [];
+    if (selectedCarrier) selectedCarrier.trail = [];
   });
 
   // ---- Slow motion: in 10× each carrier reaching a face carries a tenth of the charge ----
