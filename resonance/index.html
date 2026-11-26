@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Resonance</title>
+<style>
+  :root {
+    --bg: #f7f7f5;
+    --panel: #ffffff;
+    --ink: #1f2328;
+    --muted: #6b7280;
+    --grid: #e5e7eb;
+    --axis: #9ca3af;
+    --a: #2f6fb5;           /* string A */
+    --b: #8e4fb8;           /* string B */
+    --focus: #dc2626;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+  }
+  main { max-width: 1000px; margin: 0 auto; padding: 20px; }
+  .card {
+    background: var(--panel);
+    border-radius: 10px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.08);
+    padding: 14px 18px;
+    margin-bottom: 14px;
+  }
+  .frac {
+    display: inline-flex; flex-direction: column;
+    vertical-align: middle; text-align: center;
+    font-size: .85em; line-height: 1.15; margin: 0 2px;
+  }
+  .frac > span { padding: 0 3px; }
+  .frac > span:first-child { border-bottom: 1.5px solid currentColor; }
+  .intro h1 { font-size: 1.25rem; margin: 0 0 8px; }
+  .intro .formulas {
+    display: flex; gap: 2.2em; justify-content: center; flex-wrap: wrap;
+    font-family: "Cambria Math", "Times New Roman", serif;
+    font-size: 1.4rem;
+    line-height: 2.3;
+    margin: 4px 0 10px;
+  }
+  .intro dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; margin: 0; }
+  .intro dt { font-family: "Cambria Math", "Times New Roman", serif; font-size: 1.1rem; text-align: center; }
+  .intro dd { margin: 0; }
+  .string-head {
+    display: grid;
+    grid-template-columns: auto minmax(180px, 1fr) auto;
+    gap: 10px 24px;
+    align-items: center;
+    margin-bottom: 4px;
+  }
+  .name { font-weight: 700; }
+  .name.a { color: var(--a); }
+  .name.b { color: var(--b); }
+  .info {
+    font-family: "Cambria Math", "Times New Roman", serif;
+    font-size: 1.15rem;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .slider label { display: flex; justify-content: space-between; margin-bottom: 4px; font-variant-numeric: tabular-nums; }
+  .slider input { width: 100%; accent-color: var(--ink); }
+  canvas { display: block; width: 100%; }
+  canvas.yx { height: 230px; }
+  #plot-amp { height: 220px; }
+  .legend { display: flex; gap: 18px; align-items: center; margin-bottom: 4px; color: var(--muted); }
+  .legend .title { color: var(--ink); font-weight: 600; margin-right: auto; }
+  .key { display: inline-block; width: 1.8em; vertical-align: middle; border-top: 3px solid; margin-right: 6px; }
+  .key.a { border-color: var(--a); }
+  .key.b { border-color: var(--b); }
+  .key.off { border-top: 2px dashed var(--focus); }
+  .controls { display: flex; gap: 10px 24px; align-items: center; flex-wrap: wrap; }
+  .buttons { display: flex; gap: 8px; align-items: center; }
+  button {
+    font: inherit;
+    height: 2.4em; min-width: 2.4em; padding: 0 10px;
+    border-radius: 6px;
+    border: 1px solid #d1d5db;
+    background: #fff;
+    cursor: pointer;
+  }
+  button:hover { background: #f3f4f6; }
+  #osc-btn { min-width: 11em; font-weight: 600; }
+  #osc-btn[aria-pressed="true"] { background: var(--ink); color: #fff; border-color: var(--ink); }
+  .switch { display: inline-flex; border: 1px solid #d1d5db; border-radius: 6px; overflow: hidden; }
+  .switch button { border: 0; border-radius: 0; }
+  .switch button + button { border-left: 1px solid #d1d5db; }
+  .switch button[aria-pressed="true"] { background: var(--ink); color: #fff; }
+  .clock { font-variant-numeric: tabular-nums; min-width: 7em; text-align: right; margin-left: auto; }
+  .hint { color: var(--muted); font-size: .9rem; margin: 8px 0 0; }
+  @media (max-width: 760px) {
+    .string-head { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <section class="card intro">
+    <h1>Resonance</h1>
+    <div class="formulas">
+      <span>L = n · <span class="frac"><span>λ</span><span>2</span></span></span>
+      <span>λ = <span class="frac"><span>2L</span><span>n</span></span></span>
+      <span>T = <span class="frac"><span>λ</span><span>v</span></span></span>
+    </div>
+    <dl>
+      <dt>L</dt><dd>length between the fixed ends, set to 8 m here</dd>
+      <dt>v</dt><dd>wave speed, set to 4 m/s here</dd>
+      <dt>T</dt><dd>period of the oscillator at the left end; it moves only 0.15 m up and down</dd>
+      <dt>n</dt><dd>how many half wavelengths fit on the string</dd>
+    </dl>
+    <p class="hint">The oscillator keeps feeding waves in. They reflect at both ends and add up with the new waves.
+      A small loss on every trip along the string stops the wave from growing forever.</p>
+  </section>
+
+  <div class="card">
+    <div class="string-head">
+      <span class="name a">String A</span>
+      <div class="slider">
+        <label for="n-0"><span>n</span><span id="n-value-0"></span></label>
+        <input type="range" id="n-0" min="0.5" max="4" step="0.1" value="2">
+      </div>
+      <span class="info" id="info-0"></span>
+    </div>
+    <canvas class="yx" id="plot-0"></canvas>
+  </div>
+
+  <div class="card">
+    <div class="string-head">
+      <span class="name b">String B</span>
+      <div class="slider">
+        <label for="n-1"><span>n</span><span id="n-value-1"></span></label>
+        <input type="range" id="n-1" min="0.5" max="4" step="0.1" value="1.5">
+      </div>
+      <span class="info" id="info-1"></span>
+    </div>
+    <canvas class="yx" id="plot-1"></canvas>
+  </div>
+
+  <div class="card">
+    <div class="legend">
+      <span class="title">Amplitude: largest |y| on the string during the last period</span>
+      <span><span class="key a"></span>A</span>
+      <span><span class="key b"></span>B</span>
+      <span><span class="key off"></span>oscillator stopped</span>
+    </div>
+    <canvas id="plot-amp"></canvas>
+  </div>
+
+  <div class="card controls">
+    <button id="osc-btn" aria-pressed="true">Stop oscillator</button>
+    <div class="buttons">
+      <button id="pause-btn" title="Play / pause (Space)">▶</button>
+      <button id="reset-btn" title="Start again from t = 0">↺</button>
+    </div>
+    <div class="switch" role="group" aria-label="Playback speed">
+      <button data-speed="1" aria-pressed="false">×1</button>
+      <button data-speed="2" aria-pressed="true">×2</button>
+      <button data-speed="4" aria-pressed="false">×4</button>
+    </div>
+    <span class="clock">t = <span id="t-value">0.0</span> s</span>
+  </div>
+</main>
+
+<script>
+(() => {
+  // ---- Fixed parameters ----
+  const L = 8;               // length between the ends in m (oscillator at x = 0, fixed end at x = L)
+  const V = 4;               // wave speed in m/s
+  const DRIVER_A = 0.15;     // amplitude of the oscillator in m
+  const KEEP = 0.88;         // fraction of the amplitude left after one round trip 0 → L → 0
+  const TRIP = 2 * L / V;    // round-trip time in s
+  const GAMMA = -Math.log(KEEP) / (2 * L);   // loss per metre travelled
+  const Y_RANGE = 3;
+  const AMP_WINDOW = 60, AMP_NOW_AT = 0.85;  // the |y| graph shows 60 s, "now" at 85 %
+  const MARGIN = { left: 64, right: 24, top: 12, bottom: 44 };
+
+  const $ = id => document.getElementById(id);
+  const css = getComputedStyle(document.documentElement);
+  const color = name => css.getPropertyValue(name).trim();
+  const COLORS = {
+    ink: color('--ink'), grid: color('--grid'), axis: color('--axis'), muted: color('--muted'),
+    a: color('--a'), b: color('--b'), focus: color('--focus'),
+  };
+
+  // ---- State ----
+  // each string has its own n and its own list of times the oscillator runs: [start, end)
+  const strings = [
+    { n: 2, color: COLORS.a, runs: [] },
+    { n: 1.5, color: COLORS.b, runs: [] },
+  ];
+  let t = 0, running = false, lastFrame = null, speed = 2;
+  let oscOn = true;
+  let history = [];          // { t, now: largest |y| at t, amp: largest |y| over the last period } per string
+  let stops = [];            // times the oscillator button was set to stop
+
+  // ---- Physics ----
+  const lambdaOf = s => 2 * L / s.n;
+  const periodOf = s => lambdaOf(s) / V;
+  const omegaOf = s => 2 * Math.PI / periodOf(s);
+
+  // position of the oscillator; every run starts from y = 0 and ends at y = 0
+  function drive(s, time) {
+    for (const r of s.runs) {
+      if (time >= r.start && time < r.end) return DRIVER_A * Math.sin(omegaOf(s) * (time - r.start));
+    }
+    return 0;
+  }
+  // wave leaving the oscillator at x = 0 to the right: what the oscillator puts in now, plus every
+  // earlier wave that has come back after m round trips (inverted twice, so the sign is the same)
+  function outgoing(s, time) {
+    let sum = 0, keep = 1;
+    for (let m = 0; time - m * TRIP >= 0 && keep > 1e-5; m++, keep *= KEEP) sum += keep * drive(s, time - m * TRIP);
+    return sum;
+  }
+  // right-moving part minus its reflection at the fixed end x = L
+  const yOf = (s, x, time) =>
+    Math.exp(-GAMMA * x) * outgoing(s, time - x / V) -
+    Math.exp(-GAMMA * (2 * L - x)) * outgoing(s, time - (2 * L - x) / V);
+
+  function restart() {
+    t = 0;
+    oscOn = true;
+    history = [];
+    stops = [];
+    strings.forEach(s => { s.runs = [{ start: 0, end: Infinity }]; });
+    updateOscButton();
+  }
+
+  // stopping waits for the oscillator's next pass through y = 0, so the string is not jerked
+  function setOscillator(on) {
+    oscOn = on;
+    strings.forEach(s => {
+      const last = s.runs[s.runs.length - 1];
+      if (!on) {
+        if (last && last.end === Infinity) {
+          const half = periodOf(s) / 2;
+          last.end = last.start + Math.ceil((t - last.start) / half - 1e-9) * half;
+        }
+      } else if (last && last.end > t) {
+        last.end = Infinity;   // started again before it had stopped
+      } else {
+        s.runs.push({ start: t, end: Infinity });
+      }
+    });
+    if (!on) stops.push(t);
+    else if (stops.length && stops[stops.length - 1] === t) stops.pop();
+    updateOscButton();
+  }
+
+  // ---- Graph helper ----
+  function makeGraph(canvas, uMin, uMax, yMin, yMax) {
+    const g = { canvas, ctx: canvas.getContext('2d'), width: 0, height: 0, uMin, uMax, yMin, yMax };
+    g.resize = () => {
+      const dpr = window.devicePixelRatio || 1;
+      const rect = canvas.getBoundingClientRect();
+      g.width = rect.width; g.height = rect.height;
+      canvas.width = Math.round(g.width * dpr);
+      canvas.height = Math.round(g.height * dpr);
+      g.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    };
+    g.w = () => g.width - MARGIN.left - MARGIN.right;
+    g.h = () => g.height - MARGIN.top - MARGIN.bottom;
+    g.px = u => MARGIN.left + (u - g.uMin) / (g.uMax - g.uMin) * g.w();
+    g.py = v => MARGIN.top + (g.yMax - v) / (g.yMax - g.yMin) * g.h();
+    return g;
+  }
+  const plots = strings.map((s, i) => makeGraph($(`plot-${i}`), -0.6, L + 0.6, -Y_RANGE, Y_RANGE));
+  const amp = makeGraph($('plot-amp'), 0, AMP_WINDOW, 0, Y_RANGE);
+
+  function drawAxes(g, xLabel, xStep, yLabel, yTicks) {
+    const { ctx } = g;
+    const top = MARGIN.top, bottom = MARGIN.top + g.h();
+    ctx.lineWidth = 1;
+    ctx.font = '13px system-ui, sans-serif';
+    ctx.fillStyle = COLORS.muted;
+    ctx.strokeStyle = COLORS.grid;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    for (let u = Math.ceil(Math.max(0, g.uMin) / xStep) * xStep; u <= g.uMax + 1e-9; u += xStep) {
+      if (xLabel === 'x / m' && u > L) break;
+      ctx.beginPath(); ctx.moveTo(g.px(u), top); ctx.lineTo(g.px(u), bottom); ctx.stroke();
+      ctx.fillText(String(u), g.px(u), bottom + 6);
+    }
+    ctx.fillText(xLabel, MARGIN.left + g.w() / 2, bottom + 24);
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+    for (const v of yTicks) {
+      ctx.strokeStyle = v === 0 ? COLORS.axis : COLORS.grid;
+      ctx.beginPath(); ctx.moveTo(MARGIN.left, g.py(v)); ctx.lineTo(MARGIN.left + g.w(), g.py(v)); ctx.stroke();
+      ctx.fillText(v.toFixed(1), MARGIN.left - 8, g.py(v));
+    }
+    ctx.save();
+    ctx.translate(16, top + g.h() / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.textAlign = 'center';
+    ctx.fillText(yLabel, 0, 0);
+    ctx.restore();
+  }
+
+  function drawFixedEnd(g, x) {
+    const { ctx } = g;
+    const px = g.px(x), w = 12, top = MARGIN.top, bottom = MARGIN.top + g.h();
+    ctx.save();
+    ctx.beginPath(); ctx.rect(px, top, w, bottom - top); ctx.clip();
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(px, top, w, bottom - top);
+    ctx.strokeStyle = COLORS.muted;
+    ctx.lineWidth = 1;
+    for (let yy = top - w; yy < bottom + w; yy += 7) {
+      ctx.beginPath(); ctx.moveTo(px, yy + w); ctx.lineTo(px + w, yy); ctx.stroke();
+    }
+    ctx.restore();
+    ctx.strokeStyle = COLORS.ink;
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(px, top); ctx.lineTo(px, bottom); ctx.stroke();
+  }
+
+  // the oscillator: a rod it slides along and the block that holds the string's end
+  function drawOscillator(g, yv, on) {
+    const { ctx } = g;
+    const px = g.px(0);
+    ctx.strokeStyle = COLORS.axis;
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(px, g.py(-0.6)); ctx.lineTo(px, g.py(0.6)); ctx.stroke();
+    ctx.fillStyle = on ? COLORS.ink : COLORS.muted;
+    ctx.fillRect(px - 6, g.py(yv) - 10, 12, 20);
+  }
+
+  // ---- y–x graphs; returns the largest |y| on each string ----
+  function drawStrings() {
+    return strings.map((s, i) => {
+      const g = plots[i], { ctx } = g;
+      ctx.clearRect(0, 0, g.width, g.height);
+      drawAxes(g, 'x / m', 1, 'y / m', [-3, -2, -1, 0, 1, 2, 3]);
+      drawFixedEnd(g, L);
+
+      const steps = Math.max(200, Math.round(g.w() / 1.5));
+      let biggest = 0;
+      ctx.strokeStyle = s.color;
+      ctx.lineWidth = 3.5;
+      ctx.lineJoin = 'round';
+      ctx.beginPath();
+      for (let j = 0; j <= steps; j++) {
+        const x = j / steps * L, y = yOf(s, x, t);
+        biggest = Math.max(biggest, Math.abs(y));
+        const yc = Math.max(-Y_RANGE, Math.min(Y_RANGE, y));
+        if (j === 0) ctx.moveTo(g.px(x), g.py(yc)); else ctx.lineTo(g.px(x), g.py(yc));
+      }
+      ctx.stroke();
+      drawOscillator(g, drive(s, t), s.runs.some(r => t >= r.start && t < r.end));
+      return biggest;
+    });
+  }
+
+  // ---- |y| against t ----
+  function drawAmp() {
+    const g = amp, { ctx } = g;
+    g.uMin = Math.max(0, t - AMP_NOW_AT * AMP_WINDOW);
+    g.uMax = g.uMin + AMP_WINDOW;
+    ctx.clearRect(0, 0, g.width, g.height);
+    drawAxes(g, 't / s', 5, '|y| / m', [0, 1, 2, 3]);
+
+    ctx.strokeStyle = COLORS.focus;
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([5, 4]);
+    for (const ts of stops) {
+      if (ts < g.uMin || ts > g.uMax) continue;
+      ctx.beginPath(); ctx.moveTo(g.px(ts), MARGIN.top); ctx.lineTo(g.px(ts), MARGIN.top + g.h()); ctx.stroke();
+    }
+    ctx.setLineDash([]);
+
+    strings.forEach((s, i) => {
+      ctx.strokeStyle = s.color;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      let pen = false;
+      for (const h of history) {
+        if (h.t < g.uMin) continue;
+        const py = g.py(Math.min(Y_RANGE, h.amp[i]));
+        if (pen) ctx.lineTo(g.px(h.t), py); else ctx.moveTo(g.px(h.t), py);
+        pen = true;
+      }
+      ctx.stroke();
+    });
+  }
+
+  // ---- Readouts ----
+  function updateInfo() {
+    strings.forEach((s, i) => {
+      $(`n-value-${i}`).textContent = s.n.toFixed(1);
+      $(`info-${i}`).textContent = `λ = ${lambdaOf(s).toFixed(2)} m   T = ${periodOf(s).toFixed(2)} s`;
+    });
+  }
+  const oscBtn = $('osc-btn');
+  function updateOscButton() {
+    oscBtn.textContent = oscOn ? 'Stop oscillator' : 'Start oscillator';
+    oscBtn.setAttribute('aria-pressed', String(oscOn));
+  }
+
+  // the string passes through y = 0 twice per period, so plot the largest |y| over the last period
+  function record(now) {
+    const ampNow = now.map((v, i) => {
+      let m = v;
+      for (let j = history.length - 1; j >= 0 && history[j].t > t - periodOf(strings[i]); j--) m = Math.max(m, history[j].now[i]);
+      return m;
+    });
+    history.push({ t, now, amp: ampNow });
+    while (history.length && history[0].t < t - AMP_WINDOW) history.shift();
+  }
+
+  // ---- Animation loop ----
+  const pauseBtn = $('pause-btn');
+  function togglePause() {
+    running = !running;
+    pauseBtn.textContent = running ? '⏸' : '▶';
+  }
+  function frame(now) {
+    const advanced = lastFrame !== null && running;
+    if (advanced) t += Math.min((now - lastFrame) / 1000, 0.1) * speed;
+    lastFrame = now;
+    const biggest = drawStrings();
+    if (advanced) record(biggest);
+    drawAmp();
+    $('t-value').textContent = t.toFixed(1);
+    requestAnimationFrame(frame);
+  }
+
+  // ---- Controls ----
+  // a new n is a new oscillator frequency, so both strings start again from rest
+  strings.forEach((s, i) => {
+    const slider = $(`n-${i}`);
+    slider.addEventListener('input', () => {
+      s.n = Math.round(parseFloat(slider.value) * 10) / 10;
+      updateInfo();
+      restart();
+    });
+  });
+
+  oscBtn.addEventListener('click', () => setOscillator(!oscOn));
+  pauseBtn.addEventListener('click', togglePause);
+  $('reset-btn').addEventListener('click', restart);
+
+  const speedBtns = document.querySelectorAll('[data-speed]');
+  speedBtns.forEach(btn => btn.addEventListener('click', () => {
+    speed = Number(btn.dataset.speed);
+    speedBtns.forEach(b => b.setAttribute('aria-pressed', String(b === btn)));
+  }));
+
+  window.addEventListener('keydown', e => {
+    if (e.key === ' ' || e.code === 'Space') {
+      e.preventDefault();
+      togglePause();
+    }
+  }, true);
+
+  function resizeAll() { plots.forEach(g => g.resize()); amp.resize(); }
+  window.addEventListener('resize', resizeAll);
+  resizeAll();
+  updateInfo();
+  restart();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
