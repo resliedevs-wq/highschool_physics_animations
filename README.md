@@ -18,3 +18,4 @@ Each animation is a single self-contained HTML file. Open it directly in a brows
 - 3.6 [Polariser and analyser](polariser-analyser/index.html): I₁ = I₀·cos² θ₁, I₂ = I₁·cos²(θ₂ − θ₁); two filters that can each be turned, with plane-polarised or unpolarised light
 - 3.7 [Doppler effect](doppler/index.html): f_o = f_s·v/(v ∓ v_s); a siren drives past a listener, with the wavelength ahead and behind and the frequency heard against time
 - 3.8 [Diffraction at a gap](diffraction/index.html): ripple tank with adjustable λ and a fixed 4 cm gap; maximum diffraction at λ = a, "Full diffraction" for λ > a with less energy getting through
+- 3.9 [Double slit and diffraction grating](double-slit-grating/index.html): x = λD/a and d sin θ = nλ; fringes on a screen with point P's path difference, grating orders with 2–100 slits lit, and white-light spectra

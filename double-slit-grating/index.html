@@ -1,0 +1,1021 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>3.9 Double Slit and Diffraction Grating</title>
+<style>
+  :root {
+    --bg: #f7f7f5;
+    --panel: #ffffff;
+    --ink: #1f2328;
+    --muted: #6b7280;
+    --grid: #e5e7eb;
+    --axis: #9ca3af;
+    --dark: #0b0d12;
+    --focus: #dc2626;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+  }
+  main { max-width: 1100px; margin: 0 auto; padding: 20px; }
+  .card {
+    background: var(--panel);
+    border-radius: 10px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.08);
+    padding: 14px 18px;
+    margin-bottom: 14px;
+  }
+  .frac {
+    display: inline-flex; flex-direction: column;
+    vertical-align: middle; text-align: center;
+    font-size: .85em; line-height: 1.15; margin: 0 2px;
+  }
+  .frac > span { padding: 0 3px; }
+  .frac > span:first-child { border-bottom: 1.5px solid currentColor; }
+  .intro .title-row { display: flex; align-items: center; gap: 12px 24px; flex-wrap: wrap; margin-bottom: 8px; }
+  .intro h1 { font-size: 1.25rem; margin: 0; }
+  .intro .formulas {
+    display: flex; gap: 3em; justify-content: center; flex-wrap: wrap;
+    font-family: "Cambria Math", "Times New Roman", serif;
+    font-size: 1.4rem;
+    line-height: 2.4;
+    margin: 0 0 6px;
+  }
+  .intro dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; margin: 0; }
+  .intro dt { font-family: "Cambria Math", "Times New Roman", serif; font-size: 1.1rem; text-align: center; }
+  .intro dd { margin: 0; }
+  canvas { display: block; width: 100%; }
+  #scene { height: 480px; border-radius: 6px; background: var(--dark); touch-action: none; }
+  #front { height: 150px; touch-action: none; }
+  #plot { height: 250px; }
+  .sliders { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px 28px; margin-top: 12px; }
+  .slider label { display: flex; justify-content: space-between; margin-bottom: 4px; font-variant-numeric: tabular-nums; }
+  .slider input { width: 100%; accent-color: var(--ink); }
+  .slider.off { opacity: .4; }
+  button {
+    font: inherit;
+    height: 2.4em; min-width: 2.4em; padding: 0 10px;
+    border-radius: 6px;
+    border: 1px solid #d1d5db;
+    background: #fff;
+    cursor: pointer;
+  }
+  button:hover { background: #f3f4f6; }
+  .switch { display: inline-flex; border: 1px solid #d1d5db; border-radius: 6px; overflow: hidden; }
+  .switch button { border: 0; border-radius: 0; }
+  .switch button + button { border-left: 1px solid #d1d5db; }
+  .switch button[aria-pressed="true"] { background: var(--ink); color: #fff; }
+  .toggle[aria-pressed="true"] { background: var(--ink); color: #fff; border-color: var(--ink); }
+  .muted { color: var(--muted); }
+  .legend { display: flex; gap: 10px 18px; align-items: center; flex-wrap: wrap; margin-bottom: 4px; color: var(--muted); }
+  .legend .title { color: var(--ink); font-weight: 600; margin-right: auto; }
+  .key { display: inline-block; width: 1.8em; vertical-align: middle; border-top: 3px solid var(--ink); margin-right: 6px; }
+  .key.ref { border-top: 2px dashed var(--axis); }
+  .derivation {
+    display: grid;
+    grid-template-columns: auto auto 1fr;
+    column-gap: .4em;
+    align-items: center;
+    font-family: "Cambria Math", "Times New Roman", serif;
+    font-size: 1.3rem;
+    line-height: 2.4;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    overflow-x: auto;
+  }
+  .derivation .head {
+    grid-column: 1 / -1;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-size: 1rem; font-weight: 600; line-height: 1.6; margin-top: .3em;
+  }
+  .derivation .note {
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-size: 1rem; font-weight: 600;
+  }
+  .derivation .dim { color: var(--muted); }
+  .derivation .sel { font-weight: 700; }
+  .stage { position: relative; }
+  /* a toggle sitting on the dark scene */
+  .overlay {
+    position: absolute; left: 10px; bottom: 10px;
+    background: rgba(255,255,255,.1); color: #fff; border-color: rgba(255,255,255,.35);
+  }
+  .overlay:hover { background: rgba(255,255,255,.2); }
+  .overlay[aria-pressed="true"] { background: #fff; color: var(--ink); border-color: #fff; }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <section class="card intro">
+    <div class="title-row">
+      <h1>3.9 Double slit and diffraction grating</h1>
+      <div class="switch" role="group" aria-label="Part">
+        <button data-mode="double" aria-pressed="true">Double slit</button>
+        <button data-mode="grating" aria-pressed="false">Diffraction grating</button>
+      </div>
+    </div>
+    <div class="formulas" data-for="double">
+      <span>x = <span class="frac"><span>λD</span><span>a</span></span></span>
+    </div>
+    <div class="formulas" data-for="grating">
+      <span>d sin θ = nλ</span>
+    </div>
+    <dl data-for="double">
+      <dt>x</dt><dd>fringe spacing: the distance from one bright fringe to the next</dd>
+      <dt>λ</dt><dd>wavelength of the light</dd>
+      <dt>D</dt><dd>distance from the slits to the screen</dd>
+      <dt>a</dt><dd>slit separation</dd>
+    </dl>
+    <dl data-for="grating">
+      <dt>d</dt><dd>grating spacing: the distance from one line to the next</dd>
+      <dt>θ</dt><dd>angle of a maximum from the normal (the straight-through direction)</dd>
+      <dt>n</dt><dd>order of the maximum: 0, 1, 2, …</dd>
+      <dt>λ</dt><dd>wavelength of the light</dd>
+    </dl>
+  </section>
+
+  <div class="card">
+    <div class="stage">
+      <canvas id="scene"></canvas>
+      <button id="white-btn" class="overlay" data-for="grating" aria-pressed="false">White light</button>
+    </div>
+    <div class="sliders">
+      <div class="slider" id="lambda-box">
+        <label for="lambda"><span>λ (wavelength)</span><span id="lambda-value"></span></label>
+        <input type="range" id="lambda" min="400" max="700" step="1" value="520">
+      </div>
+      <div class="slider" data-for="double">
+        <label for="a"><span>a (slit separation)</span><span id="a-value"></span></label>
+        <input type="range" id="a" min="0.2" max="1" step="0.01" value="0.5">
+      </div>
+      <div class="slider" data-for="double">
+        <label for="D"><span>D (slits to screen)</span><span id="D-value"></span></label>
+        <input type="range" id="D" min="0.5" max="3" step="0.05" value="2">
+      </div>
+      <div class="slider" data-for="grating">
+        <label for="lines"><span>Lines per mm</span><span id="lines-value"></span></label>
+        <input type="range" id="lines" min="400" max="1000" step="10" value="500">
+      </div>
+    </div>
+  </div>
+
+  <div class="card" data-for="double">
+    <div class="legend"><span class="title">The screen, seen from the front</span></div>
+    <canvas id="front"></canvas>
+  </div>
+
+  <div class="card" data-for="grating">
+    <div class="legend">
+      <span class="title" id="plot-title">Intensity against θ</span>
+      <span id="key-n"><span class="key" id="key-line"></span><span id="key-n-text"></span></span>
+      <span id="key-ref"><span class="key ref"></span>2 slits</span>
+    </div>
+    <canvas id="plot"></canvas>
+  </div>
+
+  <div class="card derivation" id="derivation"></div>
+</main>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const css = getComputedStyle(document.documentElement);
+  const color = name => css.getPropertyValue(name).trim();
+  const COLORS = { ink: color('--ink'), grid: color('--grid'), axis: color('--axis'), muted: color('--muted'), focus: color('--focus') };
+  const DARK = [11, 13, 18];
+
+  // ---- State ----
+  let mode = 'double';
+  let lambda = 520;              // nm
+  let a = 0.50;                  // slit separation in mm
+  let D = 2.00;                  // slits to screen in m
+  let lines = 500;               // grating lines per mm
+  let N = 100;                   // slits lit on the grating (fixed; the graph also draws 2 for comparison)
+  let white = false;
+  let pY = null;                 // point P on the screen, mm from the centre (set to the first bright fringe)
+  let selOrder = 1;              // grating: the order whose path difference is drawn
+  let phase = 0, lastFrame = null;
+
+  // ---- Colour of light ----
+  // linear RGB (0 … 1) of a wavelength in nm, dimmer towards the ends of the visible range
+  function waveLinear(nm) {
+    let r = 0, g = 0, b = 0;
+    if (nm < 440) { r = (440 - nm) / 60; b = 1; }
+    else if (nm < 490) { g = (nm - 440) / 50; b = 1; }
+    else if (nm < 510) { g = 1; b = (510 - nm) / 20; }
+    else if (nm < 580) { r = (nm - 510) / 70; g = 1; }
+    else if (nm < 645) { r = 1; g = (645 - nm) / 65; }
+    else r = 1;
+    const fade = nm < 420 ? 0.3 + 0.7 * (nm - 380) / 40 : nm > 700 ? 0.3 + 0.7 * (780 - nm) / 80 : 1;
+    return [r * fade, g * fade, b * fade];
+  }
+  const gamma = c => Math.pow(Math.max(0, Math.min(1, c)), 0.8);
+  const waveRGB = nm => waveLinear(nm).map(gamma);
+  const rgbStr = (c, k = 1) => `rgb(${c.map(v => Math.round(255 * v * k)).join(',')})`;
+  // a darker version for lines on the white cards (yellow and green are hard to see otherwise)
+  const inkOf = nm => rgbStr(waveRGB(nm), 0.78);
+
+  // ---- Canvas helpers ----
+  function makeCanvas(canvas) {
+    const c = { canvas, ctx: canvas.getContext('2d'), width: 0, height: 0 };
+    c.resize = () => {
+      const dpr = window.devicePixelRatio || 1;
+      const rect = canvas.getBoundingClientRect();
+      c.width = rect.width; c.height = rect.height;
+      canvas.width = Math.round(c.width * dpr);
+      canvas.height = Math.round(c.height * dpr);
+      c.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    };
+    return c;
+  }
+  const scene = makeCanvas($('scene'));
+  const front = makeCanvas($('front'));
+  const plot = makeCanvas($('plot'));
+
+  function label(ctx, text, x, y, col, { align = 'center', base = 'middle', weight = '', size = 14, italic = false } = {}) {
+    ctx.fillStyle = col;
+    ctx.font = `${italic ? 'italic ' : ''}${weight} ${size}px system-ui, sans-serif`;
+    ctx.textAlign = align; ctx.textBaseline = base;
+    ctx.fillText(text, x, y);
+  }
+  function arrowHead(ctx, x, y, ux, uy, h, col) {
+    ctx.fillStyle = col;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x - ux * h - uy * h * 0.45, y - uy * h + ux * h * 0.45);
+    ctx.lineTo(x - ux * h + uy * h * 0.45, y - uy * h - ux * h * 0.45);
+    ctx.closePath(); ctx.fill();
+  }
+  // a dimension line from (x1, y1) to (x2, y2) with arrowheads at both ends
+  function dimLine(ctx, x1, y1, x2, y2, col) {
+    const len = Math.hypot(x2 - x1, y2 - y1);
+    if (len < 1) return;
+    const ux = (x2 - x1) / len, uy = (y2 - y1) / len, h = Math.min(8, len / 2.5);
+    ctx.strokeStyle = col; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(x1 + ux * h, y1 + uy * h); ctx.lineTo(x2 - ux * h, y2 - uy * h); ctx.stroke();
+    arrowHead(ctx, x2, y2, ux, uy, h, col);
+    arrowHead(ctx, x1, y1, -ux, -uy, h, col);
+  }
+
+  // =====================================================================
+  // Double slit
+  // =====================================================================
+  // Real numbers (mm): path difference S₂P − S₁P in nm for P at y mm above the centre of the screen
+  const pathDiff = y => {
+    const Dm = D * 1000;
+    return (Math.hypot(Dm, y + a / 2) - Math.hypot(Dm, y - a / 2)) * 1e6;
+  };
+  const spacing = () => lambda * 1e-6 * D * 1000 / a;          // x in mm
+  // the y (mm) where the path difference is m wavelengths
+  function yForOrder(m) {
+    let lo = -200, hi = 200;
+    for (let i = 0; i < 60; i++) {
+      const mid = (lo + hi) / 2;
+      if (pathDiff(mid) < m * lambda) lo = mid; else hi = mid;
+    }
+    return (lo + hi) / 2;
+  }
+
+  // The top view cannot be to scale (λ is about a thousandth of a), so it is drawn with λ much
+  // larger, keeping λ/a, D and the fringe spacing in proportion to the real ones. P is placed by
+  // its path difference in wavelengths, so it lands on the matching fringe in both views.
+  const CELL = 2;
+  let ds = null;                 // drawn geometry and the wave field behind the slits
+  function buildDouble() {
+    const W = scene.width, H = scene.height;
+    const s = Math.min(1, W / 1060);
+    const bx = Math.round(120 * s);
+    const lpx = 0.0244 * lambda * s, apx = 240 * a * s, Dpx = 260 * D * s;
+    const sx = bx + Dpx, cy = H / 2;
+    const y1 = cy - apx / 2, y2 = cy + apx / 2;          // S₁ above, S₂ below (canvas y grows down)
+    const k = 2 * Math.PI / lpx;
+    const cols = Math.ceil(W / CELL), rows = Math.ceil(H / CELL);
+    const re = new Float32Array(cols * rows), im = new Float32Array(cols * rows);
+    const inside = new Uint8Array(cols * rows);          // 1 = incident side, 2 = between the slits and the screen
+    for (let j = 0; j < rows; j++) {
+      const y = (j + 0.5) * CELL;
+      for (let i = 0; i < cols; i++) {
+        const x = (i + 0.5) * CELL, idx = j * cols + i;
+        if (x < bx) { inside[idx] = 1; continue; }
+        if (x > sx) continue;
+        const r1 = Math.hypot(x - bx, y - y1), r2 = Math.hypot(x - bx, y - y2);
+        re[idx] = (Math.cos(k * r1) + Math.cos(k * r2)) / 2;
+        im[idx] = (Math.sin(k * r1) + Math.sin(k * r2)) / 2;
+        inside[idx] = 2;
+      }
+    }
+    const img = new ImageData(cols, rows);
+    const off = document.createElement('canvas');
+    off.width = cols; off.height = rows;
+    ds = { W, H, s, bx, sx, cy, y1, y2, lpx, apx, Dpx, k, cols, rows, re, im, inside, img, off };
+  }
+  // drawn: path difference in wavelengths at height yu above the centre of the drawn screen
+  const drawnOrder = yu => (Math.hypot(ds.Dpx, yu + ds.apx / 2) - Math.hypot(ds.Dpx, yu - ds.apx / 2)) / ds.lpx;
+  function drawnYForOrder(m) {
+    let lo = -4 * ds.H, hi = 4 * ds.H;
+    for (let i = 0; i < 50; i++) {
+      const mid = (lo + hi) / 2;
+      if (drawnOrder(mid) < m) lo = mid; else hi = mid;
+    }
+    return (lo + hi) / 2;
+  }
+
+  function drawDouble() {
+    if (!ds || ds.W !== scene.width || ds.H !== scene.height) buildDouble();
+    const { ctx, width: W, height: H } = scene;
+    const { bx, sx, cy, y1, y2, lpx, k, cols, rows, re, im, inside, img, off, s } = ds;
+    const rgb = waveRGB(lambda);
+    const cw = Math.cos(phase), sw = Math.sin(phase);
+    const px = img.data;
+    for (let j = 0; j < rows; j++) {
+      for (let i = 0; i < cols; i++) {
+        const idx = j * cols + i, o = idx * 4;
+        let v = 0;
+        if (inside[idx] === 1) v = Math.cos(k * ((i + 0.5) * CELL - bx) - phase);
+        else if (inside[idx] === 2) v = re[idx] * cw + im[idx] * sw;
+        const b = v > 0 ? Math.pow(v, 0.9) : 0;         // crests lit, troughs dark
+        px[o] = DARK[0] + (255 * rgb[0] - DARK[0]) * b;
+        px[o + 1] = DARK[1] + (255 * rgb[1] - DARK[1]) * b;
+        px[o + 2] = DARK[2] + (255 * rgb[2] - DARK[2]) * b;
+        px[o + 3] = 255;
+      }
+    }
+    off.getContext('2d').putImageData(img, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(off, 0, 0, cols * CELL, rows * CELL);
+
+    // barrier with two narrow slits
+    const gapH = 5;
+    ctx.fillStyle = '#9aa1ad';
+    ctx.fillRect(bx - 4, 0, 8, y1 - gapH / 2);
+    ctx.fillRect(bx - 4, y1 + gapH / 2, 8, y2 - y1 - gapH);
+    ctx.fillRect(bx - 4, y2 + gapH / 2, 8, H - y2 - gapH / 2);
+    label(ctx, 'S₁', bx - 10, y1, '#e5e7eb', { align: 'right', weight: 600 });
+    label(ctx, 'S₂', bx - 10, y2, '#e5e7eb', { align: 'right', weight: 600 });
+
+    // screen: brightness of the drawn pattern, and its intensity profile beside it
+    ctx.fillStyle = DARK_STR;
+    ctx.fillRect(sx, 0, W - sx, H);
+    for (let y = 0; y < H; y++) {
+      const m = drawnOrder(cy - y - 0.5);
+      const I = Math.cos(Math.PI * m) ** 2;
+      ctx.fillStyle = rgbStr(rgb.map(c => c * I + (1 - I) * DARK[0] / 255));
+      ctx.fillRect(sx, y, 8, 1);
+    }
+    const profW = Math.min(80 * s + 10, W - sx - 26);
+    ctx.strokeStyle = 'rgba(255,255,255,.25)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(sx + 16, 0); ctx.lineTo(sx + 16, H); ctx.stroke();
+    ctx.strokeStyle = rgbStr(rgb); ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (let y = 0; y <= H; y += 1) {
+      const I = Math.cos(Math.PI * drawnOrder(cy - y)) ** 2;
+      const x = sx + 16 + I * profW;
+      y === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    label(ctx, 'screen', sx + 4, 14, '#e5e7eb', { weight: 600, size: 13 });
+
+    // point P and the two paths to it
+    const m = pathDiff(pY) / lambda;
+    const yP = cy - drawnYForOrder(m);
+    if (yP > -2 && yP < H + 2) {
+      ctx.strokeStyle = 'rgba(255,255,255,.85)'; ctx.lineWidth = 1.5; ctx.setLineDash([6, 4]);
+      ctx.beginPath(); ctx.moveTo(bx, y1); ctx.lineTo(sx, yP); ctx.moveTo(bx, y2); ctx.lineTo(sx, yP); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.beginPath(); ctx.arc(sx + 4, yP, 6, 0, 2 * Math.PI);
+      ctx.fillStyle = COLORS.focus; ctx.fill();
+      ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
+      label(ctx, 'P', sx - 8, yP + (yP < 24 ? 14 : -14), '#fff', { align: 'right', weight: 700 });
+    }
+
+    // dimensions: a at the slits, D along the bottom
+    const ax = bx + 26;
+    if (y2 - y1 > 18) dimLine(ctx, ax, y1, ax, y2, '#e5e7eb');
+    boxLabel(ctx, `a = ${a.toFixed(2)} mm`, ax + 8, cy);
+    const dy = H - 22;
+    dimLine(ctx, bx, dy, sx, dy, '#e5e7eb');
+    const dText = `D = ${D.toFixed(2)} m`;
+    ctx.font = '600 13px system-ui, sans-serif';
+    const tw = ctx.measureText(dText).width;
+    ctx.fillStyle = DARK_STR; ctx.fillRect((bx + sx) / 2 - tw / 2 - 5, dy - 9, tw + 10, 18);
+    label(ctx, dText, (bx + sx) / 2, dy, '#e5e7eb', { weight: 600, size: 13 });
+    boxLabel(ctx, `λ = ${lambda} nm`, 10, 16);
+    label(ctx, 'not to scale', W - 10, 10, '#9ca3af', { align: 'right', base: 'top', size: 12 });
+  }
+  const DARK_STR = `rgb(${DARK.join(',')})`;
+  function boxLabel(ctx, text, x, y) {
+    ctx.font = '600 13px system-ui, sans-serif';
+    const tw = ctx.measureText(text).width;
+    ctx.fillStyle = 'rgba(11,13,18,.8)'; ctx.fillRect(x - 4, y - 10, tw + 8, 20);
+    label(ctx, text, x, y, '#e5e7eb', { align: 'left', weight: 600, size: 13 });
+  }
+
+  // ---- Front view of the screen, real scale ----
+  const FRONT_MM = 15;           // shows −15 mm … 15 mm
+  const fgeo = { left: 0, w: 1, top: 0, h: 1 };
+  const fx = y => fgeo.left + (y + FRONT_MM) / (2 * FRONT_MM) * fgeo.w;
+  function drawFront() {
+    const { ctx, width: W, height: H } = front;
+    ctx.clearRect(0, 0, W, H);
+    const left = 20, right = 20, top = 34, h = 62;
+    const w = W - left - right;
+    Object.assign(fgeo, { left, w, top, h });
+    const rgb = waveRGB(lambda);
+    ctx.fillStyle = DARK_STR;
+    ctx.fillRect(left, top, w, h);
+    // integrate over each pixel so even closely spaced fringes are drawn fairly
+    for (let i = 0; i < w; i++) {
+      let I = 0;
+      for (let k = 0; k < 4; k++) {
+        const y = -FRONT_MM + (i + (k + 0.5) / 4) / w * 2 * FRONT_MM;
+        I += Math.cos(Math.PI * pathDiff(y) / lambda) ** 2 / 4;
+      }
+      ctx.fillStyle = rgbStr(rgb.map(c => c * I + (1 - I) * DARK[0] / 255));
+      ctx.fillRect(left + i, top, 1, h);
+    }
+    // ruler
+    const by = top + h;
+    ctx.strokeStyle = COLORS.axis; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(left, by + 0.5); ctx.lineTo(left + w, by + 0.5); ctx.stroke();
+    for (let mm = -FRONT_MM; mm <= FRONT_MM; mm++) {
+      const x = Math.round(fx(mm)) + 0.5, big = mm % 5 === 0;
+      ctx.beginPath(); ctx.moveTo(x, by); ctx.lineTo(x, by + (big ? 9 : 5)); ctx.stroke();
+      if (big) label(ctx, String(mm).replace('-', '−'), x, by + 12, COLORS.muted, { base: 'top', size: 12 });
+    }
+    label(ctx, 'y / mm', left + w / 2, by + 30, COLORS.muted, { base: 'top', size: 12 });
+
+    // measuring several fringe spacings at once: from one bright fringe to another
+    const { n, from, to } = measure();
+    const xa = fx(from), xb = fx(to), my = top - 12;
+    ctx.strokeStyle = COLORS.ink; ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(xa, my - 6); ctx.lineTo(xa, top + h); ctx.moveTo(xb, my - 6); ctx.lineTo(xb, top + h);
+    ctx.stroke();
+    dimLine(ctx, xa, my, xb, my, COLORS.ink);
+    const text = `${n}x = ${(to - from).toFixed(1)} mm`;
+    ctx.font = '600 13px system-ui, sans-serif';
+    const tw = ctx.measureText(text).width;
+    ctx.fillStyle = '#fff'; ctx.fillRect((xa + xb) / 2 - tw / 2 - 4, my - 9, tw + 8, 18);
+    label(ctx, text, (xa + xb) / 2, my, COLORS.ink, { weight: 600, size: 13 });
+
+    // P
+    if (Math.abs(pY) <= FRONT_MM) {
+      const x = fx(pY);
+      ctx.fillStyle = COLORS.focus;
+      ctx.beginPath(); ctx.moveTo(x, top + h - 1); ctx.lineTo(x - 7, top + h + 11); ctx.lineTo(x + 7, top + h + 11); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = COLORS.focus; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(x, top); ctx.lineTo(x, top + h); ctx.stroke();
+      label(ctx, 'P', x + 9, top + h + 18, COLORS.focus, { align: 'left', weight: 700, size: 13 });
+    }
+  }
+  // how many fringe spacings the measuring bracket spans, and from where to where (mm)
+  function measure() {
+    const x = spacing();
+    const n = Math.max(1, Math.min(10, Math.floor(24 / x)));
+    const lo = -Math.floor(n / 2), hi = lo + n;
+    return { n, from: yForOrder(lo), to: yForOrder(hi) };
+  }
+
+  // =====================================================================
+  // Diffraction grating
+  // =====================================================================
+  const dNm = () => 1e6 / lines;                            // grating spacing in nm
+  const nMaxFor = lam => Math.floor(dNm() / lam + 1e-9);
+  const thetaDeg = (n, lam) => Math.asin(n * lam / dNm()) * 180 / Math.PI;
+  // intensity from N slits, as a fraction of a principal maximum
+  function nSlit(sinT, lam) {
+    const half = Math.PI * dNm() * sinT / lam;               // half the phase difference between neighbours
+    const den = Math.sin(half);
+    if (Math.abs(den) < 1e-9) return 1;
+    const r = Math.sin(N * half) / (N * den);
+    return r * r;
+  }
+
+  // brightness against angle, θ from −90° to 90° in 0.05° bins, as RGB; plus running sums so a
+  // pixel can take the average over the angle it covers
+  const BIN = 0.05, NB = Math.round(180 / BIN);
+  let gt = null;
+  function buildGratingTable() {
+    // white light needs the wavelengths close enough together that neighbouring ones overlap
+    // (sharper maxima, so a finer step, for more slits)
+    const step = white ? (N >= 100 ? 0.5 : N >= 10 ? 2 : 5) : 1;
+    const lams = white ? Array.from({ length: Math.round(300 / step) + 1 }, (_, i) => 400 + step * i) : [lambda];
+    const cols = lams.map(waveLinear);
+    const tot = [0, 0, 0];
+    cols.forEach(c => c.forEach((v, k) => { tot[k] += v; }));
+    const T = new Float32Array(NB * 3);
+    const SUB = 4;
+    const add = (j, q) => {
+      for (let s = 0; s < SUB; s++) {
+        const th = (-90 + (j + (s + 0.5) / SUB) * BIN) * Math.PI / 180;
+        const I = nSlit(Math.sin(th), lams[q]) / SUB;
+        T[3 * j] += cols[q][0] * I; T[3 * j + 1] += cols[q][1] * I; T[3 * j + 2] += cols[q][2] * I;
+      }
+    };
+    const d = dNm();
+    for (let q = 0; q < lams.length; q++) {
+      if (N < 10) { for (let j = 0; j < NB; j++) add(j, q); continue; }
+      // many slits: the light is all close to the maxima, so only work out the bins near each one
+      const w = 3 * lams[q] / (N * d);                      // three zero-widths, in sin θ
+      const nm = Math.floor(d / lams[q] + 1e-9);
+      for (let n = -nm; n <= nm; n++) {
+        const s0 = n * lams[q] / d;
+        const ta = Math.asin(Math.max(-1, s0 - w)) * 180 / Math.PI, tb = Math.asin(Math.min(1, s0 + w)) * 180 / Math.PI;
+        const ja = Math.max(0, Math.floor((ta + 90) / BIN)), jb = Math.min(NB - 1, Math.floor((tb + 90) / BIN));
+        for (let j = ja; j <= jb; j++) add(j, q);
+      }
+    }
+    if (white) {
+      // the zero order (all colours together) becomes white; the spectra are scaled up to be seen
+      for (let j = 0; j < NB; j++) for (let k = 0; k < 3; k++) T[3 * j + k] /= tot[k];
+      const zeroHalf = Math.max(1, Math.asin(Math.min(1, 1.2 * 700 / (N * dNm()))) * 180 / Math.PI + 2 * BIN);
+      let peak = 1e-9;
+      for (let j = 0; j < NB; j++) {
+        const th = -90 + (j + 0.5) * BIN;
+        if (Math.abs(th) > zeroHalf) peak = Math.max(peak, T[3 * j], T[3 * j + 1], T[3 * j + 2]);
+      }
+      const gain = 1 / peak;
+      for (let j = 0; j < NB; j++) {
+        const th = -90 + (j + 0.5) * BIN;
+        if (Math.abs(th) > zeroHalf) for (let k = 0; k < 3; k++) T[3 * j + k] *= gain;
+      }
+    } else {
+      let peak = 1e-9;
+      for (let j = 0; j < 3 * NB; j++) peak = Math.max(peak, T[j]);
+      const c = cols[0], m = Math.max(...c);
+      for (let j = 0; j < 3 * NB; j++) T[j] *= m / peak;
+    }
+    const C = new Float64Array((NB + 1) * 3);
+    for (let j = 0; j < NB; j++) for (let k = 0; k < 3; k++) C[3 * (j + 1) + k] = C[3 * j + k] + T[3 * j + k];
+    gt = { T, C, img: null, W: 0, H: 0 };
+  }
+  // the average colour from θa to θb (degrees), linear
+  function tableAvg(ta, tb, out) {
+    const pos = th => Math.max(0, Math.min(NB, (th + 90) / BIN));
+    const cum = (p, k) => {
+      const j = Math.min(NB - 1, Math.floor(p)), f = p - j;
+      return gt.C[3 * j + k] + f * (gt.C[3 * (j + 1) + k] - gt.C[3 * j + k]);
+    };
+    const pa = pos(ta), pb = pos(tb), span = Math.max(1e-9, pb - pa);
+    for (let k = 0; k < 3; k++) out[k] = (cum(pb, k) - cum(pa, k)) / span;
+    return out;
+  }
+
+  const ggeo = { gx: 0, gy: 0 };
+  function renderFan() {
+    const W = Math.round(scene.width), H = Math.round(scene.height);
+    const gx = Math.round(W * 0.42), gy = Math.round(H / 2);
+    Object.assign(ggeo, { gx, gy });
+    const off = document.createElement('canvas');
+    off.width = W; off.height = H;
+    const octx = off.getContext('2d');
+    const img = octx.createImageData(W, H);
+    const d = img.data, out = [0, 0, 0];
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        const o = 4 * (y * W + x);
+        d[o] = DARK[0]; d[o + 1] = DARK[1]; d[o + 2] = DARK[2]; d[o + 3] = 255;
+        const dx = x + 0.5 - gx, dy = gy - (y + 0.5);
+        if (dx <= 0) continue;
+        const r = Math.hypot(dx, dy);
+        if (r < 3) continue;
+        const th = Math.atan2(dy, dx) * 180 / Math.PI;
+        const hw = Math.max(BIN, 0.5 / r * 180 / Math.PI);
+        tableAvg(th - hw, th + hw, out);
+        for (let k = 0; k < 3; k++) {
+          const v = gamma(out[k]);
+          d[o + k] = DARK[k] + (255 - DARK[k]) * v;
+        }
+      }
+    }
+    octx.putImageData(img, 0, 0);
+    gt.img = off; gt.W = W; gt.H = H;
+  }
+
+  // where a ray from the grating at θ (degrees) leaves the canvas
+  function rayEnd(th, W, H, margin = 8) {
+    const { gx, gy } = ggeo;
+    const c = Math.cos(th * Math.PI / 180), s = Math.sin(th * Math.PI / 180);
+    let r = (W - margin - gx) / Math.max(c, 1e-9);
+    if (Math.abs(s) > 1e-9) r = Math.min(r, (gy - margin) / Math.abs(s));
+    return r;
+  }
+
+  function drawGrating() {
+    const { ctx, width: W, height: H } = scene;
+    if (!gt) buildGratingTable();
+    if (!gt.img || gt.W !== Math.round(W) || gt.H !== Math.round(H)) renderFan();
+    ctx.clearRect(0, 0, W, H);
+    ctx.drawImage(gt.img, 0, 0, W, H);
+    const { gx, gy } = ggeo;
+    const lamC = white ? null : waveRGB(lambda);
+
+    // incident beam
+    const beam = white ? 'rgba(255,255,255,.85)' : rgbStr(lamC);
+    ctx.fillStyle = beam;
+    ctx.globalAlpha = 0.85;
+    ctx.fillRect(0, gy - 7, gx, 14);
+    ctx.globalAlpha = 1;
+    for (let x = 40; x < gx - 20; x += 120) arrowHead(ctx, x + 14, gy, 1, 0, 12, DARK_STR);
+
+    // the grating
+    ctx.strokeStyle = '#cbd5e1'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(gx, gy - 70); ctx.lineTo(gx, gy + 70); ctx.stroke();
+    ctx.strokeStyle = DARK_STR; ctx.lineWidth = 1;
+    for (let y = gy - 66; y <= gy + 66; y += 6) { ctx.beginPath(); ctx.moveTo(gx - 2, y); ctx.lineTo(gx + 2, y); ctx.stroke(); }
+    label(ctx, 'grating', gx - 10, gy + 60, '#e5e7eb', { align: 'right', weight: 600, size: 13 });
+    ctx.strokeStyle = 'rgba(255,255,255,.35)'; ctx.lineWidth = 1; ctx.setLineDash([5, 5]);
+    ctx.beginPath(); ctx.moveTo(gx, gy); ctx.lineTo(W - 8, gy); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // order labels at the ends of the beams (monochromatic), or of the spectra (white light)
+    const lamRef = white ? 550 : lambda;
+    const nMax = nMaxFor(white ? 400 : lambda);
+    const placed = [];
+    for (let n = 0; n <= nMax; n++) {
+      for (const sgn of n === 0 ? [1] : [1, -1]) {
+        let th;
+        if (white) {
+          const tv = thetaDeg(n, 400), tr = n * 700 <= dNm() ? thetaDeg(n, 700) : 90;
+          th = sgn * (tv + tr) / 2;
+        } else th = sgn * thetaDeg(n, lamRef);
+        const r = rayEnd(th, W, H) - 22;
+        const lx = gx + r * Math.cos(th * Math.PI / 180), ly = gy - r * Math.sin(th * Math.PI / 180);
+        const text = `n = ${sgn < 0 && n > 0 ? '−' : ''}${n}`;
+        ctx.font = '600 13px system-ui, sans-serif';
+        const tw = ctx.measureText(text).width;
+        const box = [lx - tw / 2 - 4, ly - 9, tw + 8, 18];
+        if (placed.some(b => box[0] < b[0] + b[2] + 4 && b[0] < box[0] + box[2] + 4 && box[1] < b[1] + b[3] + 2 && b[1] < box[1] + box[3] + 2)) continue;
+        placed.push(box);
+        ctx.fillStyle = 'rgba(11,13,18,.75)'; ctx.fillRect(lx - tw / 2 - 4, ly - 9, tw + 8, 18);
+        label(ctx, text, lx, ly, '#fff', { weight: 600, size: 13 });
+      }
+    }
+
+    // angle of the chosen order
+    if (!white && selOrder <= nMax) {
+      const th = thetaDeg(selOrder, lambda), R = 80;
+      ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.arc(gx, gy, R, -th * Math.PI / 180, 0); ctx.stroke();
+      const mid = th / 2 * Math.PI / 180;
+      const text = `θ${sub(selOrder)} = ${th.toFixed(1)}°`;
+      const lx = gx + (R + 12) * Math.cos(mid), ly = gy - (R + 12) * Math.sin(mid);
+      ctx.font = '600 14px system-ui, sans-serif';
+      const tw = ctx.measureText(text).width;
+      ctx.fillStyle = 'rgba(11,13,18,.8)'; ctx.fillRect(lx - 2, ly - 10, tw + 6, 20);
+      label(ctx, text, lx + 1, ly, '#fff', { align: 'left', weight: 600 });
+    }
+
+    if (!white) drawInset(ctx);
+  }
+  const SUBS = '₀₁₂₃₄₅₆₇₈₉';
+  const sub = n => String(n).split('').map(c => SUBS[+c]).join('');
+
+  // enlarged view of two neighbouring slits: the extra path d sin θ towards the chosen order
+  function drawInset(ctx) {
+    const n = Math.min(selOrder, nMaxFor(lambda));
+    const th = thetaDeg(n, lambda) * Math.PI / 180;
+    const bxp = 14, byp = 14, bw = 300, bh = 200;
+    ctx.fillStyle = '#151922'; ctx.strokeStyle = '#3b4252'; ctx.lineWidth = 1;
+    ctx.fillRect(bxp, byp, bw, bh); ctx.strokeRect(bxp + 0.5, byp + 0.5, bw, bh);
+    label(ctx, 'two neighbouring slits, enlarged', bxp + 10, byp + 14, '#9ca3af', { align: 'left', size: 12 });
+    const col = rgbStr(waveRGB(lambda));
+    const X = bxp + 70, A = [X, byp + 70], B = [X, byp + 160];   // A above, B below; d = AB
+    // grating line with the two slits
+    ctx.strokeStyle = '#cbd5e1'; ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(X, byp + 30); ctx.lineTo(X, A[1] - 5);
+    ctx.moveTo(X, A[1] + 5); ctx.lineTo(X, B[1] - 5);
+    ctx.moveTo(X, B[1] + 5); ctx.lineTo(X, byp + bh - 8);
+    ctx.stroke();
+    // incident light
+    ctx.strokeStyle = col; ctx.lineWidth = 2;
+    for (const P of [A, B]) {
+      ctx.beginPath(); ctx.moveTo(bxp + 8, P[1]); ctx.lineTo(X - 6, P[1]); ctx.stroke();
+      arrowHead(ctx, X - 6, P[1], 1, 0, 8, col);
+    }
+    // parallel rays at θ to the normal
+    const ux = Math.cos(th), uy = -Math.sin(th), L = 210;
+    ctx.save();
+    ctx.beginPath(); ctx.rect(bxp, byp + 26, bw, bh - 26); ctx.clip();
+    ctx.strokeStyle = col; ctx.lineWidth = 2;
+    for (const P of [A, B]) { ctx.beginPath(); ctx.moveTo(P[0], P[1]); ctx.lineTo(P[0] + ux * L, P[1] + uy * L); ctx.stroke(); }
+    // foot of the perpendicular from A onto the ray from B
+    const t = (A[0] - B[0]) * ux + (A[1] - B[1]) * uy;
+    const F = [B[0] + ux * t, B[1] + uy * t];
+    ctx.strokeStyle = '#e5e7eb'; ctx.lineWidth = 1.2; ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(A[0], A[1]); ctx.lineTo(F[0], F[1]); ctx.stroke();
+    ctx.setLineDash([]);
+    // the extra path, d sin θ
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 5;
+    ctx.beginPath(); ctx.moveTo(B[0], B[1]); ctx.lineTo(F[0], F[1]); ctx.stroke();
+    ctx.strokeStyle = col; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(B[0], B[1]); ctx.lineTo(F[0], F[1]); ctx.stroke();
+    // θ between the grating and the perpendicular, at A
+    if (th > 0.02) {
+      ctx.strokeStyle = '#e5e7eb'; ctx.lineWidth = 1.2;
+      ctx.beginPath(); ctx.arc(A[0], A[1], 22, Math.PI / 2 - th, Math.PI / 2); ctx.stroke();
+      label(ctx, 'θ', A[0] + 30 * Math.cos(Math.PI / 2 - th / 2), A[1] + 30 * Math.sin(Math.PI / 2 - th / 2), '#e5e7eb', { italic: true, size: 13 });
+    }
+    ctx.restore();
+    label(ctx, 'd', X - 12, (A[1] + B[1]) / 2, '#e5e7eb', { align: 'right', italic: true, weight: 600 });
+    // the label sits just below the extra path, on the side away from the rays
+    const text = `d sin θ = ${n === 1 ? '' : n}λ`;
+    const mx = (B[0] + F[0]) / 2 + Math.sin(th) * 16, my = (B[1] + F[1]) / 2 + Math.cos(th) * 16;
+    label(ctx, text, mx, my, '#fff', { align: 'left', weight: 600, size: 13 });
+  }
+
+  // ---- Graph: intensity against θ (or the spectra in white light) ----
+  const PM = { left: 56, right: 18, top: 26, bottom: 42 };
+  function drawPlot() {
+    const { ctx, width: W, height: H } = plot;
+    ctx.clearRect(0, 0, W, H);
+    const w = W - PM.left - PM.right, h = H - PM.top - PM.bottom;
+    const top = PM.top, bottom = top + h;
+    const px = th => PM.left + (th + 90) / 180 * w;
+    const py = v => bottom - v * h;
+
+    ctx.lineWidth = 1;
+    ctx.font = '13px system-ui, sans-serif';
+    ctx.fillStyle = COLORS.muted;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    for (let th = -90; th <= 90; th += 15) {
+      ctx.strokeStyle = th === 0 ? COLORS.axis : COLORS.grid;
+      ctx.beginPath(); ctx.moveTo(px(th), top); ctx.lineTo(px(th), bottom); ctx.stroke();
+      if (th % 30 === 0) ctx.fillText(`${th < 0 ? '−' : ''}${Math.abs(th)}`, px(th), bottom + 6);
+    }
+    ctx.fillText('θ / °', PM.left + w / 2, bottom + 24);
+
+    if (white) {
+      // the spectra as they would look on a curved screen
+      const out = [0, 0, 0];
+      const sy = top + 8, sh = h - 44;
+      ctx.fillStyle = DARK_STR; ctx.fillRect(PM.left, sy, w, sh);
+      for (let i = 0; i < w; i++) {
+        const ta = -90 + i / w * 180, tb = -90 + (i + 1) / w * 180;
+        tableAvg(ta, tb, out);
+        ctx.fillStyle = rgbStr(out.map(gamma));
+        ctx.fillRect(PM.left + i, sy, 1, sh);
+      }
+      // a bracket for each order's spectrum: even orders above the strip, odd orders below,
+      // so neighbouring orders never share a row and their overlap shows as brackets that overlap
+      const nMax = nMaxFor(400);
+      for (let n = 1; n <= nMax; n++) {
+        const tv = thetaDeg(n, 400), tr = n * 700 <= dNm() ? thetaDeg(n, 700) : 90;
+        const above = n % 2 === 0;
+        const y0 = above ? sy - 4 : sy + sh + 4, y1 = above ? sy - 10 : sy + sh + 10;
+        for (const sgn of [1, -1]) {
+          let xa = px(sgn * tv), xb = px(sgn * tr);
+          if (xa > xb) [xa, xb] = [xb, xa];
+          if (xb - xa < 6) continue;
+          ctx.strokeStyle = COLORS.ink; ctx.lineWidth = 1.2;
+          ctx.beginPath(); ctx.moveTo(xa, y0); ctx.lineTo(xa, y1); ctx.lineTo(xb, y1); ctx.lineTo(xb, y0); ctx.stroke();
+          if (xb - xa > 24) label(ctx, `n = ${sgn < 0 ? '−' : ''}${n}`, (xa + xb) / 2, above ? y1 - 2 : y1 + 2, COLORS.ink, { base: above ? 'bottom' : 'top', weight: 600, size: 12 });
+        }
+      }
+      label(ctx, 'n = 0', px(0), sy - 12, COLORS.ink, { base: 'bottom', weight: 600, size: 12 });
+      return;
+    }
+
+    ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    for (let v = 0; v <= 1.001; v += 0.25) {
+      ctx.strokeStyle = v === 0 ? COLORS.axis : COLORS.grid;
+      ctx.beginPath(); ctx.moveTo(PM.left, py(v)); ctx.lineTo(PM.left + w, py(v)); ctx.stroke();
+      ctx.fillText(String(v), PM.left - 8, py(v));
+    }
+    ctx.save();
+    ctx.translate(14, top + h / 2); ctx.rotate(-Math.PI / 2);
+    ctx.textAlign = 'center'; ctx.fillText('I / I max', 0, 0);
+    ctx.restore();
+
+    // the maxima: sampled finely within each pixel, with the exact peaks included
+    const peaks = [];
+    for (let n = -nMaxFor(lambda); n <= nMaxFor(lambda); n++) peaks.push(thetaDeg(n, lambda));
+    const curve = nn => {
+      const save = N; N = nn;
+      const pts = [];
+      for (let i = 0; i <= w; i++) {
+        const ta = -90 + (i - 0.5) / w * 180, tb = -90 + (i + 0.5) / w * 180;
+        let m = 0;
+        for (let k = 0; k <= 8; k++) m = Math.max(m, nSlit(Math.sin((ta + (tb - ta) * k / 8) * Math.PI / 180), lambda));
+        if (peaks.some(p => p >= ta && p < tb)) m = 1;
+        pts.push(m);
+      }
+      N = save;
+      return pts;
+    };
+    ctx.save();
+    ctx.beginPath(); ctx.rect(PM.left, top - 2, w, h + 4); ctx.clip();
+    if (N > 2) {
+      const ref = curve(2);
+      ctx.strokeStyle = COLORS.axis; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]);
+      ctx.beginPath(); ref.forEach((v, i) => i ? ctx.lineTo(PM.left + i, py(v)) : ctx.moveTo(PM.left + i, py(v))); ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    const pts = curve(N);
+    const ink = inkOf(lambda);
+    ctx.fillStyle = rgbStr(waveRGB(lambda)); ctx.globalAlpha = 0.18;
+    ctx.beginPath(); ctx.moveTo(PM.left, py(0));
+    pts.forEach((v, i) => ctx.lineTo(PM.left + i, py(v)));
+    ctx.lineTo(PM.left + w, py(0)); ctx.closePath(); ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = ink; ctx.lineWidth = 2;
+    ctx.beginPath(); pts.forEach((v, i) => i ? ctx.lineTo(PM.left + i, py(v)) : ctx.moveTo(PM.left + i, py(v))); ctx.stroke();
+    ctx.restore();
+    // order numbers above the maxima, when there is room
+    let lastX = -1e9;
+    for (let n = -nMaxFor(lambda); n <= nMaxFor(lambda); n++) {
+      const x = px(thetaDeg(n, lambda));
+      if (x - lastX < 30) continue;
+      lastX = x;
+      label(ctx, String(n).replace('-', '−'), x, top - 6, n === selOrder ? COLORS.ink : COLORS.muted, { base: 'bottom', weight: 600, size: 12 });
+    }
+  }
+
+  // =====================================================================
+  // Working
+  // =====================================================================
+  const line = (lhs, ...rhs) => `<span>${lhs}</span><span>=</span><span>${rhs.join(' = ')}</span>`;
+  const frac = (p, q) => `<span class="frac"><span>${p}</span><span>${q}</span></span>`;
+  const head = text => `<span class="head">${text}</span>`;
+  const fmt = (v, dp) => v.toFixed(dp);
+  function updateDerivation() {
+    let rows = '';
+    if (mode === 'double') {
+      const x = spacing();
+      const xm = x * 1e-3;
+      rows += line('x', frac('λD', 'a'), frac(`${lambda} × 10<sup>−9</sup> × ${fmt(D, 2)}`, `${fmt(a, 2)} × 10<sup>−3</sup>`),
+        `${fmt(xm * 1e3, 2)} × 10<sup>−3</sup> m`, `<b>${fmt(x, 2)} mm</b>`);
+      const { n, from, to } = measure();
+      rows += head('Measured on the screen');
+      rows += line(`${n}x`, `${fmt(to - from, 1)} mm`) + line('x', frac(`${fmt(to - from, 1)} mm`, n), `${fmt((to - from) / n, 2)} mm`);
+      const dPath = pathDiff(pY), m = dPath / lambda;
+      const nb = Math.round(m), nd = Math.floor(m) ;
+      let verdict;
+      if (Math.abs(m - nb) < 0.05) verdict = `bright fringe: path difference = nλ, n = ${Math.abs(nb)}`;
+      else if (Math.abs(Math.abs(m) - (Math.floor(Math.abs(m)) + 0.5)) < 0.05) verdict = `dark fringe: path difference = (n + ½)λ, n = ${Math.floor(Math.abs(m))}`;
+      else verdict = 'neither a bright nor a dark fringe';
+      rows += head('Point P');
+      rows += line('y', `${fmt(pY, 2)} mm from the centre`);
+      rows += line('S<sub>2</sub>P − S<sub>1</sub>P', `${fmt(Math.abs(dPath), 0)} nm`, `${fmt(Math.abs(m), 2)}λ`);
+      rows += `<span></span><span></span><span class="note">${verdict}</span>`;
+    } else {
+      const d = dNm();
+      rows += line('d', frac('1 mm', lines), `${fmt(d / 1000, 2)} × 10<sup>−6</sup> m`, `${fmt(d, 0)} nm`);
+      if (white) {
+        rows += head('Each order spreads into a spectrum, from violet (400 nm) to red (700 nm)');
+        const nMax = nMaxFor(400);
+        const show = Math.min(nMax, 5);
+        for (let n = 1; n <= show; n++) {
+          const tv = thetaDeg(n, 400);
+          const red = n * 700 <= d ? `${fmt(thetaDeg(n, 700), 1)}°` : `90° (light beyond ${fmt(d / n, 0)} nm is lost)`;
+          rows += line(`θ<sub>${n}</sub>`, `${fmt(tv, 1)}° to ${red}`);
+        }
+        if (nMax > show) rows += `<span class="dim">…</span><span></span><span class="dim">orders up to n = ${nMax}</span>`;
+        for (let n = 1; n < nMax && n <= 3; n++) {
+          const tr = n * 700 <= d ? thetaDeg(n, 700) : 90, tvNext = thetaDeg(n + 1, 400);
+          if (tvNext < tr) { rows += `<span></span><span></span><span class="note">orders ${n} and ${n + 1} overlap from ${fmt(tvNext, 1)}° to ${fmt(tr, 1)}°</span>`; break; }
+        }
+      } else {
+        const nMax = nMaxFor(lambda);
+        rows += head('Maxima where d sin θ = nλ');
+        const order = (n, cls = '') => {
+          const sv = n * lambda / d;
+          const lhs = `sin θ<sub>${n}</sub>`;
+          if (sv > 1) return `<span class="dim">${lhs}</span><span class="dim">=</span><span class="dim">${frac(`${n} × ${lambda}`, fmt(d, 0))} = ${fmt(sv, 3)} &gt; 1, so there is no order ${n}</span>`;
+          const body = line(lhs, frac(`${n} × ${lambda}`, fmt(d, 0)), `${fmt(sv, 3)}, &nbsp;θ<sub>${n}</sub> = ${fmt(thetaDeg(n, lambda), 1)}°`);
+          return cls ? body.replace(/<span>/g, `<span class="${cls}">`) : body;
+        };
+        const list = [];
+        for (let n = 1; n <= nMax; n++) list.push(n);
+        const shown = list.length > 6 ? [1, 2, 3, 4, '…', nMax] : list;
+        for (const n of shown) {
+          if (n === '…') { rows += '<span class="dim">…</span><span></span><span></span>'; continue; }
+          rows += order(n, n === selOrder ? 'sel' : '');
+        }
+        rows += order(nMax + 1);
+        rows += line('n<sub>max</sub>', `⌊${frac('d', 'λ')}⌋`, `⌊${frac(fmt(d, 0), lambda)}⌋`, `⌊${fmt(d / lambda, 2)}⌋`, `<b>${nMax}</b>`);
+      }
+    }
+    $('derivation').innerHTML = rows;
+    $('lambda-value').textContent = white && mode === 'grating' ? '400–700 nm' : `${lambda} nm`;
+    $('a-value').textContent = `${fmt(a, 2)} mm`;
+    $('D-value').textContent = `${fmt(D, 2)} m`;
+    $('lines-value').textContent = `${lines} (d = ${fmt(dNm() / 1000, 2)} µm)`;
+    $('key-line').style.borderTopColor = inkOf(lambda);
+    $('key-n-text').textContent = `${N} slits`;
+    $('key-n').classList.toggle('hidden', white);
+    $('key-ref').classList.toggle('hidden', white || N <= 2);
+    $('plot-title').textContent = white ? 'Spectra against θ' : 'Intensity against θ';
+    $('lambda-box').classList.toggle('off', white && mode === 'grating');
+    $('lambda').disabled = white && mode === 'grating';
+  }
+
+  // =====================================================================
+  // Controls
+  // =====================================================================
+  let dirty = true;
+  const changed = ({ field = false, table = false } = {}) => {
+    if (field) ds = null;
+    if (table) gt = null;
+    selOrder = Math.max(1, Math.min(selOrder, nMaxFor(lambda)));
+    dirty = true;
+  };
+  $('lambda').addEventListener('input', e => { lambda = Number(e.target.value); changed({ field: true, table: true }); });
+  $('a').addEventListener('input', e => { a = Number(e.target.value); changed({ field: true }); });
+  $('D').addEventListener('input', e => { D = Number(e.target.value); changed({ field: true }); });
+  $('lines').addEventListener('input', e => { lines = Number(e.target.value); changed({ table: true }); });
+  $('white-btn').addEventListener('click', () => {
+    white = !white;
+    $('white-btn').setAttribute('aria-pressed', String(white));
+    changed({ table: true });
+  });
+  function setMode(m) {
+    mode = m;
+    document.querySelectorAll('[data-mode]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.mode === m)));
+    document.querySelectorAll('[data-for]').forEach(el => el.classList.toggle('hidden', el.dataset.for !== m));
+    resizeAll();
+  }
+  document.querySelectorAll('[data-mode]').forEach(b => b.addEventListener('click', () => setMode(b.dataset.mode)));
+
+  // P: drag on the screen in the top view, or along the front view
+  const local = (c, e) => { const r = c.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
+  let dragScene = false, dragFront = false;
+  function setPFromScene([x, y]) {
+    const m = drawnOrder(ds.cy - y);
+    pY = Math.max(-FRONT_MM, Math.min(FRONT_MM, yForOrder(m)));
+    dirty = true;
+  }
+  function setPFromFront([x]) {
+    pY = Math.max(-FRONT_MM, Math.min(FRONT_MM, -FRONT_MM + (x - fgeo.left) / fgeo.w * 2 * FRONT_MM));
+    dirty = true;
+  }
+  $('scene').addEventListener('pointerdown', e => {
+    const p = local(scene.canvas, e);
+    if (mode === 'double' && ds) {
+      if (Math.abs(p[0] - ds.sx) < 60) { dragScene = true; scene.canvas.setPointerCapture(e.pointerId); setPFromScene(p); }
+      return;
+    }
+    // grating: pick the order nearest to where the beam was clicked
+    if (mode === 'grating' && !white) {
+      const th = Math.abs(Math.atan2(ggeo.gy - p[1], p[0] - ggeo.gx) * 180 / Math.PI);
+      if (p[0] <= ggeo.gx) return;
+      let best = selOrder, bd = 1e9;
+      for (let n = 1; n <= nMaxFor(lambda); n++) {
+        const dd = Math.abs(thetaDeg(n, lambda) - th);
+        if (dd < bd) { bd = dd; best = n; }
+      }
+      if (bd < 4) { selOrder = best; dirty = true; }
+    }
+  });
+  $('scene').addEventListener('pointermove', e => {
+    const p = local(scene.canvas, e);
+    if (dragScene) { setPFromScene(p); return; }
+    scene.canvas.style.cursor = mode === 'double' && ds && Math.abs(p[0] - ds.sx) < 60 ? 'ns-resize'
+      : mode === 'grating' && !white && p[0] > ggeo.gx ? 'pointer' : '';
+  });
+  const endScene = () => { dragScene = false; };
+  $('scene').addEventListener('pointerup', endScene);
+  $('scene').addEventListener('pointercancel', endScene);
+  $('front').addEventListener('pointerdown', e => { dragFront = true; front.canvas.setPointerCapture(e.pointerId); setPFromFront(local(front.canvas, e)); });
+  $('front').addEventListener('pointermove', e => { if (dragFront) setPFromFront(local(front.canvas, e)); });
+  $('front').addEventListener('pointerup', () => { dragFront = false; });
+  $('front').addEventListener('pointercancel', () => { dragFront = false; });
+  $('front').style.cursor = 'ew-resize';
+
+  // ---- Animation loop ----
+  function frame(now) {
+    if (lastFrame !== null && mode === 'double') phase += Math.min((now - lastFrame) / 1000, 0.1) * 2 * Math.PI * 0.7;
+    lastFrame = now;
+    if (mode === 'double') {
+      drawDouble();
+      if (dirty) drawFront();
+    } else if (dirty) {
+      drawGrating();
+      drawPlot();
+    }
+    if (dirty) updateDerivation();
+    dirty = false;
+    requestAnimationFrame(frame);
+  }
+
+  function resizeAll() {
+    scene.resize(); front.resize(); plot.resize();
+    ds = null; if (gt) gt.img = null;
+    dirty = true;
+  }
+  window.addEventListener('resize', resizeAll);
+  pY = yForOrder(1);
+  setMode('double');
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
