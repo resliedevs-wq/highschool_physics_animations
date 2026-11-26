@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>3.8 Diffraction at a Gap</title>
+<style>
+  :root {
+    --bg: #f7f7f5;
+    --panel: #ffffff;
+    --ink: #1f2328;
+    --muted: #6b7280;
+    --grid: #e5e7eb;
+    --axis: #9ca3af;
+    --wave: #2f6fb5;
+    --energy: #c2410c;
+    --focus: #dc2626;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+  }
+  main { max-width: 1100px; margin: 0 auto; padding: 20px; }
+  .card {
+    background: var(--panel);
+    border-radius: 10px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.08);
+    padding: 14px 18px;
+    margin-bottom: 14px;
+  }
+  .intro h1 { font-size: 1.25rem; margin: 0 0 8px; }
+  .intro dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; margin: 0; }
+  .intro dt { font-family: "Cambria Math", "Times New Roman", serif; font-size: 1.1rem; text-align: center; }
+  .intro dd { margin: 0; }
+  canvas { display: block; width: 100%; }
+  #tank { height: 480px; border-radius: 6px; }
+  .sliders { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 28px; margin-top: 12px; padding-bottom: 20px; }
+  .slider label { display: flex; justify-content: space-between; margin-bottom: 4px; font-variant-numeric: tabular-nums; }
+  /* sliders drawn here, not by the browser, so the thumb is always 18 px wide and the 4 cm tick lines up */
+  .slider input[type=range] {
+    -webkit-appearance: none; appearance: none;
+    width: 100%; height: 20px; margin: 0; background: transparent; cursor: pointer;
+    --frac: 0;
+  }
+  .slider input[type=range]::-webkit-slider-runnable-track {
+    height: 4px; border-radius: 2px;
+    background: linear-gradient(to right, var(--ink) calc(9px + (100% - 18px) * var(--frac)), #d1d5db 0);
+  }
+  .slider input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 18px; height: 18px; margin-top: -7px; border: 0; border-radius: 50%; background: var(--ink);
+  }
+  .slider input[type=range]::-moz-range-track { height: 4px; border-radius: 2px; background: #d1d5db; }
+  .slider input[type=range]::-moz-range-progress { height: 4px; border-radius: 2px; background: var(--ink); }
+  .slider input[type=range]::-moz-range-thumb { width: 18px; height: 18px; border: 0; border-radius: 50%; background: var(--ink); }
+  .slider input[type=range]:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 4px; }
+  .track { position: relative; }
+  /* a tick under the slider; --at is its position along the slider (0 … 1), --thumb the thumb width */
+  .tick {
+    position: absolute; top: 100%;
+    left: calc(var(--thumb) / 2 + (100% - var(--thumb)) * var(--at));
+    transform: translateX(-50%);
+    display: flex; flex-direction: column; align-items: center;
+    font-size: .8rem; color: var(--muted); font-variant-numeric: tabular-nums; pointer-events: none;
+  }
+  .tick::before { content: ""; width: 1.5px; height: 6px; background: var(--muted); margin-bottom: 1px; }
+  .controls { display: flex; gap: 10px 22px; align-items: center; flex-wrap: wrap; }
+  button {
+    font: inherit;
+    height: 2.4em; min-width: 2.4em; padding: 0 10px;
+    border-radius: 6px;
+    border: 1px solid #d1d5db;
+    background: #fff;
+    cursor: pointer;
+  }
+  button:hover { background: #f3f4f6; }
+  .muted { color: var(--muted); }
+  .meter { display: flex; align-items: center; gap: 12px; flex: 1 1 360px; }
+  .meter .bar { flex: 1; height: 16px; border-radius: 8px; background: #f1f2f4; overflow: hidden; border: 1px solid #e1e3e7; }
+  .meter .fill { height: 100%; background: var(--energy); width: 100%; transition: width .15s; }
+  .meter .pct { font-variant-numeric: tabular-nums; font-weight: 600; color: var(--energy); min-width: 3.5em; text-align: right; }
+  #plot { height: 260px; }
+  .legend { display: flex; gap: 10px 18px; align-items: center; flex-wrap: wrap; margin-bottom: 4px; color: var(--muted); }
+  .legend .title { color: var(--ink); font-weight: 600; margin-right: auto; }
+  .toggle[aria-pressed="true"] { background: var(--ink); color: #fff; border-color: var(--ink); }
+  @media (max-width: 760px) {
+    .sliders { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <section class="card intro">
+    <h1>3.8 Diffraction at a gap</h1>
+    <dl>
+      <dt>λ</dt><dd>wavelength of the water waves</dd>
+      <dt>a</dt><dd>width of the gap</dd>
+    </dl>
+  </section>
+
+  <div class="card">
+    <canvas id="tank"></canvas>
+    <div class="sliders">
+      <div class="slider">
+        <label for="lambda"><span>λ (wavelength)</span><span id="lambda-value"></span></label>
+        <div class="track">
+          <input type="range" id="lambda" min="0" max="1000" step="1" value="86">
+          <span class="tick" id="tick-4">4 cm</span>
+        </div>
+      </div>
+      <div class="slider">
+        <label for="gap"><span>a (gap width)</span><span id="gap-value"></span></label>
+        <input type="range" id="gap" min="0.4" max="8" step="0.1" value="4">
+      </div>
+    </div>
+  </div>
+
+  <div class="card controls">
+    <button id="pause-btn" title="Play / pause (Space)">⏸</button>
+    <button data-preset="wide">Gap ≫ λ</button>
+    <button data-preset="equal">λ = gap</button>
+    <button data-preset="long">λ &gt; gap</button>
+    <button data-preset="huge">λ ≫ gap</button>
+    <div class="meter">
+      <span class="muted">Energy getting through the gap</span>
+      <div class="bar"><div class="fill" id="energy-fill"></div></div>
+      <span class="pct" id="energy-pct"></span>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="legend">
+      <span class="title">Energy getting through against λ / a</span>
+      <button id="curve-btn" class="toggle" aria-pressed="false">Show full curve</button>
+      <button id="clear-btn">Clear graph</button>
+    </div>
+    <canvas id="plot"></canvas>
+  </div>
+</main>
+
+<script>
+(() => {
+  // ---- The tank, in cm: barrier along x = 0, gap centred on y = 0 ----
+  // the tank shown at zoom 1: x from −7 to 17 cm, y from −5 to 5 cm. For long wavelengths the view
+  // zooms out (zoom = λ / 3 cm beyond λ = 3 cm), so about seven wavelengths always fit across it,
+  // and the incident side always has room for a whole wavelength to be marked
+  const BASE_X0 = -7, BASE_X1 = 17, BASE_Y = 5;
+  const ZOOM_FROM = 3, ZOOM_MAX = 4;   // beyond 4× the gap would be too small to see
+  let zoom = 1;
+  const X0 = () => BASE_X0 * zoom, X1 = () => BASE_X1 * zoom, Y_HALF = () => BASE_Y * zoom;
+  const BARRIER = 0.15;            // half-thickness of the barrier
+  const CELL = 5;                  // the wave is worked out on a grid of 5 × 5 px cells
+  const PERIOD = 1.2;              // s on screen for one oscillation
+
+  const $ = id => document.getElementById(id);
+  const css = getComputedStyle(document.documentElement);
+  const color = name => css.getPropertyValue(name).trim();
+  const COLORS = { ink: color('--ink'), muted: color('--muted'), focus: color('--focus'), energy: color('--energy') };
+
+  // ---- State ----
+  let lambda = 1, gap = 4;
+  let t = 0, running = true, lastFrame = null;
+  let field = null;                // { re, im, nx, ny } for every cell, recalculated when λ or a change
+  let dirty = true;
+
+  const fmtL = l => (l >= 10 ? l.toFixed(0) : l.toFixed(1));
+  // energy getting through, as a fraction of the energy arriving at the gap
+  const energyFraction = () => (lambda <= gap ? 1 : gap / lambda);
+
+  // ---- Diffraction: Huygens' principle ----
+  // Every point across the gap acts as a source of circular waves, in step with the incident wave there.
+  // In two dimensions each source adds √(k / 2πr) · e^{i(kr − π/4)} · cos θ per unit width of gap
+  // (cos θ = x / r leans the sources forward); for a wide gap this adds up to the plane wave again.
+  function sources() {
+    const n = Math.min(140, Math.max(8, Math.ceil(gap / Math.min(lambda / 6, gap / 8))));
+    const dy = gap / n, ys = [];
+    for (let j = 0; j < n; j++) ys.push(-gap / 2 + (j + 0.5) * dy);
+    return { ys, dy };
+  }
+  function huygens(x, y, src, k) {
+    let re = 0, im = 0;
+    const c = Math.sqrt(k / (2 * Math.PI)) * src.dy;
+    for (const ys of src.ys) {
+      const dyv = y - ys, r = Math.max(Math.hypot(x, dyv), src.dy);
+      const amp = c / Math.sqrt(r) * (x / r), ph = k * r - Math.PI / 4;
+      re += amp * Math.cos(ph); im += amp * Math.sin(ph);
+    }
+    return [re, im];
+  }
+
+  const tank = { canvas: $('tank'), ctx: $('tank').getContext('2d'), width: 0, height: 0 };
+  const geo = { s: 1, ox: 0, oy: 0 };        // cm → px
+  const SX = x => geo.ox + x * geo.s, SY = y => geo.oy - y * geo.s;
+  function layout() {
+    geo.s = Math.min(tank.width / (X1() - X0()), tank.height / (2 * Y_HALF()));
+    geo.ox = (tank.width - geo.s * (X1() - X0())) / 2 - X0() * geo.s;
+    geo.oy = tank.height / 2;
+    dirty = true;
+  }
+  function resize() {
+    const dpr = window.devicePixelRatio || 1, rect = tank.canvas.getBoundingClientRect();
+    tank.width = rect.width; tank.height = rect.height;
+    tank.canvas.width = Math.round(rect.width * dpr); tank.canvas.height = Math.round(rect.height * dpr);
+    tank.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    layout();
+  }
+
+  function computeField() {
+    const k = 2 * Math.PI / lambda, src = sources();
+    const nx = Math.ceil(tank.width / CELL), ny = Math.ceil(tank.height / CELL);
+    const re = new Float32Array(nx * ny), im = new Float32Array(nx * ny);
+    // scale so the energy carried away matches the agreed model: measure it far from the gap
+    const R = Math.max(40, 10 * lambda);    // far enough away to count as far
+    let power = 0;
+    for (let i = 0; i <= 360; i++) {
+      const th = (i / 360 - 0.5) * Math.PI, [a, b] = huygens(R * Math.cos(th), R * Math.sin(th), src, k);
+      power += (a * a + b * b) * R * (Math.PI / 360);
+    }
+    const scale = Math.sqrt(energyFraction() * gap / power);
+    // the pattern is the same either side of the middle of the gap, so rows at y and −y share one calculation
+    const rows = new Map();
+    for (let j = 0; j < ny; j++) {
+      const y = (geo.oy - (j + 0.5) * CELL) / geo.s, key = Math.abs(y).toFixed(4);
+      const done = rows.get(key);
+      if (done !== undefined) {
+        re.copyWithin(j * nx, done * nx, done * nx + nx);
+        im.copyWithin(j * nx, done * nx, done * nx + nx);
+        continue;
+      }
+      rows.set(key, j);
+      for (let i = 0; i < nx; i++) {
+        const x = ((i + 0.5) * CELL - geo.ox) / geo.s, n = j * nx + i;
+        if (x < -BARRIER) { re[n] = Math.cos(k * x); im[n] = Math.sin(k * x); }       // incident plane wave
+        else if (x <= BARRIER) { if (Math.abs(y) > gap / 2) { re[n] = im[n] = NaN; } else { re[n] = Math.cos(k * x); im[n] = Math.sin(k * x); } }   // the barrier, open at the gap
+        else { const [a, b] = huygens(x, y, src, k); re[n] = a * scale; im[n] = b * scale; }
+      }
+    }
+    field = { re, im, nx, ny };
+    dirty = false;
+  }
+
+  // ---- Drawing ----
+  const off = document.createElement('canvas'), offCtx = off.getContext('2d');
+  const DEEP = [28, 74, 128], CREST = [222, 236, 250], STILL = [96, 146, 200];
+  function drawWater() {
+    const { re, im, nx, ny } = field;
+    if (off.width !== nx || off.height !== ny) { off.width = nx; off.height = ny; }
+    const img = offCtx.createImageData(nx, ny), d = img.data;
+    const w = 2 * Math.PI * t / PERIOD, c = Math.cos(w), s = Math.sin(w);
+    for (let n = 0; n < nx * ny; n++) {
+      const p = n * 4;
+      if (Number.isNaN(re[n])) { d[p] = 70; d[p + 1] = 74; d[p + 2] = 82; d[p + 3] = 255; continue; }
+      // displacement now: Re(U e^{−iωt}); crests light, troughs dark
+      const v = Math.max(-1, Math.min(1, re[n] * c + im[n] * s));
+      const to = v > 0 ? CREST : DEEP, f = Math.abs(v);
+      d[p] = STILL[0] + (to[0] - STILL[0]) * f;
+      d[p + 1] = STILL[1] + (to[1] - STILL[1]) * f;
+      d[p + 2] = STILL[2] + (to[2] - STILL[2]) * f;
+      d[p + 3] = 255;
+    }
+    offCtx.putImageData(img, 0, 0);
+    const { ctx } = tank;
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(off, 0, 0, nx * CELL, ny * CELL);
+  }
+
+  function label(ctx, text, x, y, col, { align = 'center', base = 'middle', weight = 600, size = 14, box = false } = {}) {
+    ctx.font = `${weight} ${size}px system-ui, sans-serif`;
+    ctx.textAlign = align; ctx.textBaseline = base;
+    if (box) {
+      const w = ctx.measureText(text).width, h = size + 8;
+      const bx = align === 'left' ? x - 6 : align === 'right' ? x - w - 6 : x - w / 2 - 6;
+      const by = base === 'top' ? y - 4 : base === 'bottom' ? y - h + 4 : y - h / 2;
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.92)';
+      ctx.beginPath(); ctx.roundRect(bx, by, w + 12, h, 5); ctx.fill();
+    }
+    ctx.fillStyle = col;
+    ctx.fillText(text, x, y);
+  }
+  function measure(ctx, x1, y1, x2, y2, text, side) {
+    // a dimension line with end ticks; side places the label
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 2;
+    const dx = x2 - x1, dy = y2 - y1, len = Math.hypot(dx, dy), nx = -dy / len * 6, ny = dx / len * 6;
+    ctx.beginPath();
+    ctx.moveTo(x1, y1); ctx.lineTo(x2, y2);
+    ctx.moveTo(x1 - nx, y1 - ny); ctx.lineTo(x1 + nx, y1 + ny);
+    ctx.moveTo(x2 - nx, y2 - ny); ctx.lineTo(x2 + nx, y2 + ny);
+    ctx.stroke();
+    label(ctx, text, (x1 + x2) / 2 + side[0], (y1 + y2) / 2 + side[1], COLORS.ink, { box: true, align: side[0] < 0 ? 'right' : side[0] > 0 ? 'left' : 'center' });
+  }
+
+  function verdict() {
+    const r = lambda / gap;
+    if (Math.abs(lambda - gap) < 0.05) return 'Maximum diffraction (λ = gap width)';
+    if (lambda > gap) return energyFraction() < 0.1 ? 'Full diffraction, but almost no energy gets through' : 'Full diffraction';
+    if (r <= 0.2) return 'Little diffraction (spreading mainly at the edges)';
+    return 'Diffraction increases';
+  }
+
+  function drawTank() {
+    const { ctx, width: W, height: H } = tank;
+    if (dirty || !field) computeField();
+    ctx.clearRect(0, 0, W, H);
+    drawWater();
+
+    // the edges of the gap carried straight on: anything outside them has spread round the edges
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.55)'; ctx.lineWidth = 1.5; ctx.setLineDash([6, 6]);
+    ctx.beginPath();
+    for (const y of [gap / 2, -gap / 2]) { ctx.moveTo(SX(BARRIER), SY(y)); ctx.lineTo(SX(X1()), SY(y)); }
+    ctx.stroke(); ctx.setLineDash([]);
+
+    // gap width and wavelength
+    const gx = SX(-BARRIER) - 14;
+    measure(ctx, gx, SY(gap / 2), gx, SY(-gap / 2), `a = ${gap.toFixed(1)} cm`, [-10, 0]);
+    // λ between two incident crests near the top-left (crests where kx − ωt = 2πm)
+    const phase = 2 * Math.PI * t / PERIOD;
+    let xc = (phase / (2 * Math.PI)) * lambda;      // a crest position
+    const left = X0() + 0.4 * zoom, top = Y_HALF() - 0.9 * zoom;
+    xc -= Math.ceil((xc - left) / lambda) * lambda;
+    while (xc < left) xc += lambda;
+    if (xc + lambda < -BARRIER - 0.1) measure(ctx, SX(xc), SY(top), SX(xc + lambda), SY(top), `λ = ${fmtL(lambda)} cm`, [0, -18]);
+    else label(ctx, `λ = ${fmtL(lambda)} cm`, SX(X0()) + 14, SY(top), COLORS.ink, { align: 'left', box: true });
+
+    // scale bar, as the view zooms with λ
+    const bar = [1, 2, 5, 10, 20].find(c => c * geo.s >= 50) || 20;
+    const bx = 16, by = H - 16;
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(bx, by - 6); ctx.lineTo(bx, by); ctx.lineTo(bx + bar * geo.s, by); ctx.lineTo(bx + bar * geo.s, by - 6); ctx.stroke();
+    label(ctx, `${bar} cm`, bx + bar * geo.s / 2, by - 8, COLORS.ink, { base: 'bottom', size: 12, box: true });
+
+    label(ctx, verdict(), W - 14, 14, COLORS.focus, { align: 'right', base: 'top', size: 16, box: true });
+  }
+
+  // ---- Readouts ----
+  function updateReadouts() {
+    const e = energyFraction();
+    $('lambda-value').textContent = `${fmtL(lambda)} cm`;
+    $('gap-value').textContent = `${gap.toFixed(1)} cm`;
+    $('energy-fill').style.width = `${(e * 100).toFixed(1)}%`;
+    $('energy-pct').textContent = `${e < 0.1 ? (e * 100).toFixed(1) : Math.round(e * 100)}%`;
+  }
+
+  // ---- Graph: energy getting through against λ / a, on a log scale so 0.1 … 100 all fit ----
+  const plot = { canvas: $('plot'), ctx: $('plot').getContext('2d'), width: 0, height: 0 };
+  const MARGIN = { left: 64, right: 24, top: 14, bottom: 46 };
+  const R_MIN = 0.04, R_MAX = 200, BINS = 500;          // λ / a range of the axis
+  const LOG0 = Math.log10(R_MIN), LOG1 = Math.log10(R_MAX);
+  const energyAt = r => (r <= 1 ? 1 : 1 / r);
+  const binOf = r => Math.max(0, Math.min(BINS, Math.round((Math.log10(r) - LOG0) / (LOG1 - LOG0) * BINS)));
+  const rOfBin = b => 10 ** (LOG0 + b / BINS * (LOG1 - LOG0));
+  let visited = new Uint8Array(BINS + 1), lastBin = null, showCurve = false;
+  // every λ / a passed through is marked, including the ones skipped between two slider events
+  function markRatio() {
+    const b = binOf(lambda / gap);
+    if (lastBin === null) visited[b] = 1;
+    else for (let i = Math.min(b, lastBin); i <= Math.max(b, lastBin); i++) visited[i] = 1;
+    lastBin = b;
+  }
+  function resizePlot() {
+    const dpr = window.devicePixelRatio || 1, rect = plot.canvas.getBoundingClientRect();
+    plot.width = rect.width; plot.height = rect.height;
+    plot.canvas.width = Math.round(rect.width * dpr); plot.canvas.height = Math.round(rect.height * dpr);
+    plot.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  function drawPlot() {
+    const { ctx, width: W, height: H } = plot;
+    const w = W - MARGIN.left - MARGIN.right, h = H - MARGIN.top - MARGIN.bottom;
+    const top = MARGIN.top, bottom = top + h;
+    const px = r => MARGIN.left + (Math.log10(r) - LOG0) / (LOG1 - LOG0) * w;
+    const py = e => top + (1.06 - e) / 1.06 * h;
+    ctx.clearRect(0, 0, W, H);
+    ctx.lineWidth = 1;
+    ctx.font = '13px system-ui, sans-serif';
+    ctx.fillStyle = COLORS.muted;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    for (const r of [0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100]) {
+      ctx.strokeStyle = '#e5e7eb';
+      ctx.beginPath(); ctx.moveTo(px(r), top); ctx.lineTo(px(r), bottom); ctx.stroke();
+      ctx.fillText(String(r), px(r), bottom + 6);
+    }
+    ctx.fillText('λ / a', MARGIN.left + w / 2, bottom + 26);
+    ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    for (const e of [0, 0.25, 0.5, 0.75, 1]) {
+      ctx.strokeStyle = e === 0 ? '#9ca3af' : '#e5e7eb';
+      ctx.beginPath(); ctx.moveTo(MARGIN.left, py(e)); ctx.lineTo(MARGIN.left + w, py(e)); ctx.stroke();
+      ctx.fillText(`${e * 100}%`, MARGIN.left - 8, py(e));
+    }
+    ctx.save();
+    ctx.translate(16, top + h / 2); ctx.rotate(-Math.PI / 2);
+    ctx.textAlign = 'center';
+    ctx.fillText('energy getting through', 0, 0);
+    ctx.restore();
+
+    // λ = a
+    ctx.strokeStyle = COLORS.focus; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]);
+    ctx.beginPath(); ctx.moveTo(px(1), top); ctx.lineTo(px(1), bottom); ctx.stroke();
+    ctx.setLineDash([]);
+    label(ctx, 'λ = a', px(1) + 6, top + 4, COLORS.focus, { align: 'left', base: 'top', size: 13 });
+
+    const curve = (onlyVisited, width, dash) => {
+      ctx.strokeStyle = COLORS.energy; ctx.lineWidth = width; ctx.setLineDash(dash);
+      ctx.beginPath();
+      let pen = false;
+      for (let b = 0; b <= BINS; b++) {
+        if (onlyVisited && !visited[b]) { pen = false; continue; }
+        const r = rOfBin(b), x = px(r), y = py(energyAt(r));
+        if (pen) ctx.lineTo(x, y); else ctx.moveTo(x, y);
+        pen = true;
+      }
+      ctx.stroke(); ctx.setLineDash([]);
+    };
+    if (showCurve) curve(false, 1.5, [6, 5]);
+    curve(true, 3, []);
+
+    const r = lambda / gap;
+    ctx.beginPath(); ctx.arc(px(r), py(energyFraction()), 6, 0, 2 * Math.PI);
+    ctx.fillStyle = COLORS.energy; ctx.fill();
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
+  }
+
+  // ---- Controls ----
+  const lSlider = $('lambda'), gSlider = $('gap');
+  // the λ slider is linear from 0.4 to 6 cm over its first 80%, then rises ten-fold to 60 cm
+  // over the last 20%, to reach wavelengths far bigger than the gap
+  const L_MIN = 0.4, L_KNEE = 6, L_MAX = 60, P_KNEE = 800, P_MAX = 1000;
+  const sliderToL = p => (p <= P_KNEE
+    ? L_MIN + (L_KNEE - L_MIN) * p / P_KNEE
+    : L_KNEE * (L_MAX / L_KNEE) ** ((p - P_KNEE) / (P_MAX - P_KNEE)));
+  const lToSlider = l => (l <= L_KNEE
+    ? (l - L_MIN) / (L_KNEE - L_MIN) * P_KNEE
+    : P_KNEE + (P_MAX - P_KNEE) * Math.log(l / L_KNEE) / Math.log(L_MAX / L_KNEE));
+  const roundL = l => (l >= 10 ? Math.round(l) : Math.round(l * 10) / 10);
+  // mark 4 cm under the slider (it is not linear, so the place has to be worked out)
+  const tick4 = $('tick-4');
+  tick4.style.setProperty('--at', String(lToSlider(4) / P_MAX));
+  tick4.style.setProperty('--thumb', '18px');
+  const setValues = (l, g) => {
+    lambda = roundL(l); gap = Math.round(g * 10) / 10;
+    lSlider.value = String(Math.round(lToSlider(lambda))); gSlider.value = String(gap);
+    for (const el of [lSlider, gSlider]) el.style.setProperty('--frac', String((el.value - el.min) / (el.max - el.min)));
+    zoom = Math.min(ZOOM_MAX, Math.max(1, lambda / ZOOM_FROM));
+    layout();
+    markRatio();
+    updateReadouts();
+  };
+  lSlider.addEventListener('input', () => setValues(sliderToL(Number(lSlider.value)), gap));
+  gSlider.addEventListener('input', () => setValues(lambda, Number(gSlider.value)));
+  const PRESETS = { wide: [0.8, 6], equal: [2, 2], long: [3, 1.5], huge: [40, 1.5] };
+  document.querySelectorAll('[data-preset]').forEach(btn =>
+    btn.addEventListener('click', () => setValues(...PRESETS[btn.dataset.preset])));
+
+  const curveBtn = $('curve-btn');
+  curveBtn.addEventListener('click', () => {
+    showCurve = !showCurve;
+    curveBtn.setAttribute('aria-pressed', String(showCurve));
+    curveBtn.textContent = showCurve ? 'Hide full curve' : 'Show full curve';
+  });
+  $('clear-btn').addEventListener('click', () => { visited = new Uint8Array(BINS + 1); lastBin = null; markRatio(); });
+
+  const pauseBtn = $('pause-btn');
+  function togglePause() { running = !running; pauseBtn.textContent = running ? '⏸' : '▶'; }
+  pauseBtn.addEventListener('click', togglePause);
+  window.addEventListener('keydown', e => {
+    if (e.key === ' ' || e.code === 'Space') { e.preventDefault(); togglePause(); }
+  }, true);
+
+  function frame(now) {
+    if (lastFrame !== null && running) t += Math.min((now - lastFrame) / 1000, 0.1);
+    lastFrame = now;
+    drawTank();
+    drawPlot();
+    requestAnimationFrame(frame);
+  }
+  window.addEventListener('resize', () => { resize(); resizePlot(); });
+  resize();
+  resizePlot();
+  setValues(lambda, gap);
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
