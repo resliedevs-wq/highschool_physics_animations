@@ -52,7 +52,7 @@
   .intro dd { margin: 0; }
   canvas { display: block; width: 100%; }
   #scene { height: 380px; }
-  #plot { height: 230px; }
+  #plot { height: 230px; touch-action: none; }
   .sliders { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 28px; margin-top: 10px; }
   .slider label { display: flex; justify-content: space-between; margin-bottom: 4px; font-variant-numeric: tabular-nums; }
   .slider input { width: 100%; accent-color: var(--ink); }
@@ -190,6 +190,18 @@
   let crests = [];               // { x: where it was sent from, te: when, ta: when it reaches the listener }
   let history = [];              // { t, f } heard by the listener
 
+  // ---- Replay ----
+  // The run is recorded as snapshots of the state (every SNAP_DT of physics time) plus a log of
+  // slider changes. Dragging the ball on the graph back to an earlier time restores the snapshot
+  // just before it and runs forward to that time; playing on from there replays the recording,
+  // slider changes included, until it catches up with the live edge (tLive).
+  const SNAP_DT = 0.001;
+  let tLive = 0;                 // the furthest time the run has reached
+  let snapshots = [];            // { t, xs, driving, nextEmit, crests, u, f }
+  let events = [];               // { t, u, f }: slider changes
+  let evIdx = 0;                 // the next slider change to replay
+  let dragging = false;
+
   const listenerDist = x => Math.hypot(LISTENER[0] - x, LISTENER[1]);
 
   function restartRun(time) {
@@ -204,6 +216,7 @@
     const t1 = t + dt;
     while (driving && nextEmit <= t1) {
       const x = xs + u * (nextEmit - t);
+      if (x > X_END) { driving = false; break; }   // it has left the scene: that was the last crest
       crests.push({ x, te: nextEmit, ta: nextEmit + listenerDist(x) / V });
       nextEmit += 1 / f;
     }
@@ -216,16 +229,81 @@
     if (!driving && crests.length === 0) restartRun(t);
   }
 
-  // the frequency heard now: one over the time between the last two crests to reach the listener
+  // the frequency heard now: one over the time from the crest that last reached the listener to
+  // the next one due. The sound starts when the first crest arrives and stops when the last one
+  // has passed, so it lasts exactly as long as crests are reaching the listener.
   function heard() {
-    let last = null, prev = null;
-    for (const c of crests) {
-      if (c.ta > t) continue;
-      if (!last || c.ta > last.ta) { prev = last; last = c; }
-      else if (!prev || c.ta > prev.ta) prev = c;
+    let k = -1;                  // crests arrive in the order they were sent (v_s < v)
+    for (let i = 0; i < crests.length; i++) if (crests[i].ta <= t) k = i;
+    if (k < 0) return null;
+    const last = crests[k];
+    let nextTa;
+    if (k + 1 < crests.length) nextTa = crests[k + 1].ta;
+    else {
+      // the next crest has not been sent yet: work out when it will arrive, if there is one
+      if (!driving) return null;
+      const x = xs + u * (nextEmit - t);
+      if (x > X_END) return null;
+      nextTa = nextEmit + listenerDist(x) / V;
     }
-    if (!last || !prev) return null;
-    return { f: 1 / (last.ta - prev.ta), approaching: last.x < LISTENER[0] };
+    return { f: 1 / (nextTa - last.ta), approaching: last.x < LISTENER[0] };
+  }
+
+  // ---- Recording and replay ----
+  const snap = () => ({ t, xs, driving, nextEmit, crests: crests.slice(), u, f });
+  function restore(s) {
+    ({ t, xs, driving, nextEmit, u, f } = s);
+    crests = s.crests.slice();
+    syncSliders();
+  }
+  // advance the physics by dt in small steps, replaying any recorded slider changes on the way
+  function advance(dt) {
+    const end = t + dt;
+    while (end - t > 1e-12) {
+      while (evIdx < events.length && events[evIdx].t <= t + 1e-12) {
+        ({ u, f } = events[evIdx++]);
+        syncSliders();
+      }
+      let d = Math.min(end - t, 0.0005);
+      if (evIdx < events.length) d = Math.max(1e-9, Math.min(d, events[evIdx].t - t));
+      step(d);
+      if (t >= tLive) {
+        tLive = t;
+        if (t - snapshots[snapshots.length - 1].t >= SNAP_DT) snapshots.push(snap());
+      }
+    }
+  }
+  // forget what was recorded after now (a slider was moved during a replay)
+  function cutFuture() {
+    tLive = t;
+    history = history.filter(e => e.t <= t);
+    snapshots = snapshots.filter(s => s.t <= t);
+    events = events.filter(e => e.t <= t);
+    evIdx = events.length;
+  }
+  // drop what has scrolled off the graph
+  function trim() {
+    const keep = tLive - T_WINDOW - 0.01;
+    while (history.length && history[0].t < keep) history.shift();
+    while (snapshots.length > 1 && snapshots[1].t <= keep) snapshots.shift();
+    events = events.filter(e => e.t >= snapshots[0].t);
+    evIdx = events.length;
+  }
+  const windowStart = () => Math.max(0, tLive - 0.85 * T_WINDOW);
+  function seek(target) {
+    target = Math.min(tLive, Math.max(target, windowStart(), snapshots[0].t));
+    let i = snapshots.length - 1;
+    while (i > 0 && snapshots[i].t > target) i--;
+    restore(snapshots[i]);
+    evIdx = events.findIndex(e => e.t >= snapshots[i].t);
+    if (evIdx < 0) evIdx = events.length;
+    advance(target - t);
+  }
+  function reset() {
+    t = 0; tLive = 0;
+    history = []; events = []; evIdx = 0;
+    restartRun(0);
+    snapshots = [snap()];
   }
 
   // ---- Canvas helpers ----
@@ -354,7 +432,7 @@
     ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
     const h = heard();
     label(ctx, 'listener', lx, ly + 14, COLORS.ink, { base: 'top', weight: 600 });
-    label(ctx, h ? `hears ${Math.round(h.f)} Hz` : 'hears nothing yet', lx, ly + 32, h ? (h.approaching ? COLORS.ahead : COLORS.behind) : COLORS.muted, { base: 'top', weight: 600 });
+    label(ctx, h ? `hears ${Math.round(h.f)} Hz` : 'hears nothing', lx, ly + 32, h ? (h.approaching ? COLORS.ahead : COLORS.behind) : COLORS.muted, { base: 'top', weight: 600 });
 
     // scale bar
     const bx = 16, by = H - 16;
@@ -369,12 +447,13 @@
     const { ctx, width: W, height: H } = plot;
     const w = W - MARGIN.left - MARGIN.right, hgt = H - MARGIN.top - MARGIN.bottom;
     const top = MARGIN.top, bottom = top + hgt;
-    const t0 = Math.max(0, t - 0.85 * T_WINDOW), t1 = t0 + T_WINDOW;
-    const fMax = f * V / (V - u);
+    const t0 = windowStart(), t1 = t0 + T_WINDOW;
+    const fMax = history.reduce((m, e) => Math.max(m, e.f || 0), f * V / (V - u));
     const stepF = fMax > 2400 ? 1000 : fMax > 1200 ? 500 : fMax > 600 ? 200 : 100;
     const yMax = Math.ceil(fMax * 1.12 / stepF) * stepF;
     const px = tt => MARGIN.left + (tt - t0) / T_WINDOW * w;
     const py = v => top + (1 - v / yMax) * hgt;
+    Object.assign(pgeo, { t0, left: MARGIN.left, w, top, bottom });
     ctx.clearRect(0, 0, W, H);
 
     ctx.lineWidth = 1;
@@ -405,21 +484,55 @@
     ctx.beginPath(); ctx.moveTo(MARGIN.left, py(f)); ctx.lineTo(MARGIN.left + w, py(f)); ctx.stroke();
     ctx.setLineDash([]);
 
-    // what the listener heard, coloured by approaching / receding
+    // what the listener heard, coloured by approaching / receding; faint after "now" during a replay
     ctx.save();
     ctx.beginPath(); ctx.rect(MARGIN.left, top, w, hgt); ctx.clip();
     ctx.lineWidth = 3;
     for (let i = 1; i < history.length; i++) {
       const a = history[i - 1], b = history[i];
       if (b.t < t0 || a.f === null || b.f === null) continue;
+      ctx.globalAlpha = b.t > t + 1e-9 ? 0.25 : 1;
       ctx.strokeStyle = b.approaching ? COLORS.ahead : COLORS.behind;
       ctx.beginPath(); ctx.moveTo(px(a.t), py(a.f)); ctx.lineTo(px(b.t), py(b.f)); ctx.stroke();
     }
+    ctx.globalAlpha = 1;
     ctx.restore();
     ctx.strokeStyle = COLORS.focus; ctx.lineWidth = 1; ctx.setLineDash([4, 4]);
     ctx.beginPath(); ctx.moveTo(px(t), top); ctx.lineTo(px(t), bottom); ctx.stroke();
     ctx.setLineDash([]);
+
+    // "now": a ball on the curve (on the time axis while nothing is heard), drag it to replay
+    const h = heard();
+    pgeo.ball = [px(t), h ? py(h.f) : py(0)];
+    ctx.beginPath(); ctx.arc(...pgeo.ball, dragging ? 9 : 7, 0, 2 * Math.PI);
+    ctx.fillStyle = COLORS.focus; ctx.fill();
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
   }
+  const pgeo = { t0: 0, left: 0, w: 1, top: 0, bottom: 0, ball: [0, 0] };
+
+  // drag the ball (or click anywhere on the graph) to move "now"
+  const plotPoint = e => {
+    const r = plot.canvas.getBoundingClientRect();
+    return [e.clientX - r.left, e.clientY - r.top];
+  };
+  const timeAt = x => pgeo.t0 + (x - pgeo.left) / pgeo.w * T_WINDOW;
+  const onGraph = ([x, y]) => x >= pgeo.left - 12 && x <= pgeo.left + pgeo.w + 12 && y >= pgeo.top - 12 && y <= pgeo.bottom + 12;
+  plot.canvas.addEventListener('pointerdown', e => {
+    const p = plotPoint(e);
+    if (!onGraph(p)) return;
+    dragging = true;
+    plot.canvas.setPointerCapture(e.pointerId);
+    seek(timeAt(p[0]));
+  });
+  plot.canvas.addEventListener('pointermove', e => {
+    const p = plotPoint(e);
+    if (dragging) { seek(timeAt(p[0])); return; }
+    const near = Math.hypot(p[0] - pgeo.ball[0], p[1] - pgeo.ball[1]) < 14;
+    plot.canvas.style.cursor = near ? 'grab' : onGraph(p) ? 'pointer' : '';
+  });
+  const endDrag = () => { dragging = false; };
+  plot.canvas.addEventListener('pointerup', endDrag);
+  plot.canvas.addEventListener('pointercancel', endDrag);
 
   // ---- Working ----
   const line = (lhs, ...rhs) => `<span>${lhs}</span><span>=</span><span>${rhs.join(' = ')}</span>`;
@@ -465,7 +578,7 @@
   function updateSound(h) {
     if (!audio) return;
     const now = audio.ac.currentTime;
-    const audible = audio.on && running && h;
+    const audible = audio.on && running && !dragging && h;
     if (h) audio.osc.frequency.setTargetAtTime(h.f, now, 0.02);
     audio.gain.gain.setTargetAtTime(audible ? 0.08 : 0, now, 0.03);
   }
@@ -473,8 +586,15 @@
 
   // ---- Controls ----
   const uSlider = $('u'), fSlider = $('f');
-  uSlider.addEventListener('input', () => { u = Number(uSlider.value); });
-  fSlider.addEventListener('input', () => { f = Number(fSlider.value); });
+  function syncSliders() { uSlider.value = u; fSlider.value = f; }
+  // a slider moved during a replay starts a new recording from now
+  function controlsChanged() {
+    if (t < tLive) cutFuture();
+    events.push({ t, u, f });
+    evIdx = events.length;
+  }
+  uSlider.addEventListener('input', () => { u = Number(uSlider.value); controlsChanged(); });
+  fSlider.addEventListener('input', () => { f = Number(fSlider.value); controlsChanged(); });
 
   const slowBtns = document.querySelectorAll('[data-slow]');
   slowBtns.forEach(btn => btn.addEventListener('click', () => {
@@ -488,20 +608,20 @@
     pauseBtn.textContent = running ? '⏸' : '▶';
   }
   pauseBtn.addEventListener('click', togglePause);
-  $('restart-btn').addEventListener('click', () => { t = 0; history = []; restartRun(0); });
+  $('restart-btn').addEventListener('click', reset);
   window.addEventListener('keydown', e => {
     if (e.key === ' ' || e.code === 'Space') { e.preventDefault(); togglePause(); }
   }, true);
 
   // ---- Animation loop: real time ÷ slow ----
   function frame(now) {
-    if (lastFrame !== null && running) {
-      // small steps so fast sirens still send their crests from the right places
-      let dt = Math.min((now - lastFrame) / 1000, 0.1) / slow;
-      while (dt > 0) { const d = Math.min(dt, 0.0005); step(d); dt -= d; }
-      const h = heard();
-      history.push({ t, f: h ? h.f : null, approaching: h ? h.approaching : true });
-      while (history.length && history[0].t < t - T_WINDOW) history.shift();
+    if (lastFrame !== null && running && !dragging) {
+      advance(Math.min((now - lastFrame) / 1000, 0.1) / slow);
+      if (t >= tLive) {          // live, not replaying: record what is heard
+        const h = heard();
+        history.push({ t, f: h ? h.f : null, approaching: h ? h.approaching : true });
+        trim();
+      }
     }
     lastFrame = now;
     drawScene();
@@ -514,7 +634,7 @@
   function resizeAll() { scene.resize(); plot.resize(); }
   window.addEventListener('resize', resizeAll);
   resizeAll();
-  restartRun(0);
+  reset();
   requestAnimationFrame(frame);
 })();
 </script>
