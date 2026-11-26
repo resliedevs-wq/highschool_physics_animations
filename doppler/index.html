@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>3.7 Doppler Effect</title>
+<style>
+  :root {
+    --bg: #f7f7f5;
+    --panel: #ffffff;
+    --ink: #1f2328;
+    --muted: #6b7280;
+    --grid: #e5e7eb;
+    --axis: #9ca3af;
+    --ahead: #2f6fb5;       /* ahead of the source: approaching */
+    --behind: #c2410c;      /* behind the source: receding */
+    --focus: #dc2626;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+  }
+  main { max-width: 1100px; margin: 0 auto; padding: 20px; }
+  .card {
+    background: var(--panel);
+    border-radius: 10px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.08);
+    padding: 14px 18px;
+    margin-bottom: 14px;
+  }
+  .frac {
+    display: inline-flex; flex-direction: column;
+    vertical-align: middle; text-align: center;
+    font-size: .85em; line-height: 1.15; margin: 0 2px;
+  }
+  .frac > span { padding: 0 3px; }
+  .frac > span:first-child { border-bottom: 1.5px solid currentColor; }
+  .intro h1 { font-size: 1.25rem; margin: 0 0 8px; }
+  .intro .formulas {
+    display: flex; gap: 3em; justify-content: center; flex-wrap: wrap;
+    font-family: "Cambria Math", "Times New Roman", serif;
+    font-size: 1.4rem;
+    line-height: 2.4;
+    margin: 4px 0 10px;
+  }
+  .intro .formulas small { font-family: system-ui, sans-serif; font-size: .9rem; color: var(--muted); margin-left: .5em; }
+  .intro dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; margin: 0; }
+  .intro dt { font-family: "Cambria Math", "Times New Roman", serif; font-size: 1.1rem; text-align: center; }
+  .intro dd { margin: 0; }
+  canvas { display: block; width: 100%; }
+  #scene { height: 380px; }
+  #plot { height: 230px; }
+  .sliders { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 28px; margin-top: 10px; }
+  .slider label { display: flex; justify-content: space-between; margin-bottom: 4px; font-variant-numeric: tabular-nums; }
+  .slider input { width: 100%; accent-color: var(--ink); }
+  .controls { display: flex; gap: 10px 22px; align-items: center; flex-wrap: wrap; }
+  button {
+    font: inherit;
+    height: 2.4em; min-width: 2.4em; padding: 0 10px;
+    border-radius: 6px;
+    border: 1px solid #d1d5db;
+    background: #fff;
+    cursor: pointer;
+  }
+  button:hover { background: #f3f4f6; }
+  .switch { display: inline-flex; border: 1px solid #d1d5db; border-radius: 6px; overflow: hidden; }
+  .switch button { border: 0; border-radius: 0; }
+  .switch button + button { border-left: 1px solid #d1d5db; }
+  .switch button[aria-pressed="true"] { background: var(--ink); color: #fff; }
+  .toggle[aria-pressed="true"] { background: var(--ink); color: #fff; border-color: var(--ink); }
+  .muted { color: var(--muted); }
+  .clock { font-variant-numeric: tabular-nums; margin-left: auto; }
+  .legend { display: flex; gap: 10px 18px; align-items: center; flex-wrap: wrap; margin-bottom: 4px; color: var(--muted); }
+  .legend .title { color: var(--ink); font-weight: 600; margin-right: auto; }
+  .key { display: inline-block; width: 1.8em; vertical-align: middle; border-top: 3px solid var(--ink); margin-right: 6px; }
+  .key.src { border-top: 2px dashed var(--axis); }
+  .derivation {
+    display: grid;
+    grid-template-columns: auto auto 1fr;
+    column-gap: .4em;
+    align-items: center;
+    font-family: "Cambria Math", "Times New Roman", serif;
+    font-size: 1.3rem;
+    line-height: 2.4;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    overflow-x: auto;
+  }
+  .derivation .head {
+    grid-column: 1 / -1;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-size: 1rem; font-weight: 600; line-height: 1.6; margin-top: .3em;
+  }
+  .derivation .gap { grid-column: 1 / -1; height: .3em; }
+  .AH { color: var(--ahead); font-weight: 600; }
+  .BH { color: var(--behind); font-weight: 600; }
+  @media (max-width: 760px) {
+    .sliders { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <section class="card intro">
+    <h1>3.7 Doppler effect</h1>
+    <div class="formulas">
+      <span>f<sub>o</sub> = <span class="frac"><span>f<sub>s</sub> v</span><span>v − v<sub>s</sub></span></span><small>approaching</small></span>
+      <span>f<sub>o</sub> = <span class="frac"><span>f<sub>s</sub> v</span><span>v + v<sub>s</sub></span></span><small>receding</small></span>
+    </div>
+    <dl>
+      <dt>f<sub>s</sub></dt><dd>frequency of the source (the siren)</dd>
+      <dt>v</dt><dd>speed of sound, 340 m/s here</dd>
+      <dt>v<sub>s</sub></dt><dd>speed of the source</dd>
+      <dt>f<sub>o</sub></dt><dd>frequency heard by the stationary listener (observer)</dd>
+    </dl>
+  </section>
+
+  <div class="card">
+    <canvas id="scene"></canvas>
+    <div class="sliders">
+      <div class="slider">
+        <label for="u"><span>v<sub>s</sub> (speed of the source)</span><span id="u-value"></span></label>
+        <input type="range" id="u" min="0" max="272" step="2" value="34">
+      </div>
+      <div class="slider">
+        <label for="f"><span>f<sub>s</sub> (frequency of the source)</span><span id="f-value"></span></label>
+        <input type="range" id="f" min="200" max="600" step="1" value="300">
+      </div>
+    </div>
+  </div>
+
+  <div class="card controls">
+    <button id="pause-btn" title="Play / pause (Space)">⏸</button>
+    <button id="restart-btn" title="Start the drive again">↺</button>
+    <span class="muted">Slow motion</span>
+    <div class="switch" role="group" aria-label="Slow motion">
+      <button data-slow="200" aria-pressed="false">200×</button>
+      <button data-slow="100" aria-pressed="false">100×</button>
+      <button data-slow="50" aria-pressed="true">50×</button>
+      <button data-slow="25" aria-pressed="false">25×</button>
+    </div>
+    <button id="sound-btn" class="toggle" aria-pressed="false">Play sound</button>
+    <span class="clock">t = <span id="t-value">0.0</span> ms</span>
+  </div>
+
+  <div class="card">
+    <div class="legend">
+      <span class="title">Frequency heard by the listener</span>
+      <span><span class="key"></span>f<sub>o</sub></span>
+      <span><span class="key src"></span>f<sub>s</sub> (source)</span>
+    </div>
+    <canvas id="plot"></canvas>
+  </div>
+
+  <div class="card derivation" id="derivation"></div>
+</main>
+
+<script>
+(() => {
+  // ---- Fixed parameters (SI units) ----
+  // on the page: v is the speed of sound (V here), v_s the speed of the source (u here)
+  // and f_s the frequency of the source (f here)
+  const V = 340;                 // speed of sound in m/s
+  const HALF_W = 8.5;            // the scene shows x from −8.5 m to 8.5 m
+  const X_START = -9.5, X_END = 9.5;   // the siren drives from here to here, then the run starts again
+  const LISTENER = [0, -1.0];    // listener on the pavement, 1 m from the middle of the road
+  const ROAD = 0.5;              // half-width of the road in m
+  const MARGIN = { left: 64, right: 24, top: 12, bottom: 44 };
+  const T_WINDOW = 0.7;          // the graph shows 700 ms
+
+  const $ = id => document.getElementById(id);
+  const css = getComputedStyle(document.documentElement);
+  const color = name => css.getPropertyValue(name).trim();
+  const COLORS = {
+    ink: color('--ink'), grid: color('--grid'), axis: color('--axis'), muted: color('--muted'),
+    ahead: color('--ahead'), behind: color('--behind'), focus: color('--focus'),
+  };
+
+  // ---- State ----
+  let u = 34, f = 300;
+  let slow = 50;                 // 1 s on screen shows 1/slow s
+  let t = 0;                     // physics time in s
+  let running = true, lastFrame = null;
+  let xs = X_START;              // where the siren is
+  let driving = true;            // false once it has left the scene: no more crests until the next run
+  let nextEmit = 0;              // time of the next crest
+  let crests = [];               // { x: where it was sent from, te: when, ta: when it reaches the listener }
+  let history = [];              // { t, f } heard by the listener
+
+  const listenerDist = x => Math.hypot(LISTENER[0] - x, LISTENER[1]);
+
+  function restartRun(time) {
+    xs = X_START;
+    driving = true;
+    nextEmit = time;
+    crests = [];
+  }
+
+  // advance the physics by dt, sending out a crest every period while the siren is driving
+  function step(dt) {
+    const t1 = t + dt;
+    while (driving && nextEmit <= t1) {
+      const x = xs + u * (nextEmit - t);
+      crests.push({ x, te: nextEmit, ta: nextEmit + listenerDist(x) / V });
+      nextEmit += 1 / f;
+    }
+    if (driving) xs += u * dt;
+    t = t1;
+    if (driving && xs > X_END) driving = false;
+    // drop crests that have spread past every corner of the scene
+    const rMax = 2 * HALF_W + 4;
+    crests = crests.filter(c => V * (t - c.te) < rMax);
+    if (!driving && crests.length === 0) restartRun(t);
+  }
+
+  // the frequency heard now: one over the time between the last two crests to reach the listener
+  function heard() {
+    let last = null, prev = null;
+    for (const c of crests) {
+      if (c.ta > t) continue;
+      if (!last || c.ta > last.ta) { prev = last; last = c; }
+      else if (!prev || c.ta > prev.ta) prev = c;
+    }
+    if (!last || !prev) return null;
+    return { f: 1 / (last.ta - prev.ta), approaching: last.x < LISTENER[0] };
+  }
+
+  // ---- Canvas helpers ----
+  function makeCanvas(canvas) {
+    const c = { canvas, ctx: canvas.getContext('2d'), width: 0, height: 0 };
+    c.resize = () => {
+      const dpr = window.devicePixelRatio || 1;
+      const rect = canvas.getBoundingClientRect();
+      c.width = rect.width; c.height = rect.height;
+      canvas.width = Math.round(c.width * dpr);
+      canvas.height = Math.round(c.height * dpr);
+      c.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    };
+    return c;
+  }
+  const scene = makeCanvas($('scene'));
+  const plot = makeCanvas($('plot'));
+
+  function label(ctx, text, x, y, col, { align = 'center', base = 'middle', weight = '', size = 14 } = {}) {
+    ctx.fillStyle = col;
+    ctx.font = `${weight} ${size}px system-ui, sans-serif`;
+    ctx.textAlign = align; ctx.textBaseline = base;
+    ctx.fillText(text, x, y);
+  }
+  function arrow(ctx, x1, y1, x2, y2, col, width = 2.5) {
+    const len = Math.hypot(x2 - x1, y2 - y1);
+    if (len < 2) return;
+    const ux = (x2 - x1) / len, uy = (y2 - y1) / len, h = Math.min(10, len * 0.6);
+    ctx.strokeStyle = col; ctx.fillStyle = col; ctx.lineWidth = width;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2 - ux * h * 0.8, y2 - uy * h * 0.8); ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - ux * h - uy * h * 0.45, y2 - uy * h + ux * h * 0.45);
+    ctx.lineTo(x2 - ux * h + uy * h * 0.45, y2 - uy * h - ux * h * 0.45);
+    ctx.closePath(); ctx.fill();
+  }
+
+  // ---- Scene: top-down view ----
+  const geo = { s: 1, cx: 0, cy: 0 };
+  const SX = x => geo.cx + x * geo.s;
+  const SY = y => geo.cy - y * geo.s;
+
+  // a dimension line between x1 and x2 at height y, with its label above
+  // a dimension line along the siren's path from one wavefront (at x1) to the next (at x2),
+  // its end ticks sitting on the two wavefronts, with its label above the road
+  function dimension(ctx, x1, x2, col, text) {
+    const a = SX(Math.min(x1, x2)), b = SX(Math.max(x1, x2)), py = SY(0);
+    ctx.strokeStyle = col; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(a, py - 8); ctx.lineTo(a, py + 8);
+    ctx.moveTo(b, py - 8); ctx.lineTo(b, py + 8);
+    ctx.moveTo(a, py); ctx.lineTo(b, py);
+    ctx.stroke();
+    ctx.fillStyle = '#fff';
+    const tw = (ctx.font = '600 14px system-ui, sans-serif', ctx.measureText(text).width);
+    const ly = SY(ROAD) - 6;
+    ctx.fillRect((a + b) / 2 - tw / 2 - 3, ly - 17, tw + 6, 18);
+    label(ctx, text, (a + b) / 2, ly, col, { base: 'bottom', weight: 600 });
+  }
+  // part of a wavefront circle, from angle a1 to a2 (degrees, 0 = straight ahead, measured on screen)
+  function arcPart(ctx, c, r, a1, a2, col) {
+    ctx.strokeStyle = col; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(SX(c.x), SY(0), r * geo.s, a1 * Math.PI / 180, a2 * Math.PI / 180); ctx.stroke();
+  }
+
+  function drawScene() {
+    const { ctx, width: W, height: H } = scene;
+    geo.s = Math.min(W / (2 * HALF_W), H / 7.4);
+    geo.cx = W / 2; geo.cy = H / 2 - 0.2 * geo.s;
+    ctx.clearRect(0, 0, W, H);
+
+    // road and pavement
+    ctx.fillStyle = '#eceef1';
+    ctx.fillRect(0, SY(ROAD), W, 2 * ROAD * geo.s);
+    ctx.strokeStyle = '#d5d8dd'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(0, SY(ROAD)); ctx.lineTo(W, SY(ROAD)); ctx.moveTo(0, SY(-ROAD)); ctx.lineTo(W, SY(-ROAD)); ctx.stroke();
+
+    // crests: circles centred where the siren was when it sent each one
+    ctx.save();
+    ctx.beginPath(); ctx.rect(0, 0, W, H); ctx.clip();
+    for (const c of crests) {
+      const r = V * (t - c.te);
+      if (r <= 0) continue;
+      ctx.strokeStyle = COLORS.ink;
+      ctx.globalAlpha = Math.max(0.15, 0.75 - r / 30);
+      ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.arc(SX(c.x), SY(0), r * geo.s, 0, 2 * Math.PI); ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+    ctx.restore();
+
+    // wavelength ahead of and behind the siren: from one wavefront to the next, along its path.
+    // The two wavefronts used are picked out: front arcs blue (ahead), back arcs orange (behind).
+    // The label is the gap actually measured, so it stays right just after u or f has changed,
+    // while the wavefronts sent before the change are still on screen.
+    const recent = crests.filter(c => t - c.te > 0).sort((a, b) => b.te - a.te);
+    if (driving && u > 0 && recent.length >= 4) {
+      const pair = [recent[2], recent[3]];
+      const r = pair.map(c => V * (t - c.te));
+      const ahead = pair.map((c, i) => c.x + r[i]), behind = pair.map((c, i) => c.x - r[i]);
+      const onScreen = xs2 => xs2.every(x => Math.abs(x) < HALF_W + 2);
+      if (onScreen(ahead)) {
+        pair.forEach((c, i) => arcPart(ctx, c, r[i], -40, 40, COLORS.ahead));
+        dimension(ctx, ...ahead, COLORS.ahead, `λ = ${Math.abs(ahead[0] - ahead[1]).toFixed(2)} m`);
+      }
+      if (onScreen(behind)) {
+        pair.forEach((c, i) => arcPart(ctx, c, r[i], 140, 220, COLORS.behind));
+        dimension(ctx, ...behind, COLORS.behind, `λ = ${Math.abs(behind[0] - behind[1]).toFixed(2)} m`);
+      }
+    }
+
+    // the siren and its velocity
+    if (driving && Math.abs(xs) < HALF_W + 1) {
+      const px = SX(xs), py = SY(0);
+      if (u > 0) arrow(ctx, px + 12, py, px + 12 + Math.max(14, u / V * 120), py, COLORS.focus);
+      ctx.beginPath(); ctx.arc(px, py, 10, 0, 2 * Math.PI);
+      ctx.fillStyle = COLORS.focus; ctx.fill();
+      ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
+      label(ctx, 'siren', px, py - 16, COLORS.focus, { base: 'bottom', weight: 600 });
+    }
+
+    // the listener, and what they hear
+    const lx = SX(LISTENER[0]), ly = SY(LISTENER[1]);
+    ctx.beginPath(); ctx.arc(lx, ly, 9, 0, 2 * Math.PI);
+    ctx.fillStyle = COLORS.ink; ctx.fill();
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
+    const h = heard();
+    label(ctx, 'listener', lx, ly + 14, COLORS.ink, { base: 'top', weight: 600 });
+    label(ctx, h ? `hears ${Math.round(h.f)} Hz` : 'hears nothing yet', lx, ly + 32, h ? (h.approaching ? COLORS.ahead : COLORS.behind) : COLORS.muted, { base: 'top', weight: 600 });
+
+    // scale bar
+    const bx = 16, by = H - 16;
+    ctx.strokeStyle = COLORS.muted; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(bx, by - 5); ctx.lineTo(bx, by); ctx.lineTo(bx + geo.s, by); ctx.lineTo(bx + geo.s, by - 5); ctx.stroke();
+    label(ctx, '1 m', bx + geo.s / 2, by - 6, COLORS.muted, { base: 'bottom', size: 12 });
+    label(ctx, `slow motion ${slow}×`, W - 12, H - 12, COLORS.muted, { align: 'right', base: 'bottom', size: 12 });
+  }
+
+  // ---- Graph: frequency heard against time ----
+  function drawPlot() {
+    const { ctx, width: W, height: H } = plot;
+    const w = W - MARGIN.left - MARGIN.right, hgt = H - MARGIN.top - MARGIN.bottom;
+    const top = MARGIN.top, bottom = top + hgt;
+    const t0 = Math.max(0, t - 0.85 * T_WINDOW), t1 = t0 + T_WINDOW;
+    const fMax = f * V / (V - u);
+    const stepF = fMax > 2400 ? 1000 : fMax > 1200 ? 500 : fMax > 600 ? 200 : 100;
+    const yMax = Math.ceil(fMax * 1.12 / stepF) * stepF;
+    const px = tt => MARGIN.left + (tt - t0) / T_WINDOW * w;
+    const py = v => top + (1 - v / yMax) * hgt;
+    ctx.clearRect(0, 0, W, H);
+
+    ctx.lineWidth = 1;
+    ctx.font = '13px system-ui, sans-serif';
+    ctx.fillStyle = COLORS.muted;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    for (let ms = Math.ceil(t0 * 10) * 100; ms <= t1 * 1000 + 1e-6; ms += 100) {
+      ctx.strokeStyle = COLORS.grid;
+      ctx.beginPath(); ctx.moveTo(px(ms / 1000), top); ctx.lineTo(px(ms / 1000), bottom); ctx.stroke();
+      ctx.fillText(String(ms), px(ms / 1000), bottom + 6);
+    }
+    ctx.fillText('t / ms', MARGIN.left + w / 2, bottom + 24);
+    ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    for (let v = 0; v <= yMax + 1e-6; v += stepF) {
+      ctx.strokeStyle = v === 0 ? COLORS.axis : COLORS.grid;
+      ctx.beginPath(); ctx.moveTo(MARGIN.left, py(v)); ctx.lineTo(MARGIN.left + w, py(v)); ctx.stroke();
+      ctx.fillText(String(v), MARGIN.left - 8, py(v));
+    }
+    ctx.save();
+    ctx.translate(16, top + hgt / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.textAlign = 'center';
+    ctx.fillText('f / Hz', 0, 0);
+    ctx.restore();
+
+    // the siren's own frequency
+    ctx.strokeStyle = COLORS.axis; ctx.lineWidth = 2; ctx.setLineDash([6, 5]);
+    ctx.beginPath(); ctx.moveTo(MARGIN.left, py(f)); ctx.lineTo(MARGIN.left + w, py(f)); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // what the listener heard, coloured by approaching / receding
+    ctx.save();
+    ctx.beginPath(); ctx.rect(MARGIN.left, top, w, hgt); ctx.clip();
+    ctx.lineWidth = 3;
+    for (let i = 1; i < history.length; i++) {
+      const a = history[i - 1], b = history[i];
+      if (b.t < t0 || a.f === null || b.f === null) continue;
+      ctx.strokeStyle = b.approaching ? COLORS.ahead : COLORS.behind;
+      ctx.beginPath(); ctx.moveTo(px(a.t), py(a.f)); ctx.lineTo(px(b.t), py(b.f)); ctx.stroke();
+    }
+    ctx.restore();
+    ctx.strokeStyle = COLORS.focus; ctx.lineWidth = 1; ctx.setLineDash([4, 4]);
+    ctx.beginPath(); ctx.moveTo(px(t), top); ctx.lineTo(px(t), bottom); ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  // ---- Working ----
+  const line = (lhs, ...rhs) => `<span>${lhs}</span><span>=</span><span>${rhs.join(' = ')}</span>`;
+  const frac = (a, b) => `<span class="frac"><span>${a}</span><span>${b}</span></span>`;
+  const head = text => `<span class="head">${text}</span>`;
+  const gap = '<span class="gap"></span>';
+  function updateDerivation() {
+    const T = 1 / f, Tms = (T * 1000).toFixed(2);
+    const lA = (V - u) / f, lB = (V + u) / f;
+    const fA = f * V / (V - u), fB = f * V / (V + u);
+    let rows =
+      line('T', frac(1, 'f<sub>s</sub>'), frac(1, f), `${Tms} ms`) +
+      line('v<sub>s</sub>T', `${u} × ${Tms} ms`, `${(u * T).toFixed(3)} m`) +
+      head('<span class="AH">Ahead of the siren (approaching)</span>') +
+      line('λ', '(v − v<sub>s</sub>) T', `(${V} − ${u}) × ${Tms} ms`, `${lA.toFixed(3)} m`) +
+      line('f<sub>o</sub>', frac('v', 'λ'), frac('f<sub>s</sub> v', 'v − v<sub>s</sub>'), frac(`${f} × ${V}`, `${V} − ${u}`), `<span class="AH">${Math.round(fA)} Hz</span>`) +
+      head('<span class="BH">Behind the siren (receding)</span>') +
+      line('λ', '(v + v<sub>s</sub>) T', `(${V} + ${u}) × ${Tms} ms`, `${lB.toFixed(3)} m`) +
+      line('f<sub>o</sub>', frac('v', 'λ'), frac('f<sub>s</sub> v', 'v + v<sub>s</sub>'), frac(`${f} × ${V}`, `${V} + ${u}`), `<span class="BH">${Math.round(fB)} Hz</span>`);
+    $('derivation').innerHTML = rows;
+    $('u-value').textContent = `${u} m/s`;
+    $('f-value').textContent = `${f} Hz`;
+    $('t-value').textContent = (t * 1000).toFixed(1);
+  }
+
+  // ---- Sound: the tone the listener hears ----
+  let audio = null;
+  function setSound(on) {
+    const btn = $('sound-btn');
+    btn.setAttribute('aria-pressed', String(on));
+    btn.textContent = on ? 'Stop sound' : 'Play sound';
+    if (on && !audio) {
+      const ac = new (window.AudioContext || window.webkitAudioContext)();
+      const osc = ac.createOscillator(), gain = ac.createGain();
+      osc.type = 'sine';
+      gain.gain.value = 0;
+      osc.connect(gain).connect(ac.destination);
+      osc.start();
+      audio = { ac, osc, gain };
+    }
+    if (audio) audio.on = on;
+  }
+  function updateSound(h) {
+    if (!audio) return;
+    const now = audio.ac.currentTime;
+    const audible = audio.on && running && h;
+    if (h) audio.osc.frequency.setTargetAtTime(h.f, now, 0.02);
+    audio.gain.gain.setTargetAtTime(audible ? 0.08 : 0, now, 0.03);
+  }
+  $('sound-btn').addEventListener('click', () => setSound(!(audio && audio.on)));
+
+  // ---- Controls ----
+  const uSlider = $('u'), fSlider = $('f');
+  uSlider.addEventListener('input', () => { u = Number(uSlider.value); });
+  fSlider.addEventListener('input', () => { f = Number(fSlider.value); });
+
+  const slowBtns = document.querySelectorAll('[data-slow]');
+  slowBtns.forEach(btn => btn.addEventListener('click', () => {
+    slow = Number(btn.dataset.slow);
+    slowBtns.forEach(b => b.setAttribute('aria-pressed', String(b === btn)));
+  }));
+
+  const pauseBtn = $('pause-btn');
+  function togglePause() {
+    running = !running;
+    pauseBtn.textContent = running ? '⏸' : '▶';
+  }
+  pauseBtn.addEventListener('click', togglePause);
+  $('restart-btn').addEventListener('click', () => { t = 0; history = []; restartRun(0); });
+  window.addEventListener('keydown', e => {
+    if (e.key === ' ' || e.code === 'Space') { e.preventDefault(); togglePause(); }
+  }, true);
+
+  // ---- Animation loop: real time ÷ slow ----
+  function frame(now) {
+    if (lastFrame !== null && running) {
+      // small steps so fast sirens still send their crests from the right places
+      let dt = Math.min((now - lastFrame) / 1000, 0.1) / slow;
+      while (dt > 0) { const d = Math.min(dt, 0.0005); step(d); dt -= d; }
+      const h = heard();
+      history.push({ t, f: h ? h.f : null, approaching: h ? h.approaching : true });
+      while (history.length && history[0].t < t - T_WINDOW) history.shift();
+    }
+    lastFrame = now;
+    drawScene();
+    drawPlot();
+    updateDerivation();
+    updateSound(heard());
+    requestAnimationFrame(frame);
+  }
+
+  function resizeAll() { scene.resize(); plot.resize(); }
+  window.addEventListener('resize', resizeAll);
+  resizeAll();
+  restartRun(0);
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
