@@ -1,0 +1,850 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>3.5 Plane Polarisation</title>
+<style>
+  :root {
+    --bg: #f7f7f5;
+    --panel: #ffffff;
+    --ink: #1f2328;
+    --muted: #6b7280;
+    --grid: #e5e7eb;
+    --axis: #9ca3af;
+    --emergent: #2f6fb5;    /* emergent wave and amplitude */
+    --intensity: #c2410c;   /* intensity */
+    --focus: #dc2626;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+  }
+  main { max-width: 1100px; margin: 0 auto; padding: 20px; }
+  .card {
+    background: var(--panel);
+    border-radius: 10px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.08);
+    padding: 14px 18px;
+    margin-bottom: 14px;
+  }
+  .intro h1 { font-size: 1.25rem; margin: 0 0 8px; }
+  .intro .formulas {
+    display: flex; gap: 2.4em; justify-content: center; flex-wrap: wrap;
+    font-family: "Cambria Math", "Times New Roman", serif;
+    font-size: 1.4rem;
+    line-height: 2.2;
+    margin: 4px 0 10px;
+  }
+  .intro dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; margin: 0; }
+  .intro dt { font-family: "Cambria Math", "Times New Roman", serif; font-size: 1.1rem; text-align: center; }
+  .intro dd { margin: 0; }
+  .views { display: grid; grid-template-columns: 1fr 330px; gap: 14px; }
+  canvas { display: block; width: 100%; touch-action: none; }
+  #view-3d { height: 340px; }
+  #view-end { height: 330px; cursor: grab; }
+  #plot { height: 260px; }
+  #bars { height: 220px; }
+  .slider { margin-top: 10px; }
+  .slider label { display: flex; justify-content: space-between; margin-bottom: 4px; font-variant-numeric: tabular-nums; }
+  .slider input { width: 100%; accent-color: var(--focus); }
+  .controls { display: flex; gap: 10px 22px; align-items: center; flex-wrap: wrap; }
+  button {
+    font: inherit;
+    height: 2.4em; min-width: 2.4em; padding: 0 10px;
+    border-radius: 6px;
+    border: 1px solid #d1d5db;
+    background: #fff;
+    cursor: pointer;
+  }
+  button:hover { background: #f3f4f6; }
+  button:disabled { opacity: .4; cursor: default; }
+  .switch { display: inline-flex; border: 1px solid #d1d5db; border-radius: 6px; overflow: hidden; }
+  .switch button { border: 0; border-radius: 0; }
+  .switch button + button { border-left: 1px solid #d1d5db; }
+  .switch button[aria-pressed="true"] { background: var(--ink); color: #fff; }
+  .toggle[aria-pressed="true"] { background: var(--ink); color: #fff; border-color: var(--ink); }
+  .legend { display: flex; gap: 10px 18px; align-items: center; flex-wrap: wrap; margin-bottom: 4px; color: var(--muted); }
+  .legend .title { color: var(--ink); font-weight: 600; margin-right: auto; }
+  .key { display: inline-block; width: 1.8em; vertical-align: middle; border-top: 3px solid; margin-right: 6px; }
+  .key.amp { border-color: var(--emergent); }
+  .key.int { border-color: var(--intensity); }
+  .derivation {
+    display: grid;
+    grid-template-columns: auto auto 1fr;
+    column-gap: .4em;
+    align-items: center;
+    font-family: "Cambria Math", "Times New Roman", serif;
+    font-size: 1.3rem;
+    line-height: 2.2;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    overflow-x: auto;
+  }
+  .derivation .note {
+    grid-column: 1 / -1;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-size: 1rem; line-height: 1.5; color: var(--muted); white-space: normal;
+  }
+  .derivation .gap { grid-column: 1 / -1; height: .4em; }
+  .F { color: var(--focus); font-weight: 600; }
+  .A { color: var(--emergent); font-weight: 600; }
+  .I { color: var(--intensity); font-weight: 600; }
+  @media (max-width: 860px) {
+    .views { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <section class="card intro">
+    <h1>3.5 Plane polarisation</h1>
+    <div class="formulas">
+      <span>A = A<sub>0</sub> · cos θ</span>
+      <span>I ∝ A<sup>2</sup></span>
+      <span>I = I<sub>0</sub> · cos<sup>2</sup> θ</span>
+    </div>
+    <dl>
+      <dt>θ</dt><dd>angle between the incident vibration and the polariser's transmission axis (the slit)</dd>
+      <dt>A<sub>0</sub>, I<sub>0</sub></dt><dd>amplitude and intensity of the incident wave</dd>
+      <dt>A, I</dt><dd>amplitude and intensity of the emergent wave</dd>
+    </dl>
+  </section>
+
+  <div class="card">
+    <div class="views">
+      <canvas id="view-3d"></canvas>
+      <canvas id="view-end"></canvas>
+    </div>
+    <div class="slider">
+      <label for="theta"><span>θ</span><span id="theta-value"></span></label>
+      <input type="range" id="theta" min="0" max="360" step="1" value="60">
+    </div>
+  </div>
+
+  <div class="card controls">
+    <div class="switch" role="group" aria-label="Source">
+      <button id="src-pol" aria-pressed="true">Plane-polarised source</button>
+      <button id="src-unpol" aria-pressed="false">Unpolarised source</button>
+    </div>
+    <button id="pause-btn" title="Play / pause (Space)">⏸</button>
+    <button id="view-btn" title="Back to the starting view (or double-click the 3D view)">Reset view</button>
+  </div>
+
+  <div class="card" id="pulse-card" hidden>
+    <div class="legend">
+      <span class="title">Intensity let through for each of the 24 pulses</span>
+      <span id="pulse-count"></span>
+      <button id="again-btn">Send 24 pulses again</button>
+    </div>
+    <canvas id="bars"></canvas>
+  </div>
+
+  <div class="card" id="plot-card">
+    <div class="legend">
+      <span class="title">Emergent wave against θ</span>
+      <span><span class="key amp"></span>A / A<sub>0</sub></span>
+      <span><span class="key int"></span>I / I<sub>0</sub></span>
+      <button id="curve-btn" class="toggle" aria-pressed="false">Show full curves</button>
+      <button id="clear-btn">Clear graph</button>
+    </div>
+    <canvas id="plot"></canvas>
+  </div>
+
+  <div class="card derivation" id="derivation"></div>
+</main>
+
+<script>
+(() => {
+  // ---- Fixed parameters (3D view in arbitrary units) ----
+  const XL = 12;             // length of the beam shown
+  const XP = 5.5;            // position of the polariser
+  const R = 1.7;             // radius of the polariser
+  const A0 = 1;              // incident amplitude
+  const LAMBDA = 2, PERIOD = 1.2;
+  const K = 2 * Math.PI / LAMBDA, W = 2 * Math.PI / PERIOD;
+  const V = LAMBDA / PERIOD;
+  const N_PULSES = 24, PULSE_STEP = 15;   // unpolarised: 24 pulses at 0°, 15°, 30° … 345°
+  const PULSE_T = PERIOD / 2;              // each pulse is a single hump, half a period long
+  const MARGIN = { left: 64, right: 24, top: 12, bottom: 44 };
+  const RAD = Math.PI / 180;
+
+  const $ = id => document.getElementById(id);
+  const css = getComputedStyle(document.documentElement);
+  const color = name => css.getPropertyValue(name).trim();
+  const COLORS = {
+    ink: color('--ink'), grid: color('--grid'), axis: color('--axis'), muted: color('--muted'),
+    em: color('--emergent'), int: color('--intensity'), focus: color('--focus'),
+  };
+
+  // ---- State ----
+  let theta = 60;            // degrees, 0 … 360, measured from the incident vibration (vertical)
+  let source = 'pol';        // 'pol' | 'unpol'
+  let pulseStart = 0;       // when the first of the 24 pulses left the source
+  let running = true, lastFrame = null, t = 0;
+  let showCurves = false;
+  // degrees visited by the polariser, kept separately for each case
+  const visited = { pol: new Uint8Array(361), unpol: new Uint8Array(361) };
+  const mode = () => source;
+
+  // ---- Physics ----
+  // emergent amplitude and intensity as fractions of the incident ones
+  function ratios(deg, m = mode()) {
+    if (m === 'unpol') return { a: Math.SQRT1_2, i: 0.5 };
+    const c = Math.cos(deg * RAD);
+    return { a: Math.abs(c), i: c * c };
+  }
+  // vibration directions are written as (y, w): y up, w across (to the right when looking along the beam)
+  const axisDir = () => [Math.cos(theta * RAD), Math.sin(theta * RAD)];
+  const phaseAt = x => W * t - K * x;
+  const pulseAngle = k => k * PULSE_STEP;          // degrees
+  // the pulse at position x right now, or −1
+  function pulseAt(x) {
+    const tau = t - pulseStart - x / V;
+    return tau >= 0 && tau < N_PULSES * PULSE_T ? Math.floor(tau / PULSE_T) : -1;
+  }
+  // time since the pulses started, at the polariser
+  const atPolariser = () => t - pulseStart - XP / V;
+  // pulses that have gone all the way through the polariser
+  const pulsesPassed = () => Math.max(0, Math.min(N_PULSES, Math.floor(atPolariser() / PULSE_T)));
+  const pulsesDone = () => pulsesPassed() === N_PULSES;
+  // the pulse at the polariser right now, or −1
+  function pulseNow() {
+    const tau = atPolariser();
+    return tau >= 0 && tau < N_PULSES * PULSE_T ? Math.floor(tau / PULSE_T) : -1;
+  }
+  function incident(x) {
+    if (source === 'pol') return [A0 * Math.sin(phaseAt(x)), 0];
+    const tau = t - pulseStart - x / V;
+    if (tau < 0 || tau >= N_PULSES * PULSE_T) return [0, 0];
+    const k = Math.floor(tau / PULSE_T), s = A0 * Math.sin(Math.PI * (tau / PULSE_T - k));
+    const phi = pulseAngle(k) * RAD;
+    return [s * Math.cos(phi), s * Math.sin(phi)];
+  }
+  // only the part of the vibration along the transmission axis gets through
+  function emergent(x) {
+    const d = incident(x), u = axisDir();
+    const along = d[0] * u[0] + d[1] * u[1];
+    return [along * u[0], along * u[1]];
+  }
+
+  // ---- Canvas helper ----
+  function makeCanvas(canvas) {
+    const c = { canvas, ctx: canvas.getContext('2d'), width: 0, height: 0 };
+    c.resize = () => {
+      const dpr = window.devicePixelRatio || 1;
+      const rect = canvas.getBoundingClientRect();
+      c.width = rect.width; c.height = rect.height;
+      canvas.width = Math.round(c.width * dpr);
+      canvas.height = Math.round(c.height * dpr);
+      c.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    };
+    return c;
+  }
+  const v3 = makeCanvas($('view-3d'));
+  const ve = makeCanvas($('view-end'));
+  const plot = makeCanvas($('plot'));
+  const bars = makeCanvas($('bars'));
+
+  function arrow(ctx, x1, y1, x2, y2, col, { width = 2.5, dash = [], head = 9 } = {}) {
+    const len = Math.hypot(x2 - x1, y2 - y1);
+    ctx.strokeStyle = col; ctx.fillStyle = col; ctx.lineWidth = width;
+    ctx.setLineDash(dash);
+    if (len < 2) { ctx.setLineDash([]); return; }
+    const ux = (x2 - x1) / len, uy = (y2 - y1) / len, h = Math.min(head, len * 0.6);
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2 - ux * h * 0.8, y2 - uy * h * 0.8); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - ux * h - uy * h * 0.45, y2 - uy * h + ux * h * 0.45);
+    ctx.lineTo(x2 - ux * h + uy * h * 0.45, y2 - uy * h - ux * h * 0.45);
+    ctx.closePath(); ctx.fill();
+  }
+  function label(ctx, text, x, y, col, { align = 'center', base = 'middle', weight = '' } = {}) {
+    ctx.fillStyle = col;
+    ctx.font = `${weight} 14px system-ui, sans-serif`;
+    ctx.textAlign = align; ctx.textBaseline = base;
+    ctx.fillText(text, x, y);
+  }
+
+  // ---- 3D view: a perspective camera that can swing round the beam ----
+  const VIEW0 = { az: 24, el: 16 };       // default camera direction in degrees
+  const cam = { ...VIEW0 };
+  const CAM_D = 30;                       // camera distance from the middle of the beam: mild perspective
+  const FLOOR = -1.9, FLOOR_W = 2.0;      // floor under the beam that the shadows fall on
+  const STEP = 0.06;                      // width of the strips each wave is built from
+  const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+  const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+  const norm = a => { const l = Math.hypot(...a) || 1; return [a[0] / l, a[1] / l, a[2] / l]; };
+  const LIGHT = norm([-0.35, 1, 0.6]);    // direction towards the light that shades the waves
+  // points are (x, y, w): x along the beam, y up, w across (towards the viewer at the start)
+  const view = { E: [0, 0, 0], r: [1, 0, 0], u: [0, 1, 0], f: [0, 0, -1], k: 1, ox: 0, oy: 0 };
+
+  const camSpace = (x, y, w) => {
+    const v = sub([x, y, w], view.E);
+    return [dot(v, view.r), dot(v, view.u), dot(v, view.f)];
+  };
+  const P = (x, y, w) => {
+    const [a, b, c] = camSpace(x, y, w);
+    return [view.ox + view.k * a / c, view.oy - view.k * b / c];
+  };
+  const depth = (x, y, w) => camSpace(x, y, w)[2];
+
+  function setupCamera() {
+    const az = cam.az * RAD, el = cam.el * RAD;
+    const dir = [Math.sin(az) * Math.cos(el), Math.sin(el), Math.cos(az) * Math.cos(el)];
+    view.E = [XL / 2 + CAM_D * dir[0], CAM_D * dir[1], CAM_D * dir[2]];
+    view.f = [-dir[0], -dir[1], -dir[2]];
+    view.r = norm(cross(view.f, [0, 1, 0]));
+    view.u = cross(view.r, view.f);
+    // fit the floor and everything above it into the canvas
+    let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+    for (const x of [-0.3, XL + 0.3]) for (const y of [FLOOR, R + 0.2]) for (const w of [-FLOOR_W, FLOOR_W]) {
+      const [a, b, c] = camSpace(x, y, w);
+      x0 = Math.min(x0, a / c); x1 = Math.max(x1, a / c);
+      y0 = Math.min(y0, b / c); y1 = Math.max(y1, b / c);
+    }
+    const m = 14, top = 34;
+    view.k = Math.min((v3.width - 2 * m) / (x1 - x0), (v3.height - m - top) / (y1 - y0));
+    view.ox = v3.width / 2 - view.k * (x0 + x1) / 2;
+    view.oy = top + (v3.height - m - top) / 2 + view.k * (y0 + y1) / 2;
+  }
+  // screen point → (y, w) where its line of sight meets the polariser's plane x = XP
+  function unproject(X, Y) {
+    const a = (X - view.ox) / view.k, b = (view.oy - Y) / view.k;
+    const d = [0, 1, 2].map(i => view.f[i] + view.r[i] * a + view.u[i] * b);
+    if (Math.abs(d[0]) < 1e-6) return [Infinity, Infinity];
+    const s = (XP - view.E[0]) / d[0];
+    if (s <= 0) return [Infinity, Infinity];
+    return [view.E[1] + s * d[1], view.E[2] + s * d[2]];
+  }
+
+  function polyline(ctx, pts, col, width, dash = []) {
+    ctx.strokeStyle = col; ctx.lineWidth = width; ctx.setLineDash(dash);
+    ctx.beginPath();
+    pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+  function fillPoly(ctx, pts, col) {
+    ctx.fillStyle = col;
+    ctx.beginPath();
+    pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+    ctx.closePath(); ctx.fill();
+  }
+  const mix = (c1, c2, s) => `rgb(${c1.map((v, i) => Math.round(v + (c2[i] - v) * s)).join(',')})`;
+  const SHADES = {
+    incident: { dark: [92, 97, 106], light: [222, 225, 230], edge: COLORS.ink },
+    emergent: { dark: [30, 78, 140], light: [184, 210, 240], edge: COLORS.em },
+  };
+
+  // a wave is drawn as strips between the beam axis and the string; each strip lies in the plane
+  // the string vibrates in there, and is brighter the more that plane faces the light
+  function waveStrips(items, x0, x1, f, shade) {
+    for (let xa = x0; xa < x1 - 1e-9; xa += STEP) {
+      const xb = Math.min(xa + STEP, x1), da = f(xa), db = f(xb);
+      const d = Math.hypot(...da) > Math.hypot(...db) ? da : db, len = Math.hypot(...d);
+      if (len < 1e-3) continue;
+      const n = [0, -d[1] / len, d[0] / len];          // normal of the plane through the axis and d
+      const fill = mix(shade.dark, shade.light, 0.15 + 0.85 * Math.abs(dot(n, LIGHT)));
+      items.push({
+        z: depth((xa + xb) / 2, (da[0] + db[0]) / 4, (da[1] + db[1]) / 4),
+        draw: ctx => {
+          const A = P(xa, 0, 0), B = P(xb, 0, 0), C = P(xb, db[0], db[1]), D = P(xa, da[0], da[1]);
+          fillPoly(ctx, [A, B, C, D], fill);
+          ctx.strokeStyle = fill; ctx.lineWidth = 0.8; ctx.stroke();    // closes hairline gaps between strips
+          ctx.lineCap = 'round';
+          polyline(ctx, [D, C], shade.edge, 2.5);
+          ctx.lineCap = 'butt';
+        },
+      });
+    }
+  }
+
+  // shadows from a light straight overhead: each point (x, y, w) lands at (x, FLOOR, w)
+  function waveShadow(ctx, x0, x1, f) {
+    const pts = [];
+    for (let x = x0; x <= x1 + 1e-9; x += STEP) pts.push(P(x, FLOOR, f(x)[1]));
+    fillPoly(ctx, [...pts, P(x1, FLOOR, 0), P(x0, FLOOR, 0)], 'rgba(31, 35, 40, 0.10)');
+    polyline(ctx, pts, 'rgba(31, 35, 40, 0.35)', 2);
+  }
+  function drawFloor(ctx) {
+    fillPoly(ctx, [P(-0.3, FLOOR, -FLOOR_W), P(XL + 0.3, FLOOR, -FLOOR_W), P(XL + 0.3, FLOOR, FLOOR_W), P(-0.3, FLOOR, FLOOR_W)], '#eff0f2');
+    for (let x = 0; x <= XL; x += 1) polyline(ctx, [P(x, FLOOR, -FLOOR_W), P(x, FLOOR, FLOOR_W)], '#e1e3e7', 1);
+    for (let w = -2; w <= 2; w += 1) polyline(ctx, [P(-0.3, FLOOR, w), P(XL + 0.3, FLOOR, w)], '#e1e3e7', 1);
+  }
+
+  const ring = (x, r) => {
+    const pts = [];
+    for (let j = 0; j <= 64; j++) { const a = j / 64 * 2 * Math.PI; pts.push(P(x, r * Math.cos(a), r * Math.sin(a))); }
+    return pts;
+  };
+  function drawPolariser(ctx) {
+    const u = axisDir(), p = [-u[1], u[0]];
+    const rim = ring(XP, R);
+    fillPoly(ctx, rim, 'rgba(107, 114, 128, 0.25)');
+    polyline(ctx, rim, COLORS.muted, 1.5);
+    // the slit along the transmission axis
+    const L = R * 0.9, hw = 0.13;
+    const corner = (a, b) => P(XP, a * L * u[0] + b * hw * p[0], a * L * u[1] + b * hw * p[1]);
+    const slit = [corner(1, 1), corner(1, -1), corner(-1, -1), corner(-1, 1)];
+    fillPoly(ctx, slit, 'rgba(255, 255, 255, 0.9)');
+    polyline(ctx, [...slit, slit[0]], COLORS.ink, 1.2);
+  }
+  function drawHandle(ctx) {
+    const u = axisDir(), [hx, hy] = P(XP, R * u[0], R * u[1]);
+    ctx.beginPath(); ctx.arc(hx, hy, 7, 0, 2 * Math.PI);
+    ctx.fillStyle = COLORS.focus; ctx.fill();
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
+  }
+
+  // unpolarised: a dial at the source, its arrow pointing the way the pulse being sent vibrates
+  const DIAL_R = 0.85;
+  function drawDial(ctx) {
+    const rim = ring(0, DIAL_R);
+    fillPoly(ctx, rim, 'rgba(255, 255, 255, 0.9)');
+    polyline(ctx, rim, COLORS.ink, 1.5);
+    const k = pulseAt(0);
+    if (k < 0) return;
+    const phi = pulseAngle(k) * RAD, [cx, cy] = P(0, 0, 0);
+    const [tx, ty] = P(0, DIAL_R * Math.cos(phi), DIAL_R * Math.sin(phi));
+    arrow(ctx, cx, cy, tx, ty, COLORS.ink, { width: 3, head: 8 });
+  }
+
+  function draw3D() {
+    const { ctx } = v3;
+    ctx.clearRect(0, 0, v3.width, v3.height);
+    setupCamera();
+    drawFloor(ctx);
+    polyline(ctx, [P(XP, FLOOR, -R), P(XP, FLOOR, R)], 'rgba(31, 35, 40, 0.18)', 5);
+    if (source === 'unpol') polyline(ctx, [P(0, FLOOR, -DIAL_R), P(0, FLOOR, DIAL_R)], 'rgba(31, 35, 40, 0.18)', 4);
+    waveShadow(ctx, 0, XP, incident);
+    waveShadow(ctx, XP, XL, emergent);
+    polyline(ctx, [P(0, 0, 0), P(XL, 0, 0)], COLORS.axis, 1, [4, 4]);
+
+    // far things first; the polariser's plane splits the scene into the two sides of it
+    const inc = [], em = [];
+    waveStrips(inc, 0, XP, incident, SHADES.incident);
+    waveStrips(em, XP, XL, emergent, SHADES.emergent);
+    if (source === 'unpol') inc.push({ z: view.E[0] > 0 ? Infinity : -Infinity, draw: drawDial });
+    const paint = list => list.sort((a, b) => b.z - a.z).forEach(it => it.draw(ctx));
+    if (view.E[0] > XP) { paint(inc); drawPolariser(ctx); paint(em); }
+    else { paint(em); drawPolariser(ctx); paint(inc); }
+    drawHandle(ctx);
+
+    const tag = (text, x, y, col) => { const [sx, sy] = P(x, y, 0); label(ctx, text, sx, sy - 8, col, { weight: 600 }); };
+    tag('incident', source === 'pol' ? XP / 2 : XP * 0.6, R, COLORS.ink);
+    tag('polariser', XP, R + 0.15, COLORS.muted);
+    tag('emergent', (XP + XL) / 2, R, COLORS.em);
+    if (source === 'unpol') {
+      const k = pulseAt(0);
+      const [sx, sy] = P(0, -DIAL_R, 0);
+      label(ctx, k < 0 ? 'source: done' : `pulse ${k + 1}: ${pulseAngle(k)}°`, sx, sy + 14, k < 0 ? COLORS.muted : COLORS.ink, { weight: 600 });
+    }
+  }
+
+  // ---- View along the beam ----
+  const endGeom = () => {
+    const cx = ve.width / 2, cy = ve.height / 2 + 16, rad = Math.min(ve.width, ve.height) / 2 - 42;
+    return { cx, cy, rad, e: rad / R, ev: rad * 0.78 / A0 };   // ev: scale for the vibration arrows
+  };
+  function drawEnd() {
+    const { ctx } = ve;
+    const { cx, cy, rad, e, ev } = endGeom();
+    const S = (y, w) => [cx + e * w, cy - e * y];      // (y, w) → screen, polariser scale
+    const SV = (y, w) => [cx + ev * w, cy - ev * y];   // (y, w) → screen, vibration scale
+    ctx.clearRect(0, 0, ve.width, ve.height);
+    label(ctx, 'View along the beam', 8, 12, COLORS.muted, { align: 'left', weight: 600 });
+
+    const u = axisDir(), p = [-u[1], u[0]];
+    // disk and slit
+    ctx.fillStyle = 'rgba(107, 114, 128, 0.15)';
+    ctx.beginPath(); ctx.arc(cx, cy, rad, 0, 2 * Math.PI); ctx.fill();
+    ctx.strokeStyle = COLORS.muted; ctx.lineWidth = 1.5; ctx.stroke();
+    const L = R * 0.9, hw = 0.13;
+    const corner = (a, b) => S(a * L * u[0] + b * hw * p[0], a * L * u[1] + b * hw * p[1]);
+    const slit = [corner(1, 1), corner(1, -1), corner(-1, -1), corner(-1, 1)];
+    ctx.fillStyle = '#fff';
+    ctx.beginPath(); slit.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = COLORS.ink; ctx.lineWidth = 1.2; ctx.stroke();
+    const [hx, hy] = S(R * u[0], R * u[1]);
+    ctx.beginPath(); ctx.arc(hx, hy, 7, 0, 2 * Math.PI);
+    ctx.fillStyle = COLORS.focus; ctx.fill();
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
+
+    // the incident vibration direction for this instant
+    let dir = [1, 0];
+    if (source === 'unpol') {
+      // every pulse that has reached the polariser leaves a faint spoke in its direction
+      const now = pulseNow(), reached = now >= 0 ? now : pulsesPassed();
+      for (let j = 0; j < reached; j++) {
+        const phi = pulseAngle(j) * RAD;
+        polyline(ctx, [[cx, cy], SV(A0 * Math.cos(phi), A0 * Math.sin(phi))], 'rgba(31, 35, 40, 0.3)', 1.5);
+      }
+      if (now < 0) {
+        label(ctx, pulsesDone() ? 'all 24 pulses have passed' : 'pulses on their way…', 8, 32, COLORS.muted, { align: 'left' });
+        return;
+      }
+      const phi = pulseAngle(now) * RAD;
+      dir = [Math.cos(phi), Math.sin(phi)];
+    } else {
+      // reference: the incident vibration is vertical; θ is measured from here
+      polyline(ctx, [S(R * 1.08, 0), S(-R * 1.08, 0)], COLORS.axis, 1, [4, 4]);
+      ctx.strokeStyle = COLORS.focus; ctx.lineWidth = 2;
+      const r = rad * 0.32;
+      ctx.beginPath(); ctx.arc(cx, cy, r, -Math.PI / 2, -Math.PI / 2 + theta * RAD); ctx.stroke();
+      const mid = (theta / 2) * RAD;
+      label(ctx, 'θ', cx + (r + 12) * Math.sin(mid), cy - (r + 12) * Math.cos(mid), COLORS.focus, { weight: 600 });
+    }
+
+    // split the incident amplitude into a part along the axis and a part across it
+    const along = dir[0] * u[0] + dir[1] * u[1];
+    const across = dir[0] * p[0] + dir[1] * p[1];
+    const tip = SV(A0 * dir[0], A0 * dir[1]);
+    const tA = SV(A0 * along * u[0], A0 * along * u[1]);
+    const tX = SV(A0 * across * p[0], A0 * across * p[1]);
+    polyline(ctx, [tip, tA], COLORS.axis, 1, [3, 3]);
+    polyline(ctx, [tip, tX], COLORS.axis, 1, [3, 3]);
+    arrow(ctx, cx, cy, tX[0], tX[1], COLORS.muted, { dash: [5, 4] });
+    arrow(ctx, cx, cy, tip[0], tip[1], COLORS.ink);
+    arrow(ctx, cx, cy, tA[0], tA[1], COLORS.em, { width: 3.5 });
+
+    const out = (pt, dist) => {
+      const dx = pt[0] - cx, dy = pt[1] - cy, len = Math.hypot(dx, dy) || 1;
+      return [pt[0] + dx / len * dist, pt[1] + dy / len * dist];
+    };
+    const pol = source === 'pol';
+    // each part's label sits beside its arrow, on the side away from A₀
+    const beside = (tipPt, side) => {
+      const [sx, sy] = [side[1], -side[0]];             // (y, w) direction → screen direction
+      return [(cx + tipPt[0]) / 2 + sx * 30, (cy + tipPt[1]) / 2 + sy * 30];
+    };
+    const sgn = v => (v < 0 ? -1 : 1);
+    if (Math.abs(along) > 0.08) label(ctx, pol ? 'A₀ cos θ' : 'passes', ...beside(tA, [-sgn(across) * p[0], -sgn(across) * p[1]]), COLORS.em, { weight: 600 });
+    if (Math.abs(across) > 0.08) label(ctx, pol ? 'A₀ sin θ' : 'blocked', ...beside(tX, [-sgn(along) * u[0], -sgn(along) * u[1]]), COLORS.muted, { weight: 600 });
+    // when one part is (almost) the whole of A₀ the arrows overlap, so A₀ needs no label of its own
+    if (Math.abs(along) < 0.95 && Math.abs(across) < 0.95) label(ctx, 'A₀', ...out(tip, 14), COLORS.ink, { weight: 600 });
+
+    // where the wave is right now, just before and just after the polariser
+    const dIn = incident(XP), dOut = emergent(XP);
+    for (const [d, col] of [[dIn, COLORS.ink], [dOut, COLORS.em]]) {
+      const [x, y] = SV(d[0], d[1]);
+      ctx.beginPath(); ctx.arc(x, y, 5, 0, 2 * Math.PI);
+      ctx.fillStyle = col; ctx.fill();
+    }
+  }
+
+  // ---- Graph of A/A₀ and I/I₀ against θ ----
+  const G = {
+    w: () => plot.width - MARGIN.left - MARGIN.right,
+    h: () => plot.height - MARGIN.top - MARGIN.bottom,
+    px: d => MARGIN.left + d / 360 * G.w(),
+    py: v => MARGIN.top + (1.08 - v) / 1.16 * G.h(),
+  };
+  function drawPlot() {
+    const { ctx } = plot;
+    ctx.clearRect(0, 0, plot.width, plot.height);
+    ctx.lineWidth = 1;
+    ctx.font = '13px system-ui, sans-serif';
+    ctx.fillStyle = COLORS.muted;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    const top = MARGIN.top, bottom = MARGIN.top + G.h();
+    for (let d = 0; d <= 360; d += 45) {
+      ctx.strokeStyle = COLORS.grid;
+      ctx.beginPath(); ctx.moveTo(G.px(d), top); ctx.lineTo(G.px(d), bottom); ctx.stroke();
+      ctx.fillText(`${d}°`, G.px(d), bottom + 6);
+    }
+    ctx.fillText('θ', MARGIN.left + G.w() / 2, bottom + 24);
+    ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    for (const v of [0, 0.25, 0.5, 0.75, 1]) {
+      ctx.strokeStyle = v === 0 ? COLORS.axis : COLORS.grid;
+      ctx.beginPath(); ctx.moveTo(MARGIN.left, G.py(v)); ctx.lineTo(MARGIN.left + G.w(), G.py(v)); ctx.stroke();
+      ctx.fillText(v.toFixed(2), MARGIN.left - 8, G.py(v));
+    }
+    ctx.save();
+    ctx.translate(16, top + G.h() / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.textAlign = 'center';
+    ctx.fillText('fraction of incident', 0, 0);
+    ctx.restore();
+
+    const m = mode();
+    const curve = (key, col, width, dash, onlyVisited) => {
+      ctx.strokeStyle = col; ctx.lineWidth = width; ctx.setLineDash(dash);
+      ctx.beginPath();
+      let pen = false;
+      for (let d = 0; d <= 360; d += onlyVisited ? 1 : 0.5) {
+        if (onlyVisited && !visited[m][d]) { pen = false; continue; }
+        const x = G.px(d), y = G.py(ratios(d, m)[key]);
+        if (pen) ctx.lineTo(x, y); else ctx.moveTo(x, y);
+        pen = true;
+      }
+      ctx.stroke();
+      ctx.setLineDash([]);
+    };
+    if (showCurves) {
+      curve('a', COLORS.em, 1.5, [6, 5], false);
+      curve('i', COLORS.int, 1.5, [6, 5], false);
+    }
+    curve('a', COLORS.em, 5, [], true);
+    curve('i', COLORS.int, 2.5, [], true);
+    // single visited degrees still show up as dots
+    for (let d = 0; d <= 360; d++) {
+      if (d === 0 || d === 360 || !visited[m][d] || visited[m][d - 1] || visited[m][d + 1]) continue;
+      for (const [key, col] of [['a', COLORS.em], ['i', COLORS.int]]) {
+        ctx.fillStyle = col;
+        ctx.beginPath(); ctx.arc(G.px(d), G.py(ratios(d, m)[key]), 2.5, 0, 2 * Math.PI); ctx.fill();
+      }
+    }
+
+    // the polariser's angle now
+    const x = G.px(theta), r = ratios(theta, m);
+    ctx.strokeStyle = COLORS.focus; ctx.lineWidth = 1; ctx.setLineDash([4, 4]);
+    ctx.beginPath(); ctx.moveTo(x, top); ctx.lineTo(x, bottom); ctx.stroke();
+    ctx.setLineDash([]);
+    for (const [v, col] of [[r.a, COLORS.em], [r.i, COLORS.int]]) {
+      if (source === 'unpol' && !pulsesDone()) break;
+      ctx.beginPath(); ctx.arc(x, G.py(v), 6, 0, 2 * Math.PI);
+      ctx.fillStyle = col; ctx.fill();
+      ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
+    }
+  }
+
+  // ---- Bars: intensity let through for each of the 24 pulses ----
+  function drawBars() {
+    const { ctx } = bars;
+    const w = bars.width - MARGIN.left - MARGIN.right, h = bars.height - MARGIN.top - MARGIN.bottom;
+    const top = MARGIN.top, bottom = top + h;
+    const py = v => top + (1.08 - v) / 1.08 * h;
+    const slot = w / N_PULSES, cxOf = k => MARGIN.left + (k + 0.5) * slot;
+    ctx.clearRect(0, 0, bars.width, bars.height);
+    ctx.lineWidth = 1;
+    ctx.font = '13px system-ui, sans-serif';
+    ctx.fillStyle = COLORS.muted;
+    ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    for (const v of [0, 0.25, 0.5, 0.75, 1]) {
+      ctx.strokeStyle = v === 0 ? COLORS.axis : COLORS.grid;
+      ctx.beginPath(); ctx.moveTo(MARGIN.left, py(v)); ctx.lineTo(MARGIN.left + w, py(v)); ctx.stroke();
+      ctx.fillText(v.toFixed(2), MARGIN.left - 8, py(v));
+    }
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    for (let k = 0; k < N_PULSES; k += 3) ctx.fillText(`${pulseAngle(k)}°`, cxOf(k), bottom + 6);
+    ctx.fillText('direction of the pulse', MARGIN.left + w / 2, bottom + 24);
+    ctx.textBaseline = 'middle';
+    ctx.save();
+    ctx.translate(16, top + h / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillText('I / I₀', 0, 0);
+    ctx.restore();
+
+    const passed = pulsesPassed(), now = pulseNow();
+    for (let k = 0; k < N_PULSES; k++) {
+      const x = cxOf(k) - slot * 0.32, bw = slot * 0.64;
+      if (k < passed || k === now) {
+        const v = Math.cos((pulseAngle(k) - theta) * RAD) ** 2;
+        ctx.fillStyle = COLORS.int;
+        ctx.globalAlpha = k === now ? 0.35 : 1;
+        ctx.fillRect(x, py(v), bw, py(0) - py(v));
+        ctx.globalAlpha = 1;
+      } else {
+        ctx.strokeStyle = COLORS.grid; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(x, py(0)); ctx.lineTo(x + bw, py(0)); ctx.stroke();
+      }
+    }
+    if (passed === N_PULSES) {
+      ctx.strokeStyle = COLORS.ink; ctx.lineWidth = 2; ctx.setLineDash([7, 5]);
+      ctx.beginPath(); ctx.moveTo(MARGIN.left, py(0.5)); ctx.lineTo(MARGIN.left + w, py(0.5)); ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    $('pulse-count').innerHTML = passed === N_PULSES
+      ? '24 / 24 passed · <b style="color: var(--ink)">average = 0.50</b> <span class="key" style="border-top: 2px dashed var(--ink)"></span>'
+      : `${passed} / 24 passed`;
+  }
+
+  // ---- Working ----
+  const f2 = v => v.toFixed(2);
+  const line = (lhs, ...rhs) => `<span>${lhs}</span><span>=</span><span>${rhs.join(' = ')}</span>`;
+  const note = text => `<span class="note">${text}</span>`;
+  const gap = '<span class="gap"></span>';
+  function updateDerivation() {
+    const r = ratios(theta);
+    const th = `${theta}°`;
+    let rows = line('θ', `<span class="F">${th}</span>`) + gap;
+    if (source === 'unpol') {
+      const now = pulseNow();
+      if (now >= 0) {
+        const phi = pulseAngle(now);
+        rows += line(`pulse ${now + 1} now: I / I<sub>0</sub>`, `cos<sup>2</sup>(${phi}° − ${th})`, f2(Math.cos((phi - theta) * RAD) ** 2));
+        rows += gap;
+      }
+      if (pulsesDone()) {
+        let sum = 0;
+        for (let k = 0; k < N_PULSES; k++) sum += Math.cos((pulseAngle(k) - theta) * RAD) ** 2;
+        rows += line('average I / I<sub>0</sub>',
+          `[cos<sup>2</sup>(0° − θ) + cos<sup>2</sup>(15° − θ) + … + cos<sup>2</sup>(345° − θ)] / 24`,
+          `${f2(sum)} / 24`, `<span class="I">${f2(sum / N_PULSES)}</span>`);
+        rows += line('A / A<sub>0</sub>', '√(I / I<sub>0</sub>)', `√${f2(r.i)}`, `<span class="A">${f2(r.a)}</span>`);
+        rows += gap + note('Turn the polariser: every pulse lets a different amount through, but the 24 always add up to 12, ' +
+          'so the average stays 0.50 at every θ. The emergent wave is plane-polarised along the slit.');
+      } else {
+        rows += note(`${pulsesPassed()} of 24 pulses have passed the polariser. The average appears once all 24 are through.`);
+      }
+    } else {
+      const c = Math.cos(theta * RAD);
+      rows += line('A / A<sub>0</sub>', '|cos θ|', `|cos ${th}|`, `<span class="A">${f2(r.a)}</span>`);
+      rows += line('I / I<sub>0</sub>', '(A / A<sub>0</sub>)<sup>2</sup>', 'cos<sup>2</sup> θ', `${f2(Math.abs(c))}<sup>2</sup>`, `<span class="I">${f2(r.i)}</span>`);
+    }
+    $('derivation').innerHTML = rows;
+    $('theta-value').textContent = `${theta}°`;
+  }
+
+  // ---- Turning the polariser ----
+  function mark(d) {
+    if (source === 'unpol' && !pulsesDone()) return;
+    const v = visited[mode()];
+    v[d] = 1;
+    if (d === 0) v[360] = 1;
+    if (d === 360) v[0] = 1;
+  }
+  // wrap: take the short way round (dragging, keys); no wrap: straight along the slider
+  function setTheta(next, wrap) {
+    next = Math.round(next);
+    if (wrap) next = ((next % 360) + 360) % 360;
+    let from = theta;
+    if (wrap) {
+      let delta = next - (from % 360);
+      if (delta > 180) delta -= 360;
+      if (delta < -180) delta += 360;
+      const step = Math.sign(delta);
+      for (let d = from % 360, i = 0; i < Math.abs(delta); i++) { d = (d + step + 360) % 360; mark(d); }
+    } else {
+      const step = Math.sign(next - from);
+      for (let d = from; d !== next; d += step) mark(d + step);
+    }
+    theta = next;
+    mark(theta);
+    slider.value = String(theta);
+  }
+
+  const slider = $('theta');
+  slider.addEventListener('input', () => setTheta(parseFloat(slider.value), false));
+
+  const angleOf = (y, w) => Math.atan2(w, y) / RAD;
+  function dragTo(c, e, toYW) {
+    const rect = c.canvas.getBoundingClientRect();
+    const [y, w] = toYW(e.clientX - rect.left, e.clientY - rect.top);
+    if (Math.hypot(y, w) > 0.05) setTheta(angleOf(y, w), true);
+  }
+  function makeDraggable(c, toYW, hit) {
+    c.canvas.addEventListener('pointerdown', e => {
+      const rect = c.canvas.getBoundingClientRect();
+      if (!hit(...toYW(e.clientX - rect.left, e.clientY - rect.top))) return;
+      c.canvas.setPointerCapture(e.pointerId);
+      c.canvas.style.cursor = 'grabbing';
+      dragTo(c, e, toYW);
+    });
+    c.canvas.addEventListener('pointermove', e => {
+      const rect = c.canvas.getBoundingClientRect();
+      if (c.canvas.hasPointerCapture(e.pointerId)) dragTo(c, e, toYW);
+      else c.canvas.style.cursor = hit(...toYW(e.clientX - rect.left, e.clientY - rect.top)) ? 'grab' : 'default';
+    });
+    c.canvas.addEventListener('pointerup', () => { c.canvas.style.cursor = 'grab'; });
+  }
+  let orbit = null;          // camera drag in progress: where it started
+  const localXY = e => { const r = v3.canvas.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
+  const onPolariser = (X, Y) => Math.hypot(...unproject(X, Y)) < R * 1.2;
+  v3.canvas.addEventListener('pointerdown', e => {
+    const [X, Y] = localXY(e);
+    v3.canvas.setPointerCapture(e.pointerId);
+    v3.canvas.style.cursor = 'grabbing';
+    if (onPolariser(X, Y)) { orbit = null; setTheta(angleOf(...unproject(X, Y)), true); }
+    else orbit = { X, Y, az: cam.az, el: cam.el };
+  });
+  v3.canvas.addEventListener('pointermove', e => {
+    const [X, Y] = localXY(e);
+    if (!v3.canvas.hasPointerCapture(e.pointerId)) {
+      v3.canvas.style.cursor = onPolariser(X, Y) ? 'grab' : 'move';
+    } else if (orbit) {
+      cam.az = Math.max(-85, Math.min(85, orbit.az - (X - orbit.X) * 0.4));
+      cam.el = Math.max(5, Math.min(80, orbit.el + (Y - orbit.Y) * 0.4));
+    } else {
+      const [y, w] = unproject(X, Y);
+      if (Number.isFinite(y) && Math.hypot(y, w) > 0.05) setTheta(angleOf(y, w), true);
+    }
+  });
+  v3.canvas.addEventListener('pointerup', () => { orbit = null; v3.canvas.style.cursor = 'grab'; });
+  const resetView = () => Object.assign(cam, VIEW0);
+  v3.canvas.addEventListener('dblclick', resetView);
+  $('view-btn').addEventListener('click', resetView);
+  makeDraggable(ve, (X, Y) => {
+    const { cx, cy, e } = endGeom();
+    return [(cy - Y) / e, (X - cx) / e];
+  }, (y, w) => Math.hypot(y, w) < R * 1.25);
+
+  window.addEventListener('keydown', e => {
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+      e.preventDefault();
+      const step = e.shiftKey ? 1 : 5;
+      setTheta(theta + (e.key === 'ArrowRight' ? step : -step), true);
+    } else if (e.key === ' ' || e.code === 'Space') {
+      e.preventDefault();
+      togglePause();
+    }
+  }, true);
+
+  // ---- Switches ----
+  function press(ids, on) { ids.forEach(id => $(id).setAttribute('aria-pressed', String(id === on))); }
+  // choosing the unpolarised source sends one set of 24 pulses
+  function setSource(s) {
+    source = s;
+    press(['src-pol', 'src-unpol'], s === 'pol' ? 'src-pol' : 'src-unpol');
+    $('pulse-card').hidden = s !== 'unpol';
+    $('plot-card').hidden = s === 'unpol';
+    if (s === 'unpol') pulseStart = t;
+    resizeAll();
+    mark(theta);
+  }
+  $('again-btn').addEventListener('click', () => { pulseStart = t; });
+  $('src-pol').addEventListener('click', () => setSource('pol'));
+  $('src-unpol').addEventListener('click', () => setSource('unpol'));
+
+  const curveBtn = $('curve-btn');
+  curveBtn.addEventListener('click', () => {
+    showCurves = !showCurves;
+    curveBtn.setAttribute('aria-pressed', String(showCurves));
+    curveBtn.textContent = showCurves ? 'Hide full curves' : 'Show full curves';
+  });
+  $('clear-btn').addEventListener('click', () => { visited[mode()].fill(0); mark(theta); });
+
+  const pauseBtn = $('pause-btn');
+  function togglePause() {
+    running = !running;
+    pauseBtn.textContent = running ? '⏸' : '▶';
+  }
+  pauseBtn.addEventListener('click', togglePause);
+
+  // ---- Animation loop ----
+  function frame(now) {
+    if (lastFrame !== null && running) t += Math.min((now - lastFrame) / 1000, 0.1);
+    lastFrame = now;
+    draw3D();
+    drawEnd();
+    if (source === 'unpol') drawBars();
+    else drawPlot();
+    updateDerivation();
+    requestAnimationFrame(frame);
+  }
+
+  function resizeAll() { v3.resize(); ve.resize(); plot.resize(); bars.resize(); }
+  window.addEventListener('resize', resizeAll);
+  resizeAll();
+  mark(theta);
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
