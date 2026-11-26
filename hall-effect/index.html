@@ -1,0 +1,729 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>5.1 Hall Effect</title>
+<style>
+  :root {
+    --bg: #f7f7f5;
+    --panel: #ffffff;
+    --ink: #1f2328;
+    --muted: #6b7280;
+    --grid: #e5e7eb;
+    --axis: #9ca3af;
+    --electron: #2563eb;
+    --hole: #dc2626;
+    --field: #7c3aed;       /* B */
+    --efield: #059669;      /* E and qE */
+    --focus: #d97706;       /* Bqv */
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+  }
+  main { max-width: 1100px; margin: 0 auto; padding: 20px; }
+  .card {
+    background: var(--panel);
+    border-radius: 10px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.08);
+    padding: 14px 18px;
+    margin-bottom: 14px;
+  }
+  .frac {
+    display: inline-flex; flex-direction: column;
+    vertical-align: middle; text-align: center;
+    font-size: .85em; line-height: 1.15; margin: 0 2px;
+  }
+  .frac > span { padding: 0 3px; }
+  .frac > span:first-child { border-bottom: 1.5px solid currentColor; }
+  .intro h1 { font-size: 1.25rem; margin: 0 0 8px; }
+  .intro .formulas {
+    display: flex; gap: 3em; justify-content: center; flex-wrap: wrap;
+    font-family: "Cambria Math", "Times New Roman", serif;
+    font-size: 1.4rem; line-height: 2.4; margin: 0 0 6px;
+  }
+  .intro dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; margin: 0; }
+  .intro dt { font-family: "Cambria Math", "Times New Roman", serif; font-size: 1.1rem; text-align: center; }
+  .intro dd { margin: 0; }
+  canvas { display: block; width: 100%; }
+  #scene { height: 500px; touch-action: none; border-radius: 6px; background: #fbfbfa; }
+  .stage { position: relative; }
+  .stage .views { position: absolute; left: 10px; top: 10px; }
+  .row { display: flex; gap: 12px 22px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
+  .sliders { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 28px; margin-top: 12px; }
+  .slider label { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 4px; font-variant-numeric: tabular-nums; }
+  .slider input { width: 100%; accent-color: var(--ink); }
+  .presets { display: flex; gap: 8px; margin-top: 6px; }
+  .presets button { height: 2em; font-size: .9rem; }
+  button {
+    font: inherit;
+    height: 2.4em; min-width: 2.4em; padding: 0 10px;
+    border-radius: 6px;
+    border: 1px solid #d1d5db;
+    background: #fff;
+    cursor: pointer;
+  }
+  button:hover { background: #f3f4f6; }
+  .switch { display: inline-flex; border: 1px solid #d1d5db; border-radius: 6px; overflow: hidden; background: #fff; }
+  .switch button { border: 0; border-radius: 0; }
+  .switch button + button { border-left: 1px solid #d1d5db; }
+  .switch button[aria-pressed="true"] { background: var(--ink); color: #fff; }
+  .muted { color: var(--muted); }
+  .toggle[aria-pressed="true"] { background: var(--ink); color: #fff; border-color: var(--ink); }
+  .derivation {
+    display: grid;
+    grid-template-columns: auto auto 1fr;
+    column-gap: .4em;
+    align-items: center;
+    font-family: "Cambria Math", "Times New Roman", serif;
+    font-size: 1.3rem;
+    line-height: 2.4;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    overflow-x: auto;
+  }
+  .derivation .head {
+    grid-column: 1 / -1;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-size: 1rem; font-weight: 600; line-height: 1.6; margin-top: .3em;
+  }
+  .derivation .note { font-family: system-ui, sans-serif; font-size: 1rem; font-weight: 600; }
+  @media (max-width: 760px) { .sliders { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<main>
+  <section class="card intro">
+    <h1>5.1 Hall effect</h1>
+    <div class="formulas">
+      <span>V<sub>H</sub> = <span class="frac"><span>BI</span><span>ntq</span></span></span>
+    </div>
+    <dl>
+      <dt>V<sub>H</sub></dt><dd>Hall voltage, across the width d of the slab</dd>
+      <dt>B</dt><dd>magnetic flux density, at right angles to the slab</dd>
+      <dt>I</dt><dd>current along the slab, 0.10 A here</dd>
+      <dt>n</dt><dd>number density of charge carriers</dd>
+      <dt>t</dt><dd>thickness of the slab, measured along B</dd>
+      <dt>q</dt><dd>charge of one carrier, 1.60 × 10<sup>−19</sup> C</dd>
+    </dl>
+  </section>
+
+  <div class="card">
+    <div class="stage">
+      <canvas id="scene"></canvas>
+      <div class="switch views" role="group" aria-label="View">
+        <button data-view="3d" aria-pressed="true">3D view</button>
+        <button data-view="top" aria-pressed="false">View from above</button>
+      </div>
+    </div>
+    <div class="row">
+      <div class="switch" role="group" aria-label="Charge carriers">
+        <button data-carrier="electron" aria-pressed="true">Electrons</button>
+        <button data-carrier="hole" aria-pressed="false">Holes</button>
+      </div>
+      <button id="slow-btn" class="toggle" aria-pressed="false" style="margin-left:auto">10× slow</button>
+      <button id="reset-btn" title="Reset the charge on the sides" aria-label="Reset the charge on the sides">↺</button>
+    </div>
+    <div class="sliders">
+      <div class="slider">
+        <label for="B"><span>B</span><span id="B-value"></span></label>
+        <input type="range" id="B" min="0" max="1" step="0.01" value="0.5">
+      </div>
+      <div class="slider">
+        <label for="n"><span>n</span><span id="n-value"></span></label>
+        <input type="range" id="n" min="20" max="29" step="0.01" value="22">
+        <div class="presets">
+          <button data-n="22">Semiconductor</button>
+          <button data-n="28.929">Copper</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card derivation" id="derivation"></div>
+</main>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const css = getComputedStyle(document.documentElement);
+  const color = name => css.getPropertyValue(name).trim();
+  const C = {
+    ink: color('--ink'), muted: color('--muted'), grid: color('--grid'), axis: color('--axis'),
+    electron: color('--electron'), hole: color('--hole'), field: color('--field'),
+    efield: color('--efield'), focus: color('--focus'),
+  };
+
+  // ---- Physics (SI) ----
+  const I = 0.10, Q = 1.60e-19, B_MAX = 1;
+  let B = 0.5;
+  let logN = 22;
+  let dMm = 5.0, tMm = 0.50;                 // width and thickness, changed by dragging the slab
+  let carrier = 'electron';
+  const nOf = () => Math.pow(10, logN);
+  const drift = () => I / (nOf() * dMm * 1e-3 * tMm * 1e-3 * Q);          // m/s
+  const vhFinal = () => B * I / (nOf() * tMm * 1e-3 * Q);                  // V
+  const vhMax = () => B_MAX * I / (nOf() * tMm * 1e-3 * Q);                // the Hall voltage that balances B_MAX
+
+  // ---- The model on screen (not to scale) ----
+  // world units: the slab is L long; width and thickness follow d and t (thickness drawn larger)
+  const L = 30;
+  const DSCALE = 1.6, TSCALE = 6;
+  const dv = () => dMm * DSCALE, tv = () => tMm * TSCALE;
+  const D_RANGE = [3, 12], T_RANGE = [0.2, 2];
+
+  // Hall field, in units of the field that balances B_MAX: the balance for the present B is e = B / B_MAX
+  let e = 0;
+  const DELTA = 0.012;                       // how much one carrier reaching a side face adds
+
+  // On screen the carriers' speed and number are squeezed into a readable range,
+  // but still fall as n rises and the slab gets bigger, with I fixed (I = nAvq)
+  const visSpeed = () => {
+    const sn = Math.pow(10, -(logN - 22) * 0.09);
+    const sa = Math.sqrt((5 * 0.5) / (dMm * tMm));
+    return 5 * Math.max(0.35, Math.min(1.8, sn * sa));
+  };
+  const visCount = () => Math.round(Math.max(40, Math.min(150, 80 * Math.pow(10, (logN - 22) * 0.07) * Math.sqrt(dMm * tMm / 2.5))));
+
+  // electrons drift against the current (−x); holes with it (+x). For both, Bqv pushes to −y (the front face)
+  const dir = () => (carrier === 'electron' ? -1 : 1);
+  let carriers = [];
+  function spawn(c, anywhere) {
+    const len = L, w = dv(), th = tv();
+    c.x = anywhere ? (Math.random() - 0.5) * len : -dir() * len / 2;
+    c.y = (Math.random() - 0.5) * w * 0.999;
+    c.z = (Math.random() - 0.5) * th * 0.8;
+    c.vy = vyEnter;                           // already moving sideways as fast as the forces now make it
+    c.trail = [];
+    return c;
+  }
+  function resetCarriers() {
+    carriers = Array.from({ length: visCount() }, () => spawn({}, true));
+  }
+  function resetBuildUp() {
+    e = 0;
+    resetCarriers();
+  }
+
+  // Each dot stands for a huge number of real carriers, so the charge one dot carries into a face is
+  // a choice: in 10× slow motion it is a tenth as much, and the Hall voltage takes ten times as long
+  // to build up while everything moves as usual.
+  let nowMs = 0;
+  let vyEnter = 0;                           // sideways speed of a carrier arriving from the lead
+  let absorbing = [];                         // carriers being absorbed into a face
+  const ABSORB_MS = 900;
+  const TAU = 1.2;                           // sideways motion dies away (collisions) over this time
+  function step(dt) {
+    const dtSide = dt;
+    const v = visSpeed(), w = dv() / 2;
+    // sideways push from Bqv − qE, in proportion to the width so a carrier takes the same time to
+    // cross a wide slab as a narrow one
+    const a = 2.6 * (B / B_MAX - e) * (dv() / 8);
+    // each carrier reaching a face adds the same share of the charge, however many are drawn
+    const delta = DELTA * 80 / Math.max(1, carriers.length) / slow;
+    vyEnter = -a * TAU;
+    for (let i = 0; i < carriers.length; i++) {
+      const c = carriers[i];
+      c.vy += (-a - c.vy / TAU) * dtSide;
+      c.y += c.vy * dtSide;
+      c.x += dir() * v * dt;
+      // out through the far end into the lead; a new carrier comes in from the lead at the near end
+      if (Math.abs(c.x) > L / 2) { spawn(c); continue; }
+      if (i === 0) { c.trail.push([c.x, c.y, c.z]); if (c.trail.length > 400) c.trail.shift(); }
+      // A carrier pushed onto a face is absorbed into it: the front face gains its charge (the back face
+      // the opposite). It is replaced by a new carrier from the lead, so none are created or lost.
+      // One that drifts onto a face after the forces have balanced is simply held there.
+      const side = c.y <= -w ? -1 : c.y >= w ? 1 : 0;
+      if (side) {
+        const pushed = side < 0 ? B / B_MAX - e > 0 : B / B_MAX - e < 0;
+        if (pushed) {
+          e = side < 0 ? Math.min(B / B_MAX, e + delta) : Math.max(B / B_MAX, e - delta);
+          absorbing.push({ x: c.x, y: side * w, z: c.z, t0: nowMs });
+          spawn(c);
+        } else { c.y = side * w * 0.999; c.vy = 0; }
+      }
+    }
+    // a new count of carriers when n or the size of the slab changes
+    const want = visCount();
+    while (carriers.length < want) carriers.push(spawn({}, true));
+    if (carriers.length > want) carriers.length = want;
+  }
+
+  // ---- Canvas helpers ----
+  function makeCanvas(canvas) {
+    const c = { canvas, ctx: canvas.getContext('2d'), width: 0, height: 0 };
+    c.resize = () => {
+      const dpr = window.devicePixelRatio || 1;
+      const rect = canvas.getBoundingClientRect();
+      c.width = rect.width; c.height = rect.height;
+      canvas.width = Math.round(c.width * dpr);
+      canvas.height = Math.round(c.height * dpr);
+      c.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    };
+    return c;
+  }
+  const scene = makeCanvas($('scene'));
+  function label(ctx, text, x, y, col, { align = 'center', base = 'middle', weight = '600', size = 14, italic = false } = {}) {
+    ctx.fillStyle = col;
+    ctx.font = `${italic ? 'italic ' : ''}${weight} ${size}px system-ui, sans-serif`;
+    ctx.textAlign = align; ctx.textBaseline = base;
+    ctx.fillText(text, x, y);
+  }
+  function arrow2(ctx, x1, y1, x2, y2, col, width = 2.5, head = 10) {
+    const len = Math.hypot(x2 - x1, y2 - y1);
+    if (len < 2) return;
+    const ux = (x2 - x1) / len, uy = (y2 - y1) / len, h = Math.min(head, len * 0.6);
+    ctx.strokeStyle = col; ctx.fillStyle = col; ctx.lineWidth = width;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2 - ux * h * 0.8, y2 - uy * h * 0.8); ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - ux * h - uy * h * 0.45, y2 - uy * h + ux * h * 0.45);
+    ctx.lineTo(x2 - ux * h + uy * h * 0.45, y2 - uy * h - ux * h * 0.45);
+    ctx.closePath(); ctx.fill();
+  }
+
+  // ---- Camera: x along the slab, y across it (away from the viewer), z up (along B) ----
+  const VIEW_3D = { az: -0.5, el: 0.55 }, VIEW_TOP = { az: 0, el: 1.22 };
+  const cam = { ...VIEW_3D };
+  let camTarget = null;
+  const geo = { S: 1, cx: 0, cy: 0 };
+  const FOC = 90;
+  function proj([x, y, z]) {
+    const ca = Math.cos(cam.az), sa = Math.sin(cam.az), ce = Math.cos(cam.el), se = Math.sin(cam.el);
+    const x1 = x * ca - y * sa, y1 = x * sa + y * ca;
+    const up = z * ce + y1 * se, depth = -y1 * ce + z * se;
+    const k = FOC / (FOC - depth);
+    return [geo.cx + x1 * k * geo.S, geo.cy - up * k * geo.S, depth];
+  }
+  const toCamera = () => [-Math.sin(cam.az) * Math.cos(cam.el), -Math.cos(cam.az) * Math.cos(cam.el), Math.sin(cam.el)];
+  const dot3 = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+
+  // ---- Drawing the scene ----
+  function faces() {
+    const hx = L / 2, hy = dv() / 2, hz = tv() / 2;
+    const P = (sx, sy, sz) => [sx * hx, sy * hy, sz * hz];
+    return [
+      { n: [0, 0, 1], pts: [P(-1, -1, 1), P(1, -1, 1), P(1, 1, 1), P(-1, 1, 1)], name: 'top' },
+      { n: [0, 0, -1], pts: [P(-1, -1, -1), P(-1, 1, -1), P(1, 1, -1), P(1, -1, -1)], name: 'bottom' },
+      { n: [0, -1, 0], pts: [P(-1, -1, -1), P(1, -1, -1), P(1, -1, 1), P(-1, -1, 1)], name: 'front' },
+      { n: [0, 1, 0], pts: [P(-1, 1, -1), P(-1, 1, 1), P(1, 1, 1), P(1, 1, -1)], name: 'back' },
+      { n: [-1, 0, 0], pts: [P(-1, -1, -1), P(-1, -1, 1), P(-1, 1, 1), P(-1, 1, -1)], name: 'left' },
+      { n: [1, 0, 0], pts: [P(1, -1, -1), P(1, 1, -1), P(1, 1, 1), P(1, -1, 1)], name: 'right' },
+    ];
+  }
+  const LIGHT = (() => { const l = [-0.35, -0.5, 0.8]; const m = Math.hypot(...l); return l.map(v => v / m); })();
+  function fillFace(ctx, f, alpha) {
+    const shade = 0.72 + 0.28 * Math.max(0, dot3(f.n, LIGHT));
+    const base = [203, 213, 225];
+    ctx.fillStyle = `rgba(${base.map(c => Math.round(c * shade)).join(',')},${alpha})`;
+    ctx.beginPath();
+    f.pts.map(proj).forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y));
+    ctx.closePath(); ctx.fill();
+  }
+  function strokeFace(ctx, f, col, width) {
+    ctx.strokeStyle = col; ctx.lineWidth = width;
+    ctx.beginPath();
+    f.pts.map(proj).forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y));
+    ctx.closePath(); ctx.stroke();
+  }
+
+  // the two side faces take on colour as charge collects: red for positive, blue for negative,
+  // more saturated as more charge builds up
+  function tintFace(ctx, f) {
+    if (f.name !== 'front' && f.name !== 'back') return;
+    const sat = Math.min(1, Math.abs(e) * 1.5);
+    if (sat < 0.01) return;
+    let frontNeg = carrier === 'electron';               // electrons collect on the front face
+    if (e < 0) frontNeg = !frontNeg;
+    const neg = f.name === 'front' ? frontNeg : !frontNeg;
+    const rgb = neg ? [37, 99, 235] : [220, 38, 38];
+    ctx.fillStyle = `rgba(${rgb.join(',')},${0.85 * sat})`;
+    ctx.beginPath();
+    f.pts.map(proj).forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y));
+    ctx.closePath(); ctx.fill();
+  }
+
+  function drawCarrier(ctx, c, big) {
+    const [px, py] = proj([c.x, c.y, c.z]);
+    const col = carrier === 'electron' ? C.electron : C.hole;
+    const r = big ? 7 : 3.6;
+    ctx.beginPath(); ctx.arc(px, py, r, 0, 2 * Math.PI);
+    ctx.fillStyle = col; ctx.fill();
+    if (big) {
+      ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
+      label(ctx, carrier === 'electron' ? '−' : '+', px, py + 0.5, '#fff', { weight: '800', size: 12 });
+    }
+  }
+
+  // the two forces on the picked-out carrier, both along y: Bqv towards the front, qE towards the back
+  function drawForces(ctx, c) {
+    // world length of a force arrow at B = B_MAX. Both forces are proportional to the drift speed
+    // (Bqv, and qE = Bqv at balance), which with I fixed falls as the cross-section dt grows
+    const unit = 5.5 * Math.max(0.35, Math.min(2.5, (5.0 * 0.50) / (dMm * tMm)));
+    const p0 = proj([c.x, c.y, c.z]);
+    const fB = B / B_MAX * unit, fE = e * unit;
+    if (fB > 0.05) {
+      const p1 = proj([c.x, c.y - fB, c.z]);
+      arrow2(ctx, p0[0], p0[1], p1[0], p1[1], C.focus, 3);
+      label(ctx, 'Bqv', p1[0] + 8, p1[1], C.focus, { align: 'left' });
+    }
+    if (Math.abs(fE) > 0.05) {
+      const p2 = proj([c.x, c.y + fE, c.z]);
+      arrow2(ctx, p0[0], p0[1], p2[0], p2[1], C.efield, 3);
+      label(ctx, 'qE', p2[0] + 8, p2[1], C.efield, { align: 'left' });
+    }
+  }
+
+  const handles = { d: null, t: null };
+  function drawScene() {
+    const { ctx, width: W, height: H } = scene;
+    geo.S = Math.min(W * 0.62 / L, H * 0.8 / 18);
+    geo.cx = W * 0.45; geo.cy = H * 0.52;
+    ctx.clearRect(0, 0, W, H);
+    const fs = faces(), tc = toCamera();
+    const back = fs.filter(f => dot3(f.n, tc) <= 0), front = fs.filter(f => dot3(f.n, tc) > 0);
+    const hx = L / 2, hy = dv() / 2, hz = tv() / 2;
+
+    // B: arrows up through the slab
+    const bCol = C.field;
+    const bArrows = [];
+    for (const x of [-10, 10]) for (const y of [-0.6, 0.6]) bArrows.push([x, y * hy * 1.6]);
+    const drawB = part => {
+      if (B <= 0) return;
+      if (cam.el > 1.05) {
+        // seen from well above, B points out of the slab's top face: ⊙ symbols lying in that plane
+        if (part !== 'above') return;
+        ctx.globalAlpha = 0.45 + 0.55 * B / B_MAX;
+        ctx.strokeStyle = bCol; ctx.fillStyle = bCol; ctx.lineWidth = 2;
+        const R = 0.75, zs = hz + 0.05;
+        for (const [x, y] of bArrows) {
+          const yy = y * 0.55;
+          ctx.beginPath();
+          for (let k = 0; k <= 32; k++) {
+            const th = k / 32 * 2 * Math.PI;
+            const [px, py] = proj([x + R * Math.cos(th), yy + R * Math.sin(th), zs]);
+            k ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
+          }
+          ctx.stroke();
+          // the dot, also lying in the plane
+          ctx.beginPath();
+          for (let k = 0; k <= 16; k++) {
+            const th = k / 16 * 2 * Math.PI;
+            const [px, py] = proj([x + 0.22 * Math.cos(th), yy + 0.22 * Math.sin(th), zs]);
+            k ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
+          }
+          ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+        const [lx, ly] = proj([10 + R + 0.6, bArrows[1][1] * 0.55, zs]);
+        label(ctx, `B = ${B.toFixed(2)} T`, lx + 6, ly, bCol, { align: 'left' });
+        return;
+      }
+      ctx.globalAlpha = 0.35 + 0.65 * B / B_MAX;
+      for (const [x, y] of bArrows) {
+        const a = proj([x, y, part === 'below' ? -hz - 7 : hz]);
+        const b = proj([x, y, part === 'below' ? -hz : hz + 7]);
+        if (part === 'below') { ctx.strokeStyle = bCol; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke(); }
+        else arrow2(ctx, a[0], a[1], b[0], b[1], bCol, 2, 9);
+      }
+      ctx.globalAlpha = 1;
+      if (part === 'above') {
+        const [lx, ly] = proj([10, bArrows[1][1], hz + 7]);
+        label(ctx, `B = ${B.toFixed(2)} T`, lx + 10, ly - 4, bCol, { align: 'left' });
+      }
+    };
+    drawB('below');
+
+    // leads carrying the current in and out of the end faces
+    const lead = (x0, x1) => {
+      const a = proj([x0, 0, 0]), b = proj([x1, 0, 0]);
+      ctx.strokeStyle = '#6b7280'; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
+    };
+    lead(-hx - 8, -hx); lead(hx, hx + 8);
+    {
+      const a = proj([-hx - 7, 0, 0]), b = proj([-hx - 2, 0, 0]);
+      arrow2(ctx, a[0], a[1], b[0], b[1], C.ink, 3);
+      label(ctx, 'I = 0.10 A', Math.max(46, a[0]), a[1] - 16, C.ink);
+    }
+
+    back.forEach(f => fillFace(ctx, f, 0.55));
+    back.forEach(f => strokeFace(ctx, f, 'rgba(100,116,139,.45)', 1));
+    back.forEach(f => tintFace(ctx, f));
+
+    // Hall field across the slab, faint, once there is some
+    if (Math.abs(e) > 0.02) {
+      const sgnE = (carrier === 'electron' ? -1 : 1) * Math.sign(e);   // electrons: E points to the front (−y)
+      ctx.globalAlpha = Math.min(0.8, 0.25 + Math.abs(e));
+      for (const x of [-9, 12]) {
+        const a = proj([x, -sgnE * hy * 0.7, 0]), b = proj([x, sgnE * hy * 0.7, 0]);
+        arrow2(ctx, a[0], a[1], b[0], b[1], C.efield, 1.5, 7);
+      }
+      const p = proj([12, sgnE * hy * 0.7, 0]);
+      label(ctx, 'E', p[0] + 9, p[1], C.efield, { align: 'left', italic: true });
+      ctx.globalAlpha = 1;
+    }
+
+    // carriers, far ones first, and the path of the picked-out one
+    const order = carriers.map((c, i) => [proj([c.x, c.y, c.z])[2], i]).sort((p, q) => p[0] - q[0]);
+    const pick = carriers[0];
+    if (pick && pick.trail.length > 1) {
+      ctx.strokeStyle = carrier === 'electron' ? C.electron : C.hole; ctx.lineWidth = 1.5; ctx.globalAlpha = 0.6;
+      ctx.beginPath();
+      pick.trail.map(proj).forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y));
+      ctx.stroke(); ctx.globalAlpha = 1;
+    }
+    for (const [, i] of order) if (i !== 0) drawCarrier(ctx, carriers[i], false);
+
+    front.forEach(f => { fillFace(ctx, f, 0.22); tintFace(ctx, f); });
+    // being absorbed: the carrier sinks into the face as a ring spreads out from it
+    absorbing = absorbing.filter(fx => nowMs - fx.t0 < ABSORB_MS);
+    for (const fx of absorbing) {
+      const k = Math.max(0, Math.min(1, (nowMs - fx.t0) / ABSORB_MS));
+      const [px, py] = proj([fx.x, fx.y, fx.z]);
+      const col = carrier === 'electron' ? '37, 99, 235' : '220, 38, 38';
+      ctx.strokeStyle = `rgba(255, 255, 255, ${0.95 * (1 - k)})`; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(px, py, 5 + 16 * k, 0, 2 * Math.PI); ctx.stroke();
+      const r = 5 * (1 - k);
+      if (r > 0.3) {
+        ctx.beginPath(); ctx.arc(px, py, r, 0, 2 * Math.PI);
+        ctx.fillStyle = `rgb(${col})`; ctx.fill();
+        ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.stroke();
+      }
+    }
+    if (pick) { drawCarrier(ctx, pick, true); drawForces(ctx, pick); }
+    fs.forEach(f => strokeFace(ctx, f, 'rgba(71,85,105,.8)', 1.2));
+    drawB('above');
+
+    // where a voltmeter would be connected: P on the back face, Q on the front face
+    const pP = proj([0, hy, 0]), pQ = proj([0, -hy, 0]);
+    const lP = proj([0, hy + 2.4, 0]), lQ = proj([0, -hy - 2.4, 0]);
+    // each is drawn only when its face is turned towards the viewer, never seen through the slab
+    const facing = name => dot3(name === 'P' ? [0, 1, 0] : [0, -1, 0], tc) > 0.02;
+    [[pP, lP, 'P'], [pQ, lQ, 'Q']].filter(([, , name]) => facing(name)).forEach(([p, l, name]) => {
+      ctx.beginPath(); ctx.arc(p[0], p[1], 5, 0, 2 * Math.PI);
+      ctx.fillStyle = '#fff'; ctx.fill(); ctx.strokeStyle = C.ink; ctx.lineWidth = 2; ctx.stroke();
+      label(ctx, name, l[0], l[1], C.ink, { size: 15, weight: '700' });
+    });
+    drawVoltmeter(ctx, W - 130, 60);
+
+    // handles: drag to change the width d and the thickness t
+    const pd = proj([hx, hy, hz]), pt = proj([hx, -hy, -hz]);
+    handles.d = pd; handles.t = pt;
+    const dim = (a, b, text, off) => {
+      const pa = proj(a), pbb = proj(b);
+      ctx.strokeStyle = C.muted; ctx.lineWidth = 1.2;
+      ctx.beginPath(); ctx.moveTo(pa[0] + off[0], pa[1] + off[1]); ctx.lineTo(pbb[0] + off[0], pbb[1] + off[1]); ctx.stroke();
+      label(ctx, text, (pa[0] + pbb[0]) / 2 + off[0] + 8, (pa[1] + pbb[1]) / 2 + off[1], C.ink, { align: 'left', size: 13 });
+    };
+    if (cam.el < 1.1) dim([hx, -hy, -hz], [hx, -hy, hz], `t = ${tMm.toFixed(2)} mm`, [14, 0]);
+    dim([hx, -hy, hz], [hx, hy, hz], `d = ${dMm.toFixed(1)} mm`, [16, 0]);
+    const knob = (p, name) => {
+      ctx.beginPath(); ctx.arc(p[0], p[1], drag && drag.kind === name ? 9 : 7, 0, 2 * Math.PI);
+      ctx.fillStyle = '#fff'; ctx.fill(); ctx.strokeStyle = C.ink; ctx.lineWidth = 2; ctx.stroke();
+    };
+    knob(pd, 'd');
+    if (cam.el < 1.1) knob(pt, 't');
+    drawLegend(ctx, H);
+  }
+
+  // a voltmeter reading V_P − V_Q
+  function drawVoltmeter(ctx, cx, cy) {
+    const w = 196, h = 88, left = cx - w / 2, top = cy - h / 2;
+    ctx.beginPath(); ctx.roundRect(left, top, w, h, 10);
+    ctx.fillStyle = '#fff'; ctx.fill(); ctx.strokeStyle = C.ink; ctx.lineWidth = 2; ctx.stroke();
+    // left half: the circuit symbol, and what it measures
+    const lx = left + w / 4;
+    ctx.beginPath(); ctx.arc(lx, cy - 12, 16, 0, 2 * Math.PI); ctx.stroke();
+    label(ctx, 'V', lx, cy - 11, C.ink, { size: 16, weight: '700' });
+    const parts = [['V', 'P'], [' − V', 'Q']];
+    const width = parts.reduce((acc, [txt, sub]) => {
+      ctx.font = '600 13px system-ui, sans-serif'; acc += ctx.measureText(txt).width;
+      ctx.font = '600 10px system-ui, sans-serif'; return acc + ctx.measureText(sub).width + 1;
+    }, 0);
+    let x = lx - width / 2;
+    ctx.fillStyle = C.muted; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    for (const [txt, sub] of parts) {
+      ctx.font = '600 13px system-ui, sans-serif'; ctx.fillText(txt, x, cy + 22); x += ctx.measureText(txt).width;
+      ctx.font = '600 10px system-ui, sans-serif'; ctx.fillText(sub, x, cy + 27); x += ctx.measureText(sub).width + 1;
+    }
+    // right half: the reading
+    ctx.strokeStyle = C.grid; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(cx, top + 10); ctx.lineTo(cx, top + h - 10); ctx.stroke();
+    label(ctx, fmtV(signedVH()), cx + w / 4, cy, C.ink, { size: 16, weight: '700' });
+  }
+
+  // a key to the two fields, bottom left
+  function drawLegend(ctx, H) {
+    const x = 14, y1 = H - 44, y2 = H - 18;
+    ctx.fillStyle = 'rgba(255,255,255,.85)'; ctx.fillRect(x - 6, y1 - 16, 200, 56);
+    if (cam.el > 1.05) {
+      ctx.strokeStyle = C.field; ctx.fillStyle = C.field; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(x + 14, y1, 7, 0, 2 * Math.PI); ctx.stroke();
+      ctx.beginPath(); ctx.arc(x + 14, y1, 2.2, 0, 2 * Math.PI); ctx.fill();
+    } else arrow2(ctx, x, y1, x + 28, y1, C.field, 2, 9);
+    label(ctx, 'magnetic field B', x + 38, y1, C.field, { align: 'left', size: 13 });
+    arrow2(ctx, x, y2, x + 28, y2, C.efield, 2, 9);
+    label(ctx, 'electric field E', x + 38, y2, C.efield, { align: 'left', size: 13 });
+  }
+
+  // ---- The Hall voltage now: V_P − V_Q, with P on the back face ----
+  const signedVH = () => (carrier === 'electron' ? 1 : -1) * e * vhMax();
+  function fmtV(v) {
+    const a = Math.abs(v), s = v < 0 ? '−' : v > 0 ? '+' : '';
+    const ref = Math.max(Math.abs(vhFinal()), 1e-30);
+    if (ref >= 1e-3) return `${s}${(a * 1e3).toFixed(1)} mV`;
+    if (ref >= 1e-6) return `${s}${(a * 1e6).toFixed(1)} µV`;
+    return `${s}${(a * 1e9).toFixed(1)} nV`;
+  }
+
+
+
+  // ---- Working ----
+  const line = (lhs, ...rhs) => `<span>${lhs}</span><span>=</span><span>${rhs.join(' = ')}</span>`;
+  const frac = (p, q) => `<span class="frac"><span>${p}</span><span>${q}</span></span>`;
+  const head = text => `<span class="head">${text}</span>`;
+  function sci(v, sig = 2) {
+    if (v === 0) return '0';
+    const ex = Math.floor(Math.log10(Math.abs(v)) + 1e-9);
+    const m = v / Math.pow(10, ex);
+    if (ex >= -2 && ex <= 2) return String(Number(v.toPrecision(sig + 1)));
+    return `${m.toFixed(sig - 1)} × 10<sup>${String(ex).replace('-', '−')}</sup>`;
+  }
+  function updateWorking() {
+    const n = nOf(), d = dMm * 1e-3, t = tMm * 1e-3, v = drift(), vh = vhFinal();
+    const nS = sci(n), dS = sci(d), tS = sci(t);
+    let rows = '';
+    rows += head('When the Hall voltage stops growing, the forces on a carrier balance');
+    rows += line('qE', 'Bqv');
+    rows += line('E', `<span>${frac('V<sub>H</sub>', 'd')}</span>`) + line('V<sub>H</sub>', 'Bvd');
+    rows += head('The drift speed, from I = nAvq with A = dt');
+    rows += line('v', frac('I', 'ndtq'), frac('0.10', `${nS} × ${dS} × ${tS} × 1.60 × 10<sup>−19</sup>`), `${sci(v, 3)} m/s`);
+    rows += head('So the Hall voltage');
+    rows += line('V<sub>H</sub>', 'Bvd', frac('BI', 'ntq'), frac(`${B.toFixed(2)} × 0.10`, `${nS} × ${tS} × 1.60 × 10<sup>−19</sup>`), `<b>${fmtV(vh).replace('+', '')}</b>`);
+    rows += `<span></span><span></span><span class="note">d cancels: the width does not change V<sub>H</sub></span>`;
+    $('derivation').innerHTML = rows;
+    $('B-value').textContent = `${B.toFixed(2)} T`;
+    $('n-value').innerHTML = `${sci(n)} m<sup>−3</sup>`;
+  }
+
+  // ---- Controls ----
+  $('B').addEventListener('input', ev => { B = Number(ev.target.value); updateWorking(); });
+  const nSlider = $('n');
+  nSlider.addEventListener('input', () => { logN = Number(nSlider.value); resetBuildUp(); updateWorking(); });
+  document.querySelectorAll('[data-n]').forEach(b => b.addEventListener('click', () => {
+    logN = Number(b.dataset.n); nSlider.value = logN; resetBuildUp(); updateWorking();
+  }));
+  document.querySelectorAll('[data-carrier]').forEach(b => b.addEventListener('click', () => {
+    carrier = b.dataset.carrier;
+    document.querySelectorAll('[data-carrier]').forEach(o => o.setAttribute('aria-pressed', String(o === b)));
+    resetBuildUp(); updateWorking();
+  }));
+  document.querySelectorAll('[data-view]').forEach(b => b.addEventListener('click', () => {
+    camTarget = b.dataset.view === 'top' ? VIEW_TOP : VIEW_3D;
+    document.querySelectorAll('[data-view]').forEach(o => o.setAttribute('aria-pressed', String(o === b)));
+  }));
+
+  // drag the round handles to change d and t; drag anywhere else to turn the view
+  let drag = null;
+  const local = ev => { const r = scene.canvas.getBoundingClientRect(); return [ev.clientX - r.left, ev.clientY - r.top]; };
+  scene.canvas.addEventListener('pointerdown', ev => {
+    const p = local(ev);
+    const near = h => h && Math.hypot(p[0] - h[0], p[1] - h[1]) < 14;
+    if (near(handles.d)) drag = { kind: 'd' };
+    else if (near(handles.t) && cam.el < 1.1) drag = { kind: 't' };
+    else drag = { kind: 'orbit' };
+    drag.last = p;
+    scene.canvas.setPointerCapture(ev.pointerId);
+  });
+  scene.canvas.addEventListener('pointermove', ev => {
+    const p = local(ev);
+    if (!drag) {
+      const near = h => h && Math.hypot(p[0] - h[0], p[1] - h[1]) < 14;
+      scene.canvas.style.cursor = near(handles.d) || (near(handles.t) && cam.el < 1.1) ? 'grab' : 'move';
+      return;
+    }
+    const dx = p[0] - drag.last[0], dy = p[1] - drag.last[1];
+    drag.last = p;
+    if (drag.kind === 'orbit') {
+      camTarget = null;
+      cam.az += dx * 0.008;
+      cam.el = Math.max(0.05, Math.min(Math.PI / 2 - 1e-4, cam.el + dy * 0.008));
+      document.querySelectorAll('[data-view]').forEach(o => o.setAttribute('aria-pressed', 'false'));
+      return;
+    }
+    // move along the edge the handle sits on: y for d, z for t
+    const hx = L / 2, hy = dv() / 2, hz = tv() / 2;
+    const base = drag.kind === 'd' ? [hx, hy, hz] : [hx, -hy, -hz];
+    const axis = drag.kind === 'd' ? [0, 1, 0] : [0, 0, -1];
+    const p0 = proj(base), p1 = proj(base.map((v, i) => v + axis[i]));
+    const ax = p1[0] - p0[0], ay = p1[1] - p0[1], m2 = ax * ax + ay * ay;
+    if (m2 < 1) return;
+    const dw = (dx * ax + dy * ay) / m2;              // world units the handle moved
+    const vhBefore = vhMax();
+    if (drag.kind === 'd') dMm = Math.max(D_RANGE[0], Math.min(D_RANGE[1], dMm + 2 * dw / DSCALE));
+    else tMm = Math.max(T_RANGE[0], Math.min(T_RANGE[1], tMm + 2 * dw / TSCALE));
+    // the charge on the faces, and so V_H, is the same just after the change; the slab then settles.
+    // e is V_H in units of B_MAX·I/(ntq): unchanged by d (still balanced, since E = V_H/d and Bqv
+    // fall together), but changed by t (E stays, Bqv does not, so V_H moves to its new value)
+    e *= vhBefore / vhMax();
+    // keep the carriers inside
+    for (const c of carriers) { c.y = Math.max(-dv() / 2 * 0.99, Math.min(dv() / 2 * 0.99, c.y)); c.z = Math.max(-tv() / 2, Math.min(tv() / 2, c.z)); }
+    updateWorking();
+  });
+  const endDrag = () => {
+    if (drag && drag.kind === 'd') dMm = Math.round(dMm * 10) / 10;
+    if (drag && drag.kind === 't') tMm = Math.round(tMm * 20) / 20;
+    drag = null; updateWorking();
+  };
+  scene.canvas.addEventListener('pointerup', endDrag);
+  scene.canvas.addEventListener('pointercancel', endDrag);
+  scene.canvas.addEventListener('dblclick', () => { camTarget = VIEW_3D; document.querySelectorAll('[data-view]').forEach(o => o.setAttribute('aria-pressed', String(o.dataset.view === '3d'))); });
+
+  // clear the charge on the two side faces; B, n, d, t and the carriers stay as they are
+  $('reset-btn').addEventListener('click', () => {
+    e = 0;
+    for (const c of carriers) c.vy = 0;
+    if (carriers[0]) carriers[0].trail = [];
+  });
+
+  // ---- Slow motion: in 10× each carrier reaching a face carries a tenth of the charge ----
+  const BASE_RATE = 0.5;
+  let slow = 1;
+  $('slow-btn').addEventListener('click', () => {
+    slow = slow === 1 ? 10 : 1;
+    $('slow-btn').setAttribute('aria-pressed', String(slow === 10));
+  });
+
+  // ---- Animation loop ----
+  let lastFrame = null;
+  function frame(now) {
+    if (lastFrame !== null) {
+      let dt = Math.min((now - lastFrame) / 1000, 0.05) * BASE_RATE;
+      while (dt > 0) { const s = Math.min(dt, 0.01); step(s); dt -= s; }
+    }
+    lastFrame = now;
+    nowMs = now;
+    if (camTarget) {
+      cam.az += (camTarget.az - cam.az) * 0.15;
+      cam.el += (camTarget.el - cam.el) * 0.15;
+      if (Math.abs(camTarget.az - cam.az) < 1e-3 && Math.abs(camTarget.el - cam.el) < 1e-3) { cam.az = camTarget.az; cam.el = camTarget.el; camTarget = null; }
+    }
+    drawScene();
+    requestAnimationFrame(frame);
+  }
+
+  function resizeAll() { scene.resize(); }
+  window.addEventListener('resize', resizeAll);
+  resizeAll();
+  resetBuildUp();
+  updateWorking();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
