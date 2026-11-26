@@ -1,0 +1,775 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>3.6 Polariser and Analyser</title>
+<style>
+  :root {
+    --bg: #f7f7f5;
+    --panel: #ffffff;
+    --ink: #1f2328;
+    --muted: #6b7280;
+    --grid: #e5e7eb;
+    --axis: #9ca3af;
+    --between: #2f6fb5;     /* wave between the filters, I₁ */
+    --after: #c2410c;       /* wave after the analyser, I₂ */
+    --focus: #dc2626;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+  }
+  main { max-width: 1100px; margin: 0 auto; padding: 20px; }
+  .card {
+    background: var(--panel);
+    border-radius: 10px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.08);
+    padding: 14px 18px;
+    margin-bottom: 14px;
+  }
+  .intro h1 { font-size: 1.25rem; margin: 0 0 8px; }
+  .intro .formulas {
+    display: flex; gap: 2.4em; justify-content: center; flex-wrap: wrap;
+    font-family: "Cambria Math", "Times New Roman", serif;
+    font-size: 1.4rem;
+    line-height: 2.2;
+    margin: 4px 0 10px;
+  }
+  .intro dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; margin: 0; }
+  .intro dt { font-family: "Cambria Math", "Times New Roman", serif; font-size: 1.1rem; text-align: center; }
+  .intro dd { margin: 0; }
+  canvas { display: block; width: 100%; touch-action: none; }
+  #view-3d { height: 360px; }
+  .ends { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 10px; }
+  .ends canvas { height: 300px; cursor: grab; }
+  #plot { height: 260px; }
+  .slider { margin-top: 6px; }
+  .slider label { display: flex; justify-content: space-between; margin-bottom: 4px; font-variant-numeric: tabular-nums; }
+  .slider input { width: 100%; accent-color: var(--focus); }
+  .controls { display: flex; gap: 10px 22px; align-items: center; flex-wrap: wrap; }
+  button {
+    font: inherit;
+    height: 2.4em; min-width: 2.4em; padding: 0 10px;
+    border-radius: 6px;
+    border: 1px solid #d1d5db;
+    background: #fff;
+    cursor: pointer;
+  }
+  button:hover { background: #f3f4f6; }
+  .switch { display: inline-flex; border: 1px solid #d1d5db; border-radius: 6px; overflow: hidden; }
+  .switch button { border: 0; border-radius: 0; }
+  .switch button + button { border-left: 1px solid #d1d5db; }
+  .switch button[aria-pressed="true"] { background: var(--ink); color: #fff; }
+  .toggle[aria-pressed="true"] { background: var(--ink); color: #fff; border-color: var(--ink); }
+  .legend { display: flex; gap: 10px 18px; align-items: center; flex-wrap: wrap; margin-bottom: 4px; color: var(--muted); }
+  .legend .title { color: var(--ink); font-weight: 600; margin-right: auto; }
+  .key { display: inline-block; width: 1.8em; vertical-align: middle; border-top: 3px solid; margin-right: 6px; }
+  .key.i1 { border-top: 2px dashed var(--between); }
+  .key.i2 { border-color: var(--after); }
+  .derivation {
+    display: grid;
+    grid-template-columns: auto auto 1fr;
+    column-gap: .4em;
+    align-items: center;
+    font-family: "Cambria Math", "Times New Roman", serif;
+    font-size: 1.3rem;
+    line-height: 2.2;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    overflow-x: auto;
+  }
+  .derivation .gap { grid-column: 1 / -1; height: .4em; }
+  .F { color: var(--focus); font-weight: 600; }
+  .B { color: var(--between); font-weight: 600; }
+  .O { color: var(--after); font-weight: 600; }
+  @media (max-width: 760px) {
+    .ends { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <section class="card intro">
+    <h1>3.6 Polariser and analyser</h1>
+    <div class="formulas">
+      <span>I<sub>1</sub> = I<sub>0</sub> · cos<sup>2</sup> θ<sub>1</sub></span>
+      <span>I<sub>2</sub> = I<sub>1</sub> · cos<sup>2</sup>(θ<sub>2</sub> − θ<sub>1</sub>)</span>
+    </div>
+    <dl>
+      <dt>θ<sub>1</sub>, θ<sub>2</sub></dt><dd>angles of the polariser's and the analyser's transmission axes (slits), measured from the incident vibration</dd>
+      <dt>θ<sub>2</sub> − θ<sub>1</sub></dt><dd>angle between the two transmission axes</dd>
+      <dt>I<sub>0</sub>, I<sub>1</sub>, I<sub>2</sub></dt><dd>intensity of the incident wave, after the polariser, and after the analyser</dd>
+    </dl>
+  </section>
+
+  <div class="card">
+    <canvas id="view-3d"></canvas>
+    <div class="ends">
+      <div>
+        <canvas id="end-1"></canvas>
+        <div class="slider">
+          <label for="theta-1"><span>θ<sub>1</sub> (polariser)</span><span id="theta-1-value"></span></label>
+          <input type="range" id="theta-1" min="0" max="360" step="1" value="45">
+        </div>
+      </div>
+      <div>
+        <canvas id="end-2"></canvas>
+        <div class="slider">
+          <label for="theta-2"><span>θ<sub>2</sub> (analyser)</span><span id="theta-2-value"></span></label>
+          <input type="range" id="theta-2" min="0" max="360" step="1" value="90">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card controls">
+    <div class="switch" role="group" aria-label="Source">
+      <button id="src-pol" aria-pressed="true">Plane-polarised source</button>
+      <button id="src-unpol" aria-pressed="false">Unpolarised source</button>
+    </div>
+    <button id="pause-btn" title="Play / pause (Space)">⏸</button>
+    <button id="view-btn" title="Back to the starting view (or double-click the 3D view)">Reset view</button>
+  </div>
+
+  <div class="card">
+    <div class="legend">
+      <span class="title">Intensity after the analyser against θ<sub>2</sub></span>
+      <span><span class="key i2"></span>I<sub>2</sub> / I<sub>0</sub></span>
+      <span><span class="key i1"></span>I<sub>1</sub> / I<sub>0</sub> (after the polariser)</span>
+      <button id="curve-btn" class="toggle" aria-pressed="false">Show full curve</button>
+      <button id="clear-btn">Clear graph</button>
+    </div>
+    <canvas id="plot"></canvas>
+  </div>
+
+  <div class="card derivation" id="derivation"></div>
+</main>
+
+<script>
+(() => {
+  // ---- Fixed parameters (3D view in arbitrary units) ----
+  const XL = 14;             // length of the beam shown
+  const X1 = 4.5, X2 = 9.5;  // positions of the polariser and the analyser
+  const R = 1.7;             // radius of the filters
+  const A0 = 1;              // incident amplitude
+  const LAMBDA = 2, PERIOD = 1.2;
+  const K = 2 * Math.PI / LAMBDA, W = 2 * Math.PI / PERIOD;
+  const N_DIRS = 24, DIR_STEP = 15;       // unpolarised: pulses at 0°, 15°, 30° … 345°, over and over
+  const MARGIN = { left: 64, right: 24, top: 12, bottom: 44 };
+  const RAD = Math.PI / 180;
+  const deg = v => `${v < 0 ? '−' : ''}${Math.abs(v)}°`;   // angle with a true minus sign
+
+  const $ = id => document.getElementById(id);
+  const css = getComputedStyle(document.documentElement);
+  const color = name => css.getPropertyValue(name).trim();
+  const COLORS = {
+    ink: color('--ink'), grid: color('--grid'), axis: color('--axis'), muted: color('--muted'),
+    between: color('--between'), after: color('--after'), focus: color('--focus'),
+  };
+
+  // ---- State ----
+  let theta1 = 45, theta2 = 90;   // degrees, 0 … 360, measured from the incident vibration (vertical)
+  let source = 'pol';             // 'pol' | 'unpol'
+  let running = true, lastFrame = null, t = 0;
+  let showCurve = false;
+  let visited = new Uint8Array(361);   // analyser angles turned through since θ₁ or the source last changed
+
+  // ---- Physics ----
+  // directions are written as (y, w): y up, w across (to the right when looking along the beam)
+  const dirOf = deg => [Math.cos(deg * RAD), Math.sin(deg * RAD)];
+  const phaseAt = x => W * t - K * x;
+  const i1Of = () => (source === 'unpol' ? 0.5 : Math.cos(theta1 * RAD) ** 2);
+  const i2Of = (deg2 = theta2) => i1Of() * Math.cos((deg2 - theta1) * RAD) ** 2;
+
+  // unpolarised: each half wave is a hump in the next direction round, 15° on from the last
+  const humpIndex = ph => ((Math.floor(ph / Math.PI) % N_DIRS) + N_DIRS) % N_DIRS;
+  function incident(x) {
+    const ph = phaseAt(x);
+    if (source === 'pol') return [A0 * Math.sin(ph), 0];
+    const s = A0 * Math.abs(Math.sin(ph)), d = dirOf(humpIndex(ph) * DIR_STEP);
+    return [s * d[0], s * d[1]];
+  }
+  // a filter lets through only the part of the vibration along its transmission axis
+  const through = (d, deg) => {
+    const u = dirOf(deg), along = d[0] * u[0] + d[1] * u[1];
+    return [along * u[0], along * u[1]];
+  };
+  const between = x => through(incident(x), theta1);
+  const emergent = x => through(between(x), theta2);
+
+  // ---- Canvas helpers ----
+  function makeCanvas(canvas) {
+    const c = { canvas, ctx: canvas.getContext('2d'), width: 0, height: 0 };
+    c.resize = () => {
+      const dpr = window.devicePixelRatio || 1;
+      const rect = canvas.getBoundingClientRect();
+      c.width = rect.width; c.height = rect.height;
+      canvas.width = Math.round(c.width * dpr);
+      canvas.height = Math.round(c.height * dpr);
+      c.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    };
+    return c;
+  }
+  const v3 = makeCanvas($('view-3d'));
+  const ve1 = makeCanvas($('end-1'));
+  const ve2 = makeCanvas($('end-2'));
+  const plot = makeCanvas($('plot'));
+
+  function arrow(ctx, x1, y1, x2, y2, col, { width = 2.5, dash = [], head = 9 } = {}) {
+    const len = Math.hypot(x2 - x1, y2 - y1);
+    ctx.strokeStyle = col; ctx.fillStyle = col; ctx.lineWidth = width;
+    ctx.setLineDash(dash);
+    if (len < 2) { ctx.setLineDash([]); return; }
+    const ux = (x2 - x1) / len, uy = (y2 - y1) / len, h = Math.min(head, len * 0.6);
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2 - ux * h * 0.8, y2 - uy * h * 0.8); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - ux * h - uy * h * 0.45, y2 - uy * h + ux * h * 0.45);
+    ctx.lineTo(x2 - ux * h + uy * h * 0.45, y2 - uy * h - ux * h * 0.45);
+    ctx.closePath(); ctx.fill();
+  }
+  function label(ctx, text, x, y, col, { align = 'center', base = 'middle', weight = '' } = {}) {
+    ctx.fillStyle = col;
+    ctx.font = `${weight} 14px system-ui, sans-serif`;
+    ctx.textAlign = align; ctx.textBaseline = base;
+    ctx.fillText(text, x, y);
+  }
+  function polyline(ctx, pts, col, width, dash = []) {
+    ctx.strokeStyle = col; ctx.lineWidth = width; ctx.setLineDash(dash);
+    ctx.beginPath();
+    pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+  function fillPoly(ctx, pts, col) {
+    ctx.fillStyle = col;
+    ctx.beginPath();
+    pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+    ctx.closePath(); ctx.fill();
+  }
+
+  // ---- 3D view: a perspective camera that can swing round the beam ----
+  const VIEW0 = { az: 24, el: 16 };       // default camera direction in degrees
+  const cam = { ...VIEW0 };
+  const CAM_D = 32;                       // camera distance from the middle of the beam: mild perspective
+  const FLOOR = -1.9, FLOOR_W = 2.0;      // floor under the beam that the shadows fall on
+  const STEP = 0.06;                      // width of the strips each wave is built from
+  const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+  const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+  const norm = a => { const l = Math.hypot(...a) || 1; return [a[0] / l, a[1] / l, a[2] / l]; };
+  const LIGHT = norm([-0.35, 1, 0.6]);    // direction towards the light that shades the waves
+  // points are (x, y, w): x along the beam, y up, w across (towards the viewer at the start)
+  const view = { E: [0, 0, 0], r: [1, 0, 0], u: [0, 1, 0], f: [0, 0, -1], k: 1, ox: 0, oy: 0 };
+
+  const camSpace = (x, y, w) => {
+    const v = sub([x, y, w], view.E);
+    return [dot(v, view.r), dot(v, view.u), dot(v, view.f)];
+  };
+  const P = (x, y, w) => {
+    const [a, b, c] = camSpace(x, y, w);
+    return [view.ox + view.k * a / c, view.oy - view.k * b / c];
+  };
+  const depth = (x, y, w) => camSpace(x, y, w)[2];
+
+  function setupCamera() {
+    const az = cam.az * RAD, el = cam.el * RAD;
+    const dir = [Math.sin(az) * Math.cos(el), Math.sin(el), Math.cos(az) * Math.cos(el)];
+    view.E = [XL / 2 + CAM_D * dir[0], CAM_D * dir[1], CAM_D * dir[2]];
+    view.f = [-dir[0], -dir[1], -dir[2]];
+    view.r = norm(cross(view.f, [0, 1, 0]));
+    view.u = cross(view.r, view.f);
+    // fit the floor and everything above it into the canvas
+    let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+    for (const x of [-0.3, XL + 0.3]) for (const y of [FLOOR, R + 0.2]) for (const w of [-FLOOR_W, FLOOR_W]) {
+      const [a, b, c] = camSpace(x, y, w);
+      x0 = Math.min(x0, a / c); x1 = Math.max(x1, a / c);
+      y0 = Math.min(y0, b / c); y1 = Math.max(y1, b / c);
+    }
+    const m = 14, top = 34;
+    view.k = Math.min((v3.width - 2 * m) / (x1 - x0), (v3.height - m - top) / (y1 - y0));
+    view.ox = v3.width / 2 - view.k * (x0 + x1) / 2;
+    view.oy = top + (v3.height - m - top) / 2 + view.k * (y0 + y1) / 2;
+  }
+  // screen point → (y, w) where its line of sight meets the plane x = xp, and how far along it is
+  function unproject(X, Y, xp) {
+    const a = (X - view.ox) / view.k, b = (view.oy - Y) / view.k;
+    const d = [0, 1, 2].map(i => view.f[i] + view.r[i] * a + view.u[i] * b);
+    if (Math.abs(d[0]) < 1e-6) return null;
+    const s = (xp - view.E[0]) / d[0];
+    if (s <= 0) return null;
+    return { y: view.E[1] + s * d[1], w: view.E[2] + s * d[2], s };
+  }
+
+  const mix = (c1, c2, s) => `rgb(${c1.map((v, i) => Math.round(v + (c2[i] - v) * s)).join(',')})`;
+  const SHADES = {
+    incident: { dark: [92, 97, 106], light: [222, 225, 230], edge: COLORS.ink },
+    between: { dark: [30, 78, 140], light: [184, 210, 240], edge: COLORS.between },
+    after: { dark: [140, 52, 12], light: [248, 206, 180], edge: COLORS.after },
+  };
+
+  // a wave is drawn as strips between the beam axis and the string; each strip lies in the plane
+  // the string vibrates in there, and is brighter the more that plane faces the light
+  function waveStrips(items, x0, x1, f, shade) {
+    for (let xa = x0; xa < x1 - 1e-9; xa += STEP) {
+      const xb = Math.min(xa + STEP, x1), da = f(xa), db = f(xb);
+      const d = Math.hypot(...da) > Math.hypot(...db) ? da : db, len = Math.hypot(...d);
+      if (len < 1e-3) continue;
+      const n = [0, -d[1] / len, d[0] / len];          // normal of the plane through the axis and d
+      const fill = mix(shade.dark, shade.light, 0.15 + 0.85 * Math.abs(dot(n, LIGHT)));
+      items.push({
+        z: depth((xa + xb) / 2, (da[0] + db[0]) / 4, (da[1] + db[1]) / 4),
+        draw: ctx => {
+          const A = P(xa, 0, 0), B = P(xb, 0, 0), C = P(xb, db[0], db[1]), D = P(xa, da[0], da[1]);
+          fillPoly(ctx, [A, B, C, D], fill);
+          ctx.strokeStyle = fill; ctx.lineWidth = 0.8; ctx.stroke();    // closes hairline gaps between strips
+          ctx.lineCap = 'round';
+          polyline(ctx, [D, C], shade.edge, 2.5);
+          ctx.lineCap = 'butt';
+        },
+      });
+    }
+  }
+
+  // shadows from a light straight overhead: each point (x, y, w) lands at (x, FLOOR, w)
+  function waveShadow(ctx, x0, x1, f) {
+    const pts = [];
+    for (let x = x0; x <= x1 + 1e-9; x += STEP) pts.push(P(x, FLOOR, f(x)[1]));
+    fillPoly(ctx, [...pts, P(x1, FLOOR, 0), P(x0, FLOOR, 0)], 'rgba(31, 35, 40, 0.10)');
+    polyline(ctx, pts, 'rgba(31, 35, 40, 0.35)', 2);
+  }
+  function drawFloor(ctx) {
+    fillPoly(ctx, [P(-0.3, FLOOR, -FLOOR_W), P(XL + 0.3, FLOOR, -FLOOR_W), P(XL + 0.3, FLOOR, FLOOR_W), P(-0.3, FLOOR, FLOOR_W)], '#eff0f2');
+    for (let x = 0; x <= XL; x += 1) polyline(ctx, [P(x, FLOOR, -FLOOR_W), P(x, FLOOR, FLOOR_W)], '#e1e3e7', 1);
+    for (let w = -2; w <= 2; w += 1) polyline(ctx, [P(-0.3, FLOOR, w), P(XL + 0.3, FLOOR, w)], '#e1e3e7', 1);
+  }
+
+  const ring = (x, r) => {
+    const pts = [];
+    for (let j = 0; j <= 64; j++) { const a = j / 64 * 2 * Math.PI; pts.push(P(x, r * Math.cos(a), r * Math.sin(a))); }
+    return pts;
+  };
+  function drawFilter(ctx, x, deg) {
+    const u = dirOf(deg), p = [-u[1], u[0]];
+    const rim = ring(x, R);
+    fillPoly(ctx, rim, 'rgba(107, 114, 128, 0.25)');
+    polyline(ctx, rim, COLORS.muted, 1.5);
+    // the slit along the transmission axis
+    const L = R * 0.9, hw = 0.13;
+    const corner = (a, b) => P(x, a * L * u[0] + b * hw * p[0], a * L * u[1] + b * hw * p[1]);
+    const slit = [corner(1, 1), corner(1, -1), corner(-1, -1), corner(-1, 1)];
+    fillPoly(ctx, slit, 'rgba(255, 255, 255, 0.9)');
+    polyline(ctx, [...slit, slit[0]], COLORS.ink, 1.2);
+  }
+  function drawHandle(ctx, x, deg) {
+    const u = dirOf(deg), [hx, hy] = P(x, R * u[0], R * u[1]);
+    ctx.beginPath(); ctx.arc(hx, hy, 7, 0, 2 * Math.PI);
+    ctx.fillStyle = COLORS.focus; ctx.fill();
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
+  }
+
+  // unpolarised: a dial at the source, its arrow pointing the way the hump being sent vibrates
+  const DIAL_R = 0.85;
+  function drawDial(ctx) {
+    const rim = ring(0, DIAL_R);
+    fillPoly(ctx, rim, 'rgba(255, 255, 255, 0.9)');
+    polyline(ctx, rim, COLORS.ink, 1.5);
+    const d = dirOf(humpIndex(phaseAt(0)) * DIR_STEP), [cx, cy] = P(0, 0, 0);
+    const [tx, ty] = P(0, DIAL_R * d[0], DIAL_R * d[1]);
+    arrow(ctx, cx, cy, tx, ty, COLORS.ink, { width: 3, head: 8 });
+  }
+
+  function draw3D() {
+    const { ctx } = v3;
+    ctx.clearRect(0, 0, v3.width, v3.height);
+    setupCamera();
+    drawFloor(ctx);
+    for (const x of [X1, X2]) polyline(ctx, [P(x, FLOOR, -R), P(x, FLOOR, R)], 'rgba(31, 35, 40, 0.18)', 5);
+    if (source === 'unpol') polyline(ctx, [P(0, FLOOR, -DIAL_R), P(0, FLOOR, DIAL_R)], 'rgba(31, 35, 40, 0.18)', 4);
+    waveShadow(ctx, 0, X1, incident);
+    waveShadow(ctx, X1, X2, between);
+    waveShadow(ctx, X2, XL, emergent);
+    polyline(ctx, [P(0, 0, 0), P(XL, 0, 0)], COLORS.axis, 1, [4, 4]);
+
+    // the two filters split the scene into three stretches; paint whatever is farthest along the
+    // beam from the camera first, so nearer things cover farther ones
+    const stretch = (x0, x1, f, shade) => { const items = []; waveStrips(items, x0, x1, f, shade); return items; };
+    const inc = stretch(0, X1, incident, SHADES.incident);
+    if (source === 'unpol') inc.push({ z: view.E[0] > 0 ? Infinity : -Infinity, draw: drawDial });
+    const paint = list => list.sort((a, b) => b.z - a.z).forEach(it => it.draw(ctx));
+    const parts = [
+      { x: X1 / 2, draw: () => paint(inc) },
+      { x: X1, draw: () => drawFilter(ctx, X1, theta1) },
+      { x: (X1 + X2) / 2, draw: () => paint(stretch(X1, X2, between, SHADES.between)) },
+      { x: X2, draw: () => drawFilter(ctx, X2, theta2) },
+      { x: (X2 + XL) / 2, draw: () => paint(stretch(X2, XL, emergent, SHADES.after)) },
+    ];
+    parts.sort((a, b) => Math.abs(b.x - view.E[0]) - Math.abs(a.x - view.E[0])).forEach(p => p.draw());
+    drawHandle(ctx, X1, theta1);
+    drawHandle(ctx, X2, theta2);
+
+    const tag = (text, x, y, col) => { const [sx, sy] = P(x, y, 0); label(ctx, text, sx, sy - 8, col, { weight: 600 }); };
+    tag('incident', X1 / 2, R, COLORS.ink);
+    tag('polariser', X1, R + 0.15, COLORS.muted);
+    tag('analyser', X2, R + 0.15, COLORS.muted);
+    tag('emergent', (X2 + XL) / 2, R, COLORS.after);
+  }
+
+  // ---- Views along the beam, one at each filter ----
+  function endGeom(c) {
+    const cx = c.width / 2, cy = c.height / 2 + 12, rad = Math.min(c.width, c.height) / 2 - 36;
+    return { cx, cy, rad, e: rad / R, ev: rad * 0.8 / A0 };   // ev: scale for the vibration arrows
+  }
+  // cfg: title, deg (filter angle), ref (reference direction, deg) + refColor, arc label,
+  //      inDir / inAmp (vibration arriving), labels, colours, spokes (unpolarised), dots
+  function drawEnd(c, cfg) {
+    const { ctx } = c;
+    const { cx, cy, rad, e, ev } = endGeom(c);
+    const S = (y, w) => [cx + e * w, cy - e * y];
+    const SV = (y, w) => [cx + ev * w, cy - ev * y];
+    ctx.clearRect(0, 0, c.width, c.height);
+    label(ctx, cfg.title, 8, 12, COLORS.muted, { align: 'left', weight: 600 });
+    {
+      // the angle (marked by the red arc when there is one), written next to the title
+      const w = ctx.measureText(cfg.title).width;
+      label(ctx, `· ${cfg.arc} = ${deg(cfg.arcValue)}`, 8 + w + 6, 12, COLORS.focus, { align: 'left', weight: 600 });
+    }
+
+    const u = dirOf(cfg.deg), p = [-u[1], u[0]];
+    ctx.fillStyle = 'rgba(107, 114, 128, 0.15)';
+    ctx.beginPath(); ctx.arc(cx, cy, rad, 0, 2 * Math.PI); ctx.fill();
+    ctx.strokeStyle = COLORS.muted; ctx.lineWidth = 1.5; ctx.stroke();
+    const L = R * 0.9, hw = 0.13;
+    const corner = (a, b) => S(a * L * u[0] + b * hw * p[0], a * L * u[1] + b * hw * p[1]);
+    fillPoly(ctx, [corner(1, 1), corner(1, -1), corner(-1, -1), corner(-1, 1)], '#fff');
+    ctx.strokeStyle = COLORS.ink; ctx.lineWidth = 1.2; ctx.stroke();
+    const [hx, hy] = S(R * u[0], R * u[1]);
+    ctx.beginPath(); ctx.arc(hx, hy, 7, 0, 2 * Math.PI);
+    ctx.fillStyle = COLORS.focus; ctx.fill();
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
+
+    (cfg.spokes || []).forEach(d =>
+      polyline(ctx, [[cx, cy], SV(A0 * d[0], A0 * d[1])], 'rgba(31, 35, 40, 0.3)', 1.5));
+    if (cfg.ref !== undefined) {
+      // the direction the angle is measured from, and the angle itself
+      const r0 = dirOf(cfg.ref);
+      polyline(ctx, [S(R * 1.08 * r0[0], R * 1.08 * r0[1]), S(-R * 1.08 * r0[0], -R * 1.08 * r0[1])], cfg.refColor, 1, [4, 4]);
+      let delta = ((cfg.deg - cfg.ref) % 360 + 540) % 360 - 180;   // −180 … 180, the short way round
+      if (Math.abs(delta) > 1e-9) {
+        const r = rad * 0.3, a0 = (cfg.ref - 90) * RAD;
+        ctx.strokeStyle = COLORS.focus; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(cx, cy, r, a0, a0 + delta * RAD, delta < 0); ctx.stroke();
+      }
+    }
+    if (cfg.note) label(ctx, cfg.note, cx, c.height - 10, COLORS.muted);
+    if (!cfg.inDir) return;
+
+    // split what arrives into a part along the slit (passes) and a part across it (blocked)
+    const dir = cfg.inDir, amp = cfg.inAmp;
+    const along = dir[0] * u[0] + dir[1] * u[1], across = dir[0] * p[0] + dir[1] * p[1];
+    const tip = SV(amp * dir[0], amp * dir[1]);
+    const tA = SV(amp * along * u[0], amp * along * u[1]);
+    const tX = SV(amp * across * p[0], amp * across * p[1]);
+    polyline(ctx, [tip, tA], COLORS.axis, 1, [3, 3]);
+    polyline(ctx, [tip, tX], COLORS.axis, 1, [3, 3]);
+    arrow(ctx, cx, cy, tX[0], tX[1], COLORS.muted, { dash: [5, 4] });
+    arrow(ctx, cx, cy, tip[0], tip[1], cfg.inColor);
+    arrow(ctx, cx, cy, tA[0], tA[1], cfg.passColor, { width: 3.5 });
+
+    // each label is anchored just off the tip of its arrow, on the side given (a (y, w) direction),
+    // and aligned so the text grows away from the arrow
+    const anchor = (text, pt, side, col) => {
+      const sx = side[1], sy = -side[0], len = Math.hypot(sx, sy) || 1;
+      const ux = sx / len, uy = sy / len;
+      label(ctx, text, pt[0] + ux * 14, pt[1] + uy * 14, col, {
+        weight: 600,
+        align: ux > 0.35 ? 'left' : ux < -0.35 ? 'right' : 'center',
+        base: uy > 0.35 ? 'top' : uy < -0.35 ? 'bottom' : 'middle',
+      });
+    };
+    const sgn = v => (v < 0 ? -1 : 1);
+    const MIN = 0.3;   // components shorter than this (as a fraction of the arrow) are left unlabelled
+    if (amp * Math.abs(along) > MIN) anchor(cfg.passLabel, tA, [-sgn(across) * p[0], -sgn(across) * p[1]], cfg.passColor);
+    if (amp * Math.abs(across) > MIN) anchor(cfg.blockLabel, tX, [-sgn(along) * u[0], -sgn(along) * u[1]], COLORS.muted);
+    if (Math.abs(along) < 0.95 && Math.abs(across) < 0.95) anchor(cfg.inLabel, tip, dir, cfg.inColor);
+    for (const [d, col] of cfg.dots) {
+      const [x, y] = SV(d[0], d[1]);
+      ctx.beginPath(); ctx.arc(x, y, 5, 0, 2 * Math.PI);
+      ctx.fillStyle = col; ctx.fill();
+    }
+  }
+
+  function drawEnds() {
+    const unpol = source === 'unpol';
+    // at the polariser: the incident vibration
+    const k = humpIndex(phaseAt(X1));
+    drawEnd(ve1, {
+      title: 'At the polariser',
+      deg: theta1,
+      ref: unpol ? undefined : 0, refColor: COLORS.axis, arc: 'θ₁', arcValue: theta1,
+      inDir: unpol ? dirOf(k * DIR_STEP) : [1, 0], inAmp: A0, inColor: COLORS.ink, inLabel: 'A₀',
+      passColor: COLORS.between, passLabel: unpol ? 'passes' : 'A₀ cos θ₁',
+      blockLabel: unpol ? 'blocked' : 'A₀ sin θ₁',
+      spokes: unpol ? [1, 2, 3, 4, 5, 6].map(j => dirOf(((k - j + N_DIRS) % N_DIRS) * DIR_STEP)) : [],
+      dots: [[incident(X1), COLORS.ink], [between(X1), COLORS.between]],
+    });
+    // at the analyser: the wave from the polariser, vibrating along the polariser's slit;
+    // A₁ is drawn full length here (this view only shows how A₁ splits), and the moving dots to match
+    const a1 = Math.sqrt(i1Of()) * A0, arrives = a1 > 1e-6, k2 = arrives ? A0 / a1 : 0;
+    const scaled = d => [d[0] * k2, d[1] * k2];
+    drawEnd(ve2, {
+      title: 'At the analyser',
+      deg: theta2,
+      ref: theta1, refColor: COLORS.between, arc: 'θ₂ − θ₁', arcValue: theta2 - theta1,
+      inDir: arrives ? dirOf(theta1) : null, inAmp: A0, inColor: COLORS.between, inLabel: 'A₁',
+      passColor: COLORS.after, passLabel: 'A₁ cos(θ₂ − θ₁)', blockLabel: 'A₁ sin(θ₂ − θ₁)',
+      note: arrives ? '' : 'nothing gets through the polariser',
+      dots: [[scaled(between(X2)), COLORS.between], [scaled(emergent(X2)), COLORS.after]],
+    });
+  }
+
+  // ---- Graph of I₂/I₀ against θ₂ ----
+  const G = {
+    w: () => plot.width - MARGIN.left - MARGIN.right,
+    h: () => plot.height - MARGIN.top - MARGIN.bottom,
+    px: d => MARGIN.left + d / 360 * G.w(),
+    py: v => MARGIN.top + (1.08 - v) / 1.16 * G.h(),
+  };
+  function drawPlot() {
+    const { ctx } = plot;
+    ctx.clearRect(0, 0, plot.width, plot.height);
+    ctx.lineWidth = 1;
+    ctx.font = '13px system-ui, sans-serif';
+    ctx.fillStyle = COLORS.muted;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    const top = MARGIN.top, bottom = MARGIN.top + G.h();
+    for (let d = 0; d <= 360; d += 45) {
+      ctx.strokeStyle = COLORS.grid;
+      ctx.beginPath(); ctx.moveTo(G.px(d), top); ctx.lineTo(G.px(d), bottom); ctx.stroke();
+      ctx.fillText(`${d}°`, G.px(d), bottom + 6);
+    }
+    ctx.fillText('θ₂', MARGIN.left + G.w() / 2, bottom + 24);
+    ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    for (const v of [0, 0.25, 0.5, 0.75, 1]) {
+      ctx.strokeStyle = v === 0 ? COLORS.axis : COLORS.grid;
+      ctx.beginPath(); ctx.moveTo(MARGIN.left, G.py(v)); ctx.lineTo(MARGIN.left + G.w(), G.py(v)); ctx.stroke();
+      ctx.fillText(v.toFixed(2), MARGIN.left - 8, G.py(v));
+    }
+    ctx.save();
+    ctx.translate(16, top + G.h() / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.textAlign = 'center';
+    ctx.fillText('fraction of I₀', 0, 0);
+    ctx.restore();
+
+    // the most the analyser can let through
+    polyline(ctx, [[G.px(0), G.py(i1Of())], [G.px(360), G.py(i1Of())]], COLORS.between, 2, [6, 5]);
+
+    const curve = (width, dash, onlyVisited) => {
+      ctx.strokeStyle = COLORS.after; ctx.lineWidth = width; ctx.setLineDash(dash);
+      ctx.beginPath();
+      let pen = false;
+      for (let d = 0; d <= 360; d += onlyVisited ? 1 : 0.5) {
+        if (onlyVisited && !visited[d]) { pen = false; continue; }
+        const x = G.px(d), y = G.py(i2Of(d));
+        if (pen) ctx.lineTo(x, y); else ctx.moveTo(x, y);
+        pen = true;
+      }
+      ctx.stroke();
+      ctx.setLineDash([]);
+    };
+    if (showCurve) curve(1.5, [6, 5], false);
+    curve(3, [], true);
+
+    const x = G.px(theta2);
+    ctx.strokeStyle = COLORS.focus; ctx.lineWidth = 1; ctx.setLineDash([4, 4]);
+    ctx.beginPath(); ctx.moveTo(x, top); ctx.lineTo(x, bottom); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.beginPath(); ctx.arc(x, G.py(i2Of()), 6, 0, 2 * Math.PI);
+    ctx.fillStyle = COLORS.after; ctx.fill();
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
+  }
+
+  // ---- Working ----
+  const f2 = v => v.toFixed(2);
+  const line = (lhs, ...rhs) => `<span>${lhs}</span><span>=</span><span>${rhs.join(' = ')}</span>`;
+  const gap = '<span class="gap"></span>';
+  function updateDerivation() {
+    const delta = theta2 - theta1;
+    const c2 = Math.cos(delta * RAD) ** 2, i1 = i1Of(), i2 = i2Of();
+    const crossed = c2 < 1e-9 ? ' <span class="F">(crossed)</span>' : '';
+    let rows =
+      line('θ<sub>1</sub>', `<span class="F">${theta1}°</span>`) +
+      line('θ<sub>2</sub>', `<span class="F">${theta2}°</span>`) +
+      line('θ<sub>2</sub> − θ<sub>1</sub>', `${theta2}° − ${theta1}°`, `<span class="F">${deg(delta)}</span>${crossed}`) + gap;
+    rows += source === 'unpol'
+      ? line('I<sub>1</sub> / I<sub>0</sub>', '½ for unpolarised light', `<span class="B">${f2(i1)}</span>`)
+      : line('I<sub>1</sub> / I<sub>0</sub>', 'cos<sup>2</sup> θ<sub>1</sub>', `cos<sup>2</sup> ${theta1}°`, `<span class="B">${f2(i1)}</span>`);
+    rows += line('I<sub>2</sub> / I<sub>0</sub>', '(I<sub>1</sub> / I<sub>0</sub>) · cos<sup>2</sup>(θ<sub>2</sub> − θ<sub>1</sub>)',
+      `${f2(i1)} × cos<sup>2</sup>(${deg(delta)})`, `${f2(i1)} × ${f2(c2)}`, `<span class="O">${f2(i2)}</span>`);
+    rows += line('A<sub>2</sub> / A<sub>0</sub>', '√(I<sub>2</sub> / I<sub>0</sub>)', `√${f2(i2)}`, f2(Math.sqrt(i2)));
+    $('derivation').innerHTML = rows;
+    $('theta-1-value').textContent = `${theta1}°`;
+    $('theta-2-value').textContent = `${theta2}°`;
+  }
+
+  // ---- Turning the filters ----
+  function mark(d) {
+    visited[d] = 1;
+    if (d === 0) visited[360] = 1;
+    if (d === 360) visited[0] = 1;
+  }
+  const clearTrace = () => { visited = new Uint8Array(361); mark(theta2); };
+  const norm360 = d => ((Math.round(d) % 360) + 360) % 360;
+  // the analyser leaves a trace on the graph; wrap: take the short way round (dragging, keys)
+  function setTheta2(next, wrap) {
+    next = wrap ? norm360(next) : Math.round(next);
+    if (wrap) {
+      let delta = next - (theta2 % 360);
+      if (delta > 180) delta -= 360;
+      if (delta < -180) delta += 360;
+      const step = Math.sign(delta);
+      for (let d = theta2 % 360, i = 0; i < Math.abs(delta); i++) { d = (d + step + 360) % 360; mark(d); }
+    } else {
+      const step = Math.sign(next - theta2);
+      for (let d = theta2; d !== next; d += step) mark(d + step);
+    }
+    theta2 = next;
+    mark(theta2);
+    slider2.value = String(theta2);
+  }
+  // turning the polariser changes the whole curve, so the trace starts again
+  function setTheta1(next, wrap) {
+    next = wrap ? norm360(next) : Math.round(next);
+    if (next === theta1) return;
+    theta1 = next;
+    slider1.value = String(theta1);
+    clearTrace();
+  }
+
+  const slider1 = $('theta-1'), slider2 = $('theta-2');
+  slider1.addEventListener('input', () => setTheta1(parseFloat(slider1.value), false));
+  slider2.addEventListener('input', () => setTheta2(parseFloat(slider2.value), false));
+
+  const angleOf = (y, w) => Math.atan2(w, y) / RAD;
+  const localXY = (c, e) => { const r = c.canvas.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
+
+  // 3D view: drag a filter to turn it, or drag anywhere else to swing the camera
+  let drag = null;
+  function filterUnder(X, Y) {
+    let best = null;
+    for (const [x, which] of [[X1, 1], [X2, 2]]) {
+      const hit = unproject(X, Y, x);
+      if (hit && Math.hypot(hit.y, hit.w) < R * 1.2 && (!best || hit.s < best.s)) best = { ...hit, which, x };
+    }
+    return best;
+  }
+  const turn = (which, y, w, wrap = true) => (which === 1 ? setTheta1 : setTheta2)(angleOf(y, w), wrap);
+  v3.canvas.addEventListener('pointerdown', e => {
+    const [X, Y] = localXY(v3, e);
+    v3.canvas.setPointerCapture(e.pointerId);
+    v3.canvas.style.cursor = 'grabbing';
+    const hit = filterUnder(X, Y);
+    if (hit) { drag = { which: hit.which, x: hit.x }; turn(hit.which, hit.y, hit.w); }
+    else drag = { orbit: true, X, Y, az: cam.az, el: cam.el };
+  });
+  v3.canvas.addEventListener('pointermove', e => {
+    const [X, Y] = localXY(v3, e);
+    if (!v3.canvas.hasPointerCapture(e.pointerId) || !drag) {
+      v3.canvas.style.cursor = filterUnder(X, Y) ? 'grab' : 'move';
+    } else if (drag.orbit) {
+      cam.az = Math.max(-85, Math.min(85, drag.az - (X - drag.X) * 0.4));
+      cam.el = Math.max(5, Math.min(80, drag.el + (Y - drag.Y) * 0.4));
+    } else {
+      const hit = unproject(X, Y, drag.x);
+      if (hit && Math.hypot(hit.y, hit.w) > 0.05) turn(drag.which, hit.y, hit.w);
+    }
+  });
+  v3.canvas.addEventListener('pointerup', () => { drag = null; v3.canvas.style.cursor = 'grab'; });
+  const resetView = () => Object.assign(cam, VIEW0);
+  v3.canvas.addEventListener('dblclick', resetView);
+  $('view-btn').addEventListener('click', resetView);
+
+  // views along the beam: drag the disk to turn that filter
+  [[ve1, 1], [ve2, 2]].forEach(([c, which]) => {
+    const toYW = e => {
+      const [X, Y] = localXY(c, e), { cx, cy, e: s } = endGeom(c);
+      return [(cy - Y) / s, (X - cx) / s];
+    };
+    c.canvas.addEventListener('pointerdown', e => {
+      const [y, w] = toYW(e);
+      if (Math.hypot(y, w) > R * 1.25) return;
+      c.canvas.setPointerCapture(e.pointerId);
+      c.canvas.style.cursor = 'grabbing';
+      turn(which, y, w);
+    });
+    c.canvas.addEventListener('pointermove', e => {
+      const [y, w] = toYW(e);
+      if (c.canvas.hasPointerCapture(e.pointerId)) { if (Math.hypot(y, w) > 0.05) turn(which, y, w); }
+      else c.canvas.style.cursor = Math.hypot(y, w) < R * 1.25 ? 'grab' : 'default';
+    });
+    c.canvas.addEventListener('pointerup', () => { c.canvas.style.cursor = 'grab'; });
+  });
+
+  // ← → turn the analyser (5°, Shift for 1°)
+  window.addEventListener('keydown', e => {
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+      e.preventDefault();
+      const step = e.shiftKey ? 1 : 5;
+      setTheta2(theta2 + (e.key === 'ArrowRight' ? step : -step), true);
+    } else if (e.key === ' ' || e.code === 'Space') {
+      e.preventDefault();
+      togglePause();
+    }
+  }, true);
+
+  // ---- Switches ----
+  function setSource(s) {
+    source = s;
+    $('src-pol').setAttribute('aria-pressed', String(s === 'pol'));
+    $('src-unpol').setAttribute('aria-pressed', String(s === 'unpol'));
+    clearTrace();
+  }
+  $('src-pol').addEventListener('click', () => setSource('pol'));
+  $('src-unpol').addEventListener('click', () => setSource('unpol'));
+
+  const curveBtn = $('curve-btn');
+  curveBtn.addEventListener('click', () => {
+    showCurve = !showCurve;
+    curveBtn.setAttribute('aria-pressed', String(showCurve));
+    curveBtn.textContent = showCurve ? 'Hide full curve' : 'Show full curve';
+  });
+  $('clear-btn').addEventListener('click', clearTrace);
+
+  const pauseBtn = $('pause-btn');
+  function togglePause() {
+    running = !running;
+    pauseBtn.textContent = running ? '⏸' : '▶';
+  }
+  pauseBtn.addEventListener('click', togglePause);
+
+  // ---- Animation loop ----
+  function frame(now) {
+    if (lastFrame !== null && running) t += Math.min((now - lastFrame) / 1000, 0.1);
+    lastFrame = now;
+    draw3D();
+    drawEnds();
+    drawPlot();
+    updateDerivation();
+    requestAnimationFrame(frame);
+  }
+
+  function resizeAll() { v3.resize(); ve1.resize(); ve2.resize(); plot.resize(); }
+  window.addEventListener('resize', resizeAll);
+  resizeAll();
+  mark(theta2);
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
