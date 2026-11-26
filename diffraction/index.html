@@ -37,7 +37,7 @@
   .intro dd { margin: 0; }
   canvas { display: block; width: 100%; }
   #tank { height: 480px; border-radius: 6px; }
-  .sliders { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 28px; margin-top: 12px; padding-bottom: 20px; }
+  .sliders { margin-top: 12px; padding-bottom: 20px; }
   .slider label { display: flex; justify-content: space-between; margin-bottom: 4px; font-variant-numeric: tabular-nums; }
   /* sliders drawn here, not by the browser, so the thumb is always 18 px wide and the 4 cm tick lines up */
   .slider input[type=range] {
@@ -87,7 +87,6 @@
   .legend .title { color: var(--ink); font-weight: 600; margin-right: auto; }
   .toggle[aria-pressed="true"] { background: var(--ink); color: #fff; border-color: var(--ink); }
   @media (max-width: 760px) {
-    .sliders { grid-template-columns: 1fr; }
   }
 </style>
 </head>
@@ -97,7 +96,7 @@
     <h1>3.8 Diffraction at a gap</h1>
     <dl>
       <dt>λ</dt><dd>wavelength of the water waves</dd>
-      <dt>a</dt><dd>width of the gap</dd>
+      <dt>a</dt><dd>width of the gap, 4 cm here</dd>
     </dl>
   </section>
 
@@ -111,16 +110,12 @@
           <span class="tick" id="tick-4">4 cm</span>
         </div>
       </div>
-      <div class="slider">
-        <label for="gap"><span>a (gap width)</span><span id="gap-value"></span></label>
-        <input type="range" id="gap" min="0.4" max="8" step="0.1" value="4">
-      </div>
     </div>
   </div>
 
   <div class="card controls">
     <button id="pause-btn" title="Play / pause (Space)">⏸</button>
-    <button data-preset="wide">Gap ≫ λ</button>
+    <button data-preset="wide">λ ≪ gap</button>
     <button data-preset="equal">λ = gap</button>
     <button data-preset="long">λ &gt; gap</button>
     <button data-preset="huge">λ ≫ gap</button>
@@ -161,7 +156,8 @@
   const COLORS = { ink: color('--ink'), muted: color('--muted'), focus: color('--focus'), energy: color('--energy') };
 
   // ---- State ----
-  let lambda = 1, gap = 4;
+  const gap = 4;                  // width of the gap in cm, fixed
+  let lambda = 1;
   let t = 0, running = true, lastFrame = null;
   let field = null;                // { re, im, nx, ny } for every cell, recalculated when λ or a change
   let dirty = true;
@@ -324,12 +320,6 @@
     if (xc + lambda < -BARRIER - 0.1) measure(ctx, SX(xc), SY(top), SX(xc + lambda), SY(top), `λ = ${fmtL(lambda)} cm`, [0, -18]);
     else label(ctx, `λ = ${fmtL(lambda)} cm`, SX(X0()) + 14, SY(top), COLORS.ink, { align: 'left', box: true });
 
-    // scale bar, as the view zooms with λ
-    const bar = [1, 2, 5, 10, 20].find(c => c * geo.s >= 50) || 20;
-    const bx = 16, by = H - 16;
-    ctx.strokeStyle = '#fff'; ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.moveTo(bx, by - 6); ctx.lineTo(bx, by); ctx.lineTo(bx + bar * geo.s, by); ctx.lineTo(bx + bar * geo.s, by - 6); ctx.stroke();
-    label(ctx, `${bar} cm`, bx + bar * geo.s / 2, by - 8, COLORS.ink, { base: 'bottom', size: 12, box: true });
 
     label(ctx, verdict(), W - 14, 14, COLORS.focus, { align: 'right', base: 'top', size: 16, box: true });
   }
@@ -338,7 +328,6 @@
   function updateReadouts() {
     const e = energyFraction();
     $('lambda-value').textContent = `${fmtL(lambda)} cm`;
-    $('gap-value').textContent = `${gap.toFixed(1)} cm`;
     $('energy-fill').style.width = `${(e * 100).toFixed(1)}%`;
     $('energy-pct').textContent = `${e < 0.1 ? (e * 100).toFixed(1) : Math.round(e * 100)}%`;
   }
@@ -346,7 +335,7 @@
   // ---- Graph: energy getting through against λ / a, on a log scale so 0.1 … 100 all fit ----
   const plot = { canvas: $('plot'), ctx: $('plot').getContext('2d'), width: 0, height: 0 };
   const MARGIN = { left: 64, right: 24, top: 14, bottom: 46 };
-  const R_MIN = 0.04, R_MAX = 200, BINS = 500;          // λ / a range of the axis
+  const R_MIN = 0.08, R_MAX = 64, BINS = 500;           // λ / a range of the axis
   const LOG0 = Math.log10(R_MIN), LOG1 = Math.log10(R_MAX);
   const energyAt = r => (r <= 1 ? 1 : 1 / r);
   const binOf = r => Math.max(0, Math.min(BINS, Math.round((Math.log10(r) - LOG0) / (LOG1 - LOG0) * BINS)));
@@ -376,7 +365,7 @@
     ctx.font = '13px system-ui, sans-serif';
     ctx.fillStyle = COLORS.muted;
     ctx.textAlign = 'center'; ctx.textBaseline = 'top';
-    for (const r of [0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100]) {
+    for (const r of [0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50]) {
       ctx.strokeStyle = '#e5e7eb';
       ctx.beginPath(); ctx.moveTo(px(r), top); ctx.lineTo(px(r), bottom); ctx.stroke();
       ctx.fillText(String(r), px(r), bottom + 6);
@@ -422,10 +411,10 @@
   }
 
   // ---- Controls ----
-  const lSlider = $('lambda'), gSlider = $('gap');
-  // the λ slider is linear from 0.4 to 6 cm over its first 80%, then rises ten-fold to 60 cm
+  const lSlider = $('lambda');
+  // the λ slider is linear from 0.4 to 6 cm over its first 80%, then rises to 200 cm
   // over the last 20%, to reach wavelengths far bigger than the gap
-  const L_MIN = 0.4, L_KNEE = 6, L_MAX = 60, P_KNEE = 800, P_MAX = 1000;
+  const L_MIN = 0.4, L_KNEE = 6, L_MAX = 200, P_KNEE = 800, P_MAX = 1000;
   const sliderToL = p => (p <= P_KNEE
     ? L_MIN + (L_KNEE - L_MIN) * p / P_KNEE
     : L_KNEE * (L_MAX / L_KNEE) ** ((p - P_KNEE) / (P_MAX - P_KNEE)));
@@ -437,20 +426,20 @@
   const tick4 = $('tick-4');
   tick4.style.setProperty('--at', String(lToSlider(4) / P_MAX));
   tick4.style.setProperty('--thumb', '18px');
-  const setValues = (l, g) => {
-    lambda = roundL(l); gap = Math.round(g * 10) / 10;
-    lSlider.value = String(Math.round(lToSlider(lambda))); gSlider.value = String(gap);
-    for (const el of [lSlider, gSlider]) el.style.setProperty('--frac', String((el.value - el.min) / (el.max - el.min)));
+  const setLambda = l => {
+    lambda = roundL(l);
+    lSlider.value = String(Math.round(lToSlider(lambda)));
+    lSlider.style.setProperty('--frac', String(lSlider.value / P_MAX));
     zoom = Math.min(ZOOM_MAX, Math.max(1, lambda / ZOOM_FROM));
     layout();
     markRatio();
     updateReadouts();
   };
-  lSlider.addEventListener('input', () => setValues(sliderToL(Number(lSlider.value)), gap));
-  gSlider.addEventListener('input', () => setValues(lambda, Number(gSlider.value)));
-  const PRESETS = { wide: [0.8, 6], equal: [2, 2], long: [3, 1.5], huge: [40, 1.5] };
+  lSlider.addEventListener('input', () => setLambda(sliderToL(Number(lSlider.value))));
+  // λ for each button, with a = 4 cm: λ/a = 0.2, 1, 2 and 25
+  const PRESETS = { wide: 0.8, equal: 4, long: 8, huge: 100 };
   document.querySelectorAll('[data-preset]').forEach(btn =>
-    btn.addEventListener('click', () => setValues(...PRESETS[btn.dataset.preset])));
+    btn.addEventListener('click', () => setLambda(PRESETS[btn.dataset.preset])));
 
   const curveBtn = $('curve-btn');
   curveBtn.addEventListener('click', () => {
@@ -477,7 +466,7 @@
   window.addEventListener('resize', () => { resize(); resizePlot(); });
   resize();
   resizePlot();
-  setValues(lambda, gap);
+  setLambda(lambda);
   requestAnimationFrame(frame);
 })();
 </script>
