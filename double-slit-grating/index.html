@@ -74,8 +74,6 @@
   .muted { color: var(--muted); }
   .legend { display: flex; gap: 10px 18px; align-items: center; flex-wrap: wrap; margin-bottom: 4px; color: var(--muted); }
   .legend .title { color: var(--ink); font-weight: 600; margin-right: auto; }
-  .key { display: inline-block; width: 1.8em; vertical-align: middle; border-top: 3px solid var(--ink); margin-right: 6px; }
-  .key.ref { border-top: 2px dashed var(--axis); }
   .derivation {
     display: grid;
     grid-template-columns: auto auto 1fr;
@@ -147,15 +145,15 @@
     </div>
     <div class="sliders">
       <div class="slider" id="lambda-box">
-        <label for="lambda"><span>λ (wavelength)</span><span id="lambda-value"></span></label>
+        <label for="lambda"><span>λ</span><span id="lambda-value"></span></label>
         <input type="range" id="lambda" min="400" max="700" step="1" value="520">
       </div>
       <div class="slider" data-for="double">
-        <label for="a"><span>a (slit separation)</span><span id="a-value"></span></label>
+        <label for="a"><span>a</span><span id="a-value"></span></label>
         <input type="range" id="a" min="0.2" max="1" step="0.01" value="0.5">
       </div>
       <div class="slider" data-for="double">
-        <label for="D"><span>D (slits to screen)</span><span id="D-value"></span></label>
+        <label for="D"><span>D</span><span id="D-value"></span></label>
         <input type="range" id="D" min="0.5" max="3" step="0.05" value="2">
       </div>
       <div class="slider" data-for="grating">
@@ -173,8 +171,6 @@
   <div class="card" data-for="grating">
     <div class="legend">
       <span class="title" id="plot-title">Intensity against θ</span>
-      <span id="key-n"><span class="key" id="key-line"></span><span id="key-n-text"></span></span>
-      <span id="key-ref"><span class="key ref"></span>2 slits</span>
     </div>
     <canvas id="plot"></canvas>
   </div>
@@ -196,7 +192,7 @@
   let a = 0.50;                  // slit separation in mm
   let D = 2.00;                  // slits to screen in m
   let lines = 500;               // grating lines per mm
-  let N = 100;                   // slits lit on the grating (fixed; the graph also draws 2 for comparison)
+  let N = 100;                   // slits lit on the grating (fixed)
   let white = false;
   let pY = null;                 // point P on the screen, mm from the centre (set to the first bright fringe)
   let selOrder = 1;              // grating: the order whose path difference is drawn
@@ -813,12 +809,6 @@
     };
     ctx.save();
     ctx.beginPath(); ctx.rect(PM.left, top - 2, w, h + 4); ctx.clip();
-    if (N > 2) {
-      const ref = curve(2);
-      ctx.strokeStyle = COLORS.axis; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]);
-      ctx.beginPath(); ref.forEach((v, i) => i ? ctx.lineTo(PM.left + i, py(v)) : ctx.moveTo(PM.left + i, py(v))); ctx.stroke();
-      ctx.setLineDash([]);
-    }
     const pts = curve(N);
     const ink = inkOf(lambda);
     ctx.fillStyle = rgbStr(waveRGB(lambda)); ctx.globalAlpha = 0.18;
@@ -909,10 +899,6 @@
     $('a-value').textContent = `${fmt(a, 2)} mm`;
     $('D-value').textContent = `${fmt(D, 2)} m`;
     $('lines-value').textContent = `${lines} (d = ${fmt(dNm() / 1000, 2)} µm)`;
-    $('key-line').style.borderTopColor = inkOf(lambda);
-    $('key-n-text').textContent = `${N} slits`;
-    $('key-n').classList.toggle('hidden', white);
-    $('key-ref').classList.toggle('hidden', white || N <= 2);
     $('plot-title').textContent = white ? 'Spectra against θ' : 'Intensity against θ';
     $('lambda-box').classList.toggle('off', white && mode === 'grating');
     $('lambda').disabled = white && mode === 'grating';

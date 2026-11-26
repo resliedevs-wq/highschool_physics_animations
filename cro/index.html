@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>3.10 Reading a CRO</title>
+<style>
+  :root {
+    --bg: #f7f7f5;
+    --panel: #ffffff;
+    --ink: #1f2328;
+    --muted: #6b7280;
+    --grid: #e5e7eb;
+    --axis: #9ca3af;
+    --focus: #dc2626;
+    --tmark: #d97706;       /* vertical markers: time */
+    --vmark: #0284c7;       /* horizontal markers: voltage */
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+  }
+  main { max-width: 1100px; margin: 0 auto; padding: 20px; }
+  .card {
+    background: var(--panel);
+    border-radius: 10px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.08);
+    padding: 14px 18px;
+    margin-bottom: 14px;
+  }
+  .frac {
+    display: inline-flex; flex-direction: column;
+    vertical-align: middle; text-align: center;
+    font-size: .85em; line-height: 1.15; margin: 0 2px;
+  }
+  .frac > span { padding: 0 3px; }
+  .frac > span:first-child { border-bottom: 1.5px solid currentColor; }
+  .intro h1 { font-size: 1.25rem; margin: 0 0 8px; }
+  .intro .formulas {
+    display: flex; gap: 2.5em; justify-content: center; flex-wrap: wrap;
+    font-family: "Cambria Math", "Times New Roman", serif;
+    font-size: 1.3rem;
+    line-height: 2.4;
+    margin: 0 0 6px;
+  }
+  .intro dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; margin: 0; }
+  .intro dt { font-family: "Cambria Math", "Times New Roman", serif; font-size: 1.1rem; text-align: center; }
+  .intro dd { margin: 0; }
+
+  /* the oscilloscope: screen on the left, front panel on the right */
+  .scope {
+    display: grid; grid-template-columns: 1fr 250px; gap: 18px;
+    background: #2b2f36; border-radius: 12px; padding: 16px;
+  }
+  #screen { display: block; width: 100%; aspect-ratio: 10 / 8; border-radius: 8px; touch-action: none; background: #06130c; }
+  .front { display: flex; flex-direction: column; gap: 10px; align-items: center; color: #e5e7eb; }
+  .front .caption { font-size: .9rem; font-weight: 600; color: #cbd5e1; text-align: center; }
+  .front .reading { font-size: 1.05rem; font-weight: 600; font-variant-numeric: tabular-nums; text-align: center; min-height: 1.3em; }
+  .knob { position: relative; width: 200px; height: 150px; }
+  .knob .dial {
+    position: absolute; left: 50%; top: 58%; width: 66px; height: 66px; margin: -33px 0 0 -33px;
+    border-radius: 50%; cursor: grab; touch-action: none;
+    background: radial-gradient(circle at 35% 30%, #6b7280, #1f2328 70%);
+    box-shadow: 0 2px 4px rgba(0,0,0,.5), inset 0 1px 1px rgba(255,255,255,.2);
+    transform: rotate(var(--angle, 0deg));
+  }
+  .knob .dial:focus-visible { outline: 2px solid #fbbf24; outline-offset: 3px; }
+  .knob .dial::after {
+    content: ""; position: absolute; left: 50%; top: 5px; width: 4px; height: 20px; margin-left: -2px;
+    border-radius: 2px; background: #f8fafc;
+  }
+  .knob .mark {
+    position: absolute; transform: translate(-50%, -50%);
+    font: 600 .8rem system-ui, sans-serif; font-variant-numeric: tabular-nums;
+    background: none; border: 0; color: #94a3b8; padding: 2px 3px; height: auto; min-width: 0; cursor: pointer;
+  }
+  .knob .mark[aria-pressed="true"] { color: #fff; }
+  .knob .mark:hover { color: #e5e7eb; background: none; }
+  .front .switch { border-color: #4b5563; }
+  .front .switch button { background: #374151; color: #e5e7eb; }
+  .front .switch button + button { border-left-color: #4b5563; }
+  .front .switch button[aria-pressed="true"] { background: #f8fafc; color: var(--ink); }
+
+  button {
+    font: inherit;
+    height: 2.4em; min-width: 2.4em; padding: 0 10px;
+    border-radius: 6px;
+    border: 1px solid #d1d5db;
+    background: #fff;
+    cursor: pointer;
+  }
+  button:hover { background: #f3f4f6; }
+  .switch { display: inline-flex; border: 1px solid #d1d5db; border-radius: 6px; overflow: hidden; }
+  .switch button { border: 0; border-radius: 0; }
+  .switch button + button { border-left: 1px solid #d1d5db; }
+  .switch button[aria-pressed="true"] { background: var(--ink); color: #fff; }
+  .toggle[aria-pressed="true"] { background: var(--ink); color: #fff; border-color: var(--ink); }
+
+  .generator { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 28px; align-items: end; }
+  .generator .title { font-weight: 600; grid-column: 1 / -1; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .generator .title span { margin-right: auto; }
+  .generator .title button { font-weight: normal; }
+  .slider label { display: flex; justify-content: space-between; margin-bottom: 4px; font-variant-numeric: tabular-nums; }
+  .slider input { width: 100%; accent-color: var(--ink); }
+  .slider.hidden-value input { visibility: hidden; }
+
+  .derivation {
+    display: grid;
+    grid-template-columns: auto auto 1fr;
+    column-gap: .4em;
+    align-items: center;
+    font-family: "Cambria Math", "Times New Roman", serif;
+    font-size: 1.3rem;
+    line-height: 2.4;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    overflow-x: auto;
+  }
+  .derivation .head {
+    grid-column: 1 / -1;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-size: 1rem; font-weight: 600; line-height: 1.6; margin-top: .3em;
+  }
+  .T { color: var(--tmark); }
+  .V { color: var(--vmark); }
+  .hidden { display: none !important; }
+  @media (max-width: 800px) {
+    .scope { grid-template-columns: 1fr; }
+    .front { flex-direction: row; flex-wrap: wrap; justify-content: center; }
+    .generator { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <section class="card intro">
+    <h1>3.10 Reading a cathode-ray oscilloscope (CRO)</h1>
+    <div class="formulas">
+      <span>T = (horizontal divisions) × time-base</span>
+      <span>f = <span class="frac"><span>1</span><span>T</span></span></span>
+      <span>V = (vertical divisions) × y-gain</span>
+    </div>
+    <dl>
+      <dt>time-base</dt><dd>time for the spot to cross one horizontal division (ms/div)</dd>
+      <dt>y-gain</dt><dd>voltage for one vertical division (V/div)</dd>
+      <dt>V<sub>0</sub></dt><dd>voltage amplitude: from the centre line to a peak; the peak-to-peak voltage is 2V<sub>0</sub></dd>
+    </dl>
+  </section>
+
+  <div class="card">
+    <div class="scope">
+      <canvas id="screen"></canvas>
+      <div class="front">
+        <div class="caption">Time-base (ms/div)</div>
+        <div class="knob" id="tb-knob"></div>
+        <div class="reading" id="tb-reading"></div>
+        <div class="switch" role="group" aria-label="Time-base">
+          <button data-tbon="1" aria-pressed="true">On</button>
+          <button data-tbon="0" aria-pressed="false">Off</button>
+        </div>
+        <div class="caption" style="margin-top:8px">Y-gain (V/div)</div>
+        <div class="knob" id="yg-knob"></div>
+        <div class="reading" id="yg-reading"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card generator">
+    <div class="title">
+      <span>Signal generator</span>
+      <div class="switch" role="group" aria-label="Waveform">
+        <button data-shape="sine" aria-pressed="true">Sine</button>
+        <button data-shape="square" aria-pressed="false">Square</button>
+        <button data-shape="triangle" aria-pressed="false">Triangle</button>
+      </div>
+      <button id="hide-btn" class="toggle" aria-pressed="false">Hide the input</button>
+      <button id="new-btn">New signal</button>
+    </div>
+    <div class="slider" id="f-box">
+      <label for="f"><span>Frequency f</span><span id="f-value"></span></label>
+      <input type="range" id="f" min="10" max="1000" step="5" value="125">
+    </div>
+    <div class="slider" id="v-box">
+      <label for="v"><span>Amplitude V<sub>0</sub></span><span id="v-value"></span></label>
+      <input type="range" id="v" min="0.1" max="10" step="0.1" value="1">
+    </div>
+  </div>
+
+  <div class="card derivation" id="derivation"></div>
+</main>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const css = getComputedStyle(document.documentElement);
+  const TMARK = css.getPropertyValue('--tmark').trim(), VMARK = css.getPropertyValue('--vmark').trim();
+
+  // ---- State ----
+  const TB = [0.5, 1, 2, 5, 10, 20];          // ms/div
+  const YG = [0.1, 0.2, 0.5, 1, 2, 5];        // V/div
+  const DIV_X = 10, DIV_Y = 8;                // the graticule: 10 × 8 divisions
+  const SNAP = 0.2;                           // markers snap to the small ticks
+  let tb = 2, yg = 0.5, tbOn = true;
+  let shape = 'sine', f = 125, V0 = 1.0;
+  let hidden = false;
+  let markT = [1, 5];                         // vertical markers, in divisions from the left edge
+  let markV = [0, 2];                         // horizontal markers, in divisions above the centre line
+  let sweep = 1;                              // how far the latest sweep has got (0 … 1)
+  let lastFrame = null;
+
+  // ---- The signal, triggered on a rising zero crossing at the left edge ----
+  function wave(phase) {                      // phase in cycles
+    const p = phase - Math.floor(phase);
+    if (shape === 'sine') return Math.sin(2 * Math.PI * p);
+    if (shape === 'square') return p < 0.5 ? 1 : -1;
+    return p < 0.25 ? 4 * p : p < 0.75 ? 2 - 4 * p : 4 * p - 4;     // triangle
+  }
+  const volts = tMs => V0 * wave(f * tMs / 1000);
+
+  // ---- Screen ----
+  const screen = $('screen'), ctx = screen.getContext('2d');
+  const sg = { W: 0, H: 0, x0: 0, y0: 0, d: 1 };   // graticule: left, centre line, size of one division
+  function resize() {
+    const dpr = window.devicePixelRatio || 1;
+    const r = screen.getBoundingClientRect();
+    sg.W = r.width; sg.H = r.height;
+    screen.width = Math.round(r.width * dpr); screen.height = Math.round(r.height * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    sg.d = Math.min((sg.W - 36) / DIV_X, (sg.H - 36) / DIV_Y);
+    sg.x0 = (sg.W - DIV_X * sg.d) / 2;
+    sg.y0 = sg.H / 2;
+  }
+  const X = div => sg.x0 + div * sg.d;          // divisions → screen px
+  const Y = div => sg.y0 - div * sg.d;
+
+  function drawGraticule() {
+    const { d } = sg, top = Y(DIV_Y / 2), bottom = Y(-DIV_Y / 2), left = X(0), right = X(DIV_X);
+    ctx.strokeStyle = 'rgba(120, 220, 160, .22)'; ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let i = 0; i <= DIV_X; i++) { const x = Math.round(X(i)) + 0.5; ctx.moveTo(x, top); ctx.lineTo(x, bottom); }
+    for (let j = -DIV_Y / 2; j <= DIV_Y / 2; j++) { const y = Math.round(Y(j)) + 0.5; ctx.moveTo(left, y); ctx.lineTo(right, y); }
+    ctx.stroke();
+    // small ticks every 0.2 division along the two centre lines
+    ctx.strokeStyle = 'rgba(120, 220, 160, .45)';
+    ctx.beginPath();
+    const cx = X(DIV_X / 2), cy = Y(0);
+    for (let k = 0; k <= DIV_X * 5; k++) { const x = Math.round(X(k / 5)) + 0.5; const h = k % 5 ? 3 : 0; ctx.moveTo(x, cy - h); ctx.lineTo(x, cy + h); }
+    for (let k = -DIV_Y * 5 / 2; k <= DIV_Y * 5 / 2; k++) { const y = Math.round(Y(k / 5)) + 0.5; const h = k % 5 ? 3 : 0; ctx.moveTo(cx - h, y); ctx.lineTo(cx + h, y); }
+    ctx.stroke();
+    ctx.strokeStyle = 'rgba(120, 220, 160, .4)';
+    ctx.beginPath();
+    ctx.moveTo(left, Math.round(cy) + 0.5); ctx.lineTo(right, Math.round(cy) + 0.5);
+    ctx.moveTo(Math.round(cx) + 0.5, top); ctx.lineTo(Math.round(cx) + 0.5, bottom);
+    ctx.stroke();
+  }
+
+  function glowStroke(drawPath) {
+    ctx.save();
+    ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+    ctx.strokeStyle = 'rgba(110, 255, 150, .25)'; ctx.lineWidth = 7;
+    ctx.shadowColor = 'rgba(110, 255, 150, .8)'; ctx.shadowBlur = 10;
+    drawPath(); ctx.stroke();
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = '#a7ffbf'; ctx.lineWidth = 2;
+    drawPath(); ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawTrace() {
+    const left = X(0), right = X(DIV_X), top = Y(DIV_Y / 2), bottom = Y(-DIV_Y / 2);
+    ctx.save();
+    ctx.beginPath(); ctx.rect(left, top, right - left, bottom - top); ctx.clip();
+    if (!tbOn) {
+      // no sweep: the spot only moves up and down, so the trace is a vertical line
+      const cx = X(DIV_X / 2), a = V0 / yg;
+      glowStroke(() => { ctx.beginPath(); ctx.moveTo(cx, Y(a)); ctx.lineTo(cx, Y(-a)); });
+      ctx.restore();
+      return;
+    }
+    const xEnd = left + (right - left) * sweep;
+    const n = Math.ceil((xEnd - left) * 8);          // 8 points per pixel, so dense traces fill in
+    const pts = [];
+    for (let i = 0; i <= n; i++) {
+      const x = left + (xEnd - left) * i / Math.max(1, n);
+      const div = (x - left) / sg.d;
+      pts.push([x, Y(volts(div * tb) / yg)]);
+    }
+    // a jump (the edge of a square wave) is crossed almost instantly, so it is drawn faint
+    const jump = sg.d * 0.5;
+    glowStroke(() => {
+      ctx.beginPath();
+      pts.forEach(([x, y], i) => (i && Math.abs(y - pts[i - 1][1]) < jump) ? ctx.lineTo(x, y) : ctx.moveTo(x, y));
+    });
+    ctx.strokeStyle = 'rgba(167, 255, 191, .3)'; ctx.lineWidth = 1;
+    ctx.beginPath();
+    pts.forEach(([x, y], i) => { if (i && Math.abs(y - pts[i - 1][1]) >= jump) { ctx.moveTo(x, pts[i - 1][1]); ctx.lineTo(x, y); } });
+    ctx.stroke();
+    if (sweep < 1 && pts.length) {
+      const [x, y] = pts[pts.length - 1];
+      ctx.fillStyle = '#eafff0'; ctx.shadowColor = '#7dff9e'; ctx.shadowBlur = 14;
+      ctx.beginPath(); ctx.arc(x, y, 3.5, 0, 2 * Math.PI); ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  function tag(text, x, y, col, align = 'left') {
+    ctx.font = '600 13px system-ui, sans-serif';
+    const tw = ctx.measureText(text).width;
+    const bx = align === 'left' ? x : align === 'right' ? x - tw - 8 : x - tw / 2 - 4;
+    ctx.fillStyle = col; ctx.fillRect(bx, y - 10, tw + 8, 20);
+    ctx.fillStyle = '#fff'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.fillText(text, bx + 4, y);
+  }
+  function drawMarkers() {
+    const top = Y(DIV_Y / 2), bottom = Y(-DIV_Y / 2), left = X(0), right = X(DIV_X);
+    ctx.save();
+    ctx.lineWidth = 1.5; ctx.setLineDash([6, 4]);
+    if (tbOn) {
+      ctx.strokeStyle = TMARK;
+      for (const m of markT) { const x = X(m); ctx.beginPath(); ctx.moveTo(x, top); ctx.lineTo(x, bottom); ctx.stroke(); }
+    }
+    ctx.strokeStyle = VMARK;
+    for (const m of markV) { const y = Y(m); ctx.beginPath(); ctx.moveTo(left, y); ctx.lineTo(right, y); ctx.stroke(); }
+    ctx.setLineDash([]);
+    // handles and the gap between each pair, in divisions
+    if (tbOn) {
+      const [a, b] = [...markT].sort((p, q) => p - q);
+      markT.forEach(m => { ctx.fillStyle = TMARK; ctx.beginPath(); ctx.moveTo(X(m) - 7, top); ctx.lineTo(X(m) + 7, top); ctx.lineTo(X(m), top + 10); ctx.closePath(); ctx.fill(); });
+      const ty = top + 22;
+      if (b - a > 0) {
+        ctx.strokeStyle = TMARK; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(X(a), ty); ctx.lineTo(X(b), ty); ctx.stroke();
+      }
+      tag(`${(b - a).toFixed(1)} div`, (X(a) + X(b)) / 2, ty, TMARK, 'center');
+    }
+    const [c, e] = [...markV].sort((p, q) => p - q);
+    markV.forEach(m => { ctx.fillStyle = VMARK; ctx.beginPath(); ctx.moveTo(right, Y(m) - 7); ctx.lineTo(right, Y(m) + 7); ctx.lineTo(right - 10, Y(m)); ctx.closePath(); ctx.fill(); });
+    const vx = right - 26;
+    if (e - c > 0) {
+      ctx.strokeStyle = VMARK; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(vx, Y(c)); ctx.lineTo(vx, Y(e)); ctx.stroke();
+    }
+    tag(`${(e - c).toFixed(1)} div`, vx - 6, (Y(c) + Y(e)) / 2, VMARK, 'right');
+    ctx.restore();
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, sg.W, sg.H);
+    drawGraticule();
+    drawTrace();
+    drawMarkers();
+  }
+
+  // ---- Dragging the markers (they snap to 0.2 division) ----
+  const snap = v => Math.round(v / SNAP) * SNAP;
+  let drag = null;
+  function hit(x, y) {
+    const inX = x > X(0) - 12 && x < X(DIV_X) + 12, inY = y > Y(DIV_Y / 2) - 12 && y < Y(-DIV_Y / 2) + 12;
+    if (!inX || !inY) return null;
+    let best = null, bd = 10;
+    if (tbOn) markT.forEach((m, i) => { const dd = Math.abs(x - X(m)); if (dd < bd) { bd = dd; best = { kind: 'T', i }; } });
+    markV.forEach((m, i) => { const dd = Math.abs(y - Y(m)); if (dd < bd) { bd = dd; best = { kind: 'V', i }; } });
+    return best;
+  }
+  const local = e => { const r = screen.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
+  screen.addEventListener('pointerdown', e => {
+    const [x, y] = local(e);
+    drag = hit(x, y);
+    if (drag) { screen.setPointerCapture(e.pointerId); moveTo(x, y); }
+  });
+  screen.addEventListener('pointermove', e => {
+    const [x, y] = local(e);
+    if (drag) { moveTo(x, y); return; }
+    const h = hit(x, y);
+    screen.style.cursor = !h ? '' : h.kind === 'T' ? 'ew-resize' : 'ns-resize';
+  });
+  const endDrag = () => { drag = null; };
+  screen.addEventListener('pointerup', endDrag);
+  screen.addEventListener('pointercancel', endDrag);
+  function moveTo(x, y) {
+    if (drag.kind === 'T') markT[drag.i] = Math.max(0, Math.min(DIV_X, snap((x - sg.x0) / sg.d)));
+    else markV[drag.i] = Math.max(-DIV_Y / 2, Math.min(DIV_Y / 2, snap((sg.y0 - y) / sg.d)));
+    update();
+  }
+
+  // ---- Knobs ----
+  function makeKnob(el, values, index, onChange) {
+    const A0 = -135, A1 = 135, R = 62;
+    const angleOf = i => A0 + (A1 - A0) * i / (values.length - 1);
+    const dial = document.createElement('div');
+    dial.className = 'dial'; dial.tabIndex = 0; dial.setAttribute('role', 'slider');
+    el.appendChild(dial);
+    const marks = values.map((v, i) => {
+      const b = document.createElement('button');
+      b.className = 'mark'; b.textContent = String(v);
+      const a = angleOf(i) * Math.PI / 180;
+      b.style.left = `calc(50% + ${R * Math.sin(a)}px)`;
+      b.style.top = `calc(58% - ${R * Math.cos(a)}px)`;
+      b.addEventListener('click', () => set(i));
+      el.appendChild(b);
+      return b;
+    });
+    function set(i, silent = false) {
+      index = Math.max(0, Math.min(values.length - 1, i));
+      dial.style.setProperty('--angle', `${angleOf(index)}deg`);
+      dial.setAttribute('aria-valuenow', values[index]);
+      marks.forEach((b, k) => b.setAttribute('aria-pressed', String(k === index)));
+      if (!silent) onChange(values[index]);
+    }
+    let dragging = false;
+    const fromPointer = e => {
+      const r = dial.getBoundingClientRect();
+      const a = Math.atan2(e.clientX - (r.left + r.width / 2), -(e.clientY - (r.top + r.height / 2))) * 180 / Math.PI;
+      let best = 0, bd = 1e9;
+      values.forEach((_, k) => { const dd = Math.abs(angleOf(k) - a); if (dd < bd) { bd = dd; best = k; } });
+      if (best !== index) set(best);
+    };
+    dial.addEventListener('pointerdown', e => { dragging = true; dial.setPointerCapture(e.pointerId); dial.style.cursor = 'grabbing'; });
+    dial.addEventListener('pointermove', e => { if (dragging) fromPointer(e); });
+    dial.addEventListener('pointerup', () => { dragging = false; dial.style.cursor = ''; });
+    dial.addEventListener('wheel', e => { e.preventDefault(); set(index + (e.deltaY < 0 ? 1 : -1)); }, { passive: false });
+    dial.addEventListener('keydown', e => {
+      if (e.key === 'ArrowRight' || e.key === 'ArrowUp') { e.preventDefault(); set(index + 1); }
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') { e.preventDefault(); set(index - 1); }
+    });
+    set(index, true);
+    return { set: v => set(values.indexOf(v)) };
+  }
+  makeKnob($('tb-knob'), TB, TB.indexOf(tb), v => { tb = v; restartSweep(); update(); });
+  makeKnob($('yg-knob'), YG, YG.indexOf(yg), v => { yg = v; update(); });
+
+  document.querySelectorAll('[data-tbon]').forEach(b => b.addEventListener('click', () => {
+    tbOn = b.dataset.tbon === '1';
+    document.querySelectorAll('[data-tbon]').forEach(o => o.setAttribute('aria-pressed', String(o === b)));
+    restartSweep(); update();
+  }));
+
+  // ---- Signal generator ----
+  const fSlider = $('f'), vSlider = $('v');
+  fSlider.addEventListener('input', () => { f = Number(fSlider.value); restartSweep(); update(); });
+  vSlider.addEventListener('input', () => { V0 = Number(vSlider.value); restartSweep(); update(); });
+  document.querySelectorAll('[data-shape]').forEach(b => b.addEventListener('click', () => {
+    shape = b.dataset.shape;
+    document.querySelectorAll('[data-shape]').forEach(o => o.setAttribute('aria-pressed', String(o === b)));
+    restartSweep(); update();
+  }));
+  $('hide-btn').addEventListener('click', () => {
+    hidden = !hidden;
+    $('hide-btn').setAttribute('aria-pressed', String(hidden));
+    update();
+  });
+  // a new signal that can be read exactly at some setting of the knobs:
+  // a whole number of 0.2 divisions per cycle and from the centre line to a peak
+  $('new-btn').addEventListener('click', () => {
+    const options = [];
+    for (const t of TB) for (const p of [2, 2.5, 4, 5, 8]) {
+      const ff = 1000 / (p * t);
+      if (ff >= 10 && ff <= 1000 && Math.abs(ff / 5 - Math.round(ff / 5)) < 1e-9 && ff !== f) options.push(ff);
+    }
+    const vOptions = [];
+    for (const g of YG) for (const q of [1, 1.5, 2, 2.5, 3, 3.5]) {
+      const v = Math.round(q * g * 10) / 10;
+      if (v >= 0.1 && v <= 10 && Math.abs(v - q * g) < 1e-9 && v !== V0) vOptions.push(v);
+    }
+    f = options[Math.floor(Math.random() * options.length)];
+    V0 = vOptions[Math.floor(Math.random() * vOptions.length)];
+    fSlider.value = f; vSlider.value = V0;
+    restartSweep(); update();
+  });
+
+  // ---- Working ----
+  const line = (lhs, ...rhs) => `<span>${lhs}</span><span>=</span><span>${rhs.join(' = ')}</span>`;
+  const frac = (p, q) => `<span class="frac"><span>${p}</span><span>${q}</span></span>`;
+  const head = text => `<span class="head">${text}</span>`;
+  const num = (v, dp = 3) => String(Number(v.toFixed(dp)));
+  // a reading to at least one decimal place: 8.0, 1.0, 0.14
+  const dec = v => { const t = v.toFixed(2); return t.endsWith('0') ? t.slice(0, -1) : t; };
+  function updateWorking() {
+    let rows = '';
+    if (tbOn) {
+      const dx = Math.abs(markT[1] - markT[0]);
+      const T = dx * tb;                       // ms
+      rows += head('<span class="T">Between the vertical markers</span>');
+      rows += line('T', `${dx.toFixed(1)} div × ${tb} ms/div`, `<span class="T">${dec(T)} ms</span>`);
+      if (T > 0) rows += line('f', frac(1, 'T'), frac(1, `${num(T / 1000, 6)} s`), `<span class="T">${Number((1000 / T).toPrecision(3))} Hz</span>`);
+    }
+    const dy = Math.abs(markV[1] - markV[0]);
+    rows += head('<span class="V">Between the horizontal markers</span>');
+    rows += line('V', `${dy.toFixed(1)} div × ${yg} V/div`, `<span class="V">${dec(dy * yg)} V</span>`);
+    $('derivation').innerHTML = rows;
+  }
+
+  function update() {
+    $('tb-reading').textContent = tbOn ? `${tb} ms/div` : 'off';
+    $('yg-reading').textContent = `${yg} V/div`;
+    $('f-value').textContent = hidden ? '?' : `${f} Hz`;
+    $('v-value').textContent = hidden ? '?' : `${V0.toFixed(1)} V`;
+    $('f-box').classList.toggle('hidden-value', hidden);
+    $('v-box').classList.toggle('hidden-value', hidden);
+    updateWorking();
+    draw();
+  }
+
+  // ---- The sweep: after a change the spot draws the trace from left to right, then it stays ----
+  const SWEEP_S = 0.45;
+  function restartSweep() { sweep = 0; }
+  function frame(now) {
+    if (lastFrame !== null && sweep < 1) {
+      sweep = Math.min(1, sweep + (now - lastFrame) / 1000 / SWEEP_S);
+      draw();
+    }
+    lastFrame = now;
+    requestAnimationFrame(frame);
+  }
+
+  window.addEventListener('resize', () => { resize(); draw(); });
+  resize();
+  update();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
