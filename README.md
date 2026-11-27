@@ -11,6 +11,8 @@ Each animation is a single self-contained HTML file. Open it directly in a brows
 ### 1 Mechanics
 
 - 1.1 [Projectile motion](projectile-motion/index.html): u_x = u cos θ, u_y = u sin θ, a_y = −g; drag the ledge to set its height (up to "very high"), with velocity–time graphs and an optional air-resistance comparison for a tennis ball or a steel ball
+- 1.2 [Collisions on a track](collisions/index.html): m_A·u_A + m_B·u_B = m_A·v_A + m_B·v_B; elastic, stick together or spring released, with equal and opposite contact forces, momentum against time, and momentum and kinetic energy before and after
+- 1.3 [Glancing collision](glancing-collision/index.html): east and north momentum conserved separately; an elastic off-centre collision of two pucks, B dragged to set the offset, with velocity components, angles and the momentum triangle
 
 ### 3 Wave
 

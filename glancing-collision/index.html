@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>1.3 Glancing Collision</title>
+<style>
+  :root {
+    --bg: #f7f7f5;
+    --panel: #ffffff;
+    --ink: #1f2328;
+    --muted: #6b7280;
+    --grid: #e5e7eb;
+    --axis: #9ca3af;
+    --a: #2563eb;           /* puck A */
+    --b: #d97706;           /* puck B */
+    --focus: #7c3aed;       /* drag handle */
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+  }
+  main { max-width: 1100px; margin: 0 auto; padding: 20px; }
+  .card {
+    background: var(--panel);
+    border-radius: 10px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.08);
+    padding: 14px 18px;
+    margin-bottom: 14px;
+  }
+  .frac {
+    display: inline-flex; flex-direction: column;
+    vertical-align: middle; text-align: center;
+    font-size: .85em; line-height: 1.15; margin: 0 2px;
+  }
+  .frac > span { padding: 0 3px; }
+  .frac > span:first-child { border-bottom: 1.5px solid currentColor; }
+  .intro h1 { font-size: 1.25rem; margin: 0 0 8px; }
+  .intro .formulas {
+    display: flex; gap: 2.5em; justify-content: center; flex-wrap: wrap;
+    font-family: "Cambria Math", "Times New Roman", serif;
+    font-size: 1.3rem; line-height: 2.4; margin: 0 0 6px;
+  }
+  .intro dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; margin: 0; }
+  .intro dt { font-family: "Cambria Math", "Times New Roman", serif; font-size: 1.1rem; text-align: center; }
+  .intro dd { margin: 0; }
+  canvas { display: block; width: 100%; }
+  #scene { height: 440px; touch-action: none; border-radius: 6px; }
+  #vectors { height: 300px; }
+  .row { display: flex; gap: 12px 18px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
+  .row .right { margin-left: auto; display: flex; gap: 10px; }
+  .sliders { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px 28px; margin-top: 12px; }
+  .slider label { display: flex; justify-content: space-between; margin-bottom: 4px; font-variant-numeric: tabular-nums; }
+  .slider input { width: 100%; accent-color: var(--ink); }
+  .slider.A label span:first-child { color: var(--a); font-weight: 600; }
+  .slider.B label span:first-child { color: var(--b); font-weight: 600; }
+  button {
+    font: inherit;
+    height: 2.4em; min-width: 2.4em; padding: 0 10px;
+    border-radius: 6px;
+    border: 1px solid #d1d5db;
+    background: #fff;
+    cursor: pointer;
+  }
+  button:hover { background: #f3f4f6; }
+  .toggle[aria-pressed="true"] { background: var(--ink); color: #fff; border-color: var(--ink); }
+  .legend { display: flex; gap: 10px 18px; align-items: center; flex-wrap: wrap; margin-bottom: 4px; color: var(--muted); }
+  .legend .title { color: var(--ink); font-weight: 600; margin-right: auto; }
+  .derivation {
+    display: grid;
+    grid-template-columns: auto auto 1fr;
+    column-gap: .4em;
+    align-items: center;
+    font-family: "Cambria Math", "Times New Roman", serif;
+    font-size: 1.3rem;
+    line-height: 2.4;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    overflow-x: auto;
+  }
+  .derivation .head {
+    grid-column: 1 / -1;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-size: 1rem; font-weight: 600; line-height: 1.6; margin-top: .3em;
+  }
+  .A { color: var(--a); }
+  .B { color: var(--b); }
+  @media (max-width: 760px) { .sliders { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<main>
+  <section class="card intro">
+    <h1>1.3 Glancing collision</h1>
+    <div class="formulas">
+      <span>east: m<sub>A</sub>u<sub>A</sub> = m<sub>A</sub>v<sub>A,x</sub> + m<sub>B</sub>v<sub>B,x</sub></span>
+      <span>north: 0 = m<sub>A</sub>v<sub>A,y</sub> + m<sub>B</sub>v<sub>B,y</sub></span>
+    </div>
+    <dl>
+      <dt>u<sub>A</sub></dt><dd>velocity of A before, due east; B is at rest. East and north are positive</dd>
+      <dt>v</dt><dd>velocity after, split into east (x) and north (y) components</dd>
+      <dt>b</dt><dd>how far B's centre is from A's line of travel; drag B to change it</dd>
+    </dl>
+  </section>
+
+  <div class="card">
+    <canvas id="scene"></canvas>
+    <div class="row">
+      <div class="right">
+        <button id="pause-btn" title="Play / pause (Space)">⏸</button>
+        <button id="slow-btn" class="toggle" aria-pressed="false">10× slow</button>
+        <button id="restart-btn" title="Run again">↺</button>
+      </div>
+    </div>
+    <div class="sliders">
+      <div class="slider A">
+        <label for="mA"><span>m<sub>A</sub></span><span id="mA-value"></span></label>
+        <input type="range" id="mA" min="0.5" max="4" step="0.1" value="1">
+      </div>
+      <div class="slider B">
+        <label for="mB"><span>m<sub>B</sub></span><span id="mB-value"></span></label>
+        <input type="range" id="mB" min="0.5" max="4" step="0.1" value="1">
+      </div>
+      <div class="slider A">
+        <label for="uA"><span>u<sub>A</sub></span><span id="uA-value"></span></label>
+        <input type="range" id="uA" min="1" max="8" step="0.1" value="5">
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="legend"><span class="title">Momentum before and after</span></div>
+    <canvas id="vectors"></canvas>
+  </div>
+
+  <div class="card derivation" id="derivation"></div>
+</main>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const css = getComputedStyle(document.documentElement);
+  const color = name => css.getPropertyValue(name).trim();
+  const C = { ink: color('--ink'), muted: color('--muted'), grid: color('--grid'), axis: color('--axis'), a: color('--a'), b: color('--b'), focus: color('--focus') };
+
+  // ---- State (SI; east = +x, north = +y) ----
+  const R = 0.6;                 // puck radius (m); the off-centre distance b is given in diameters d = 2R
+  const D = 2 * R;
+  const T_HIT = 1.0, T_END = 2.3;
+  let mA = 1, mB = 1, uA = 5;
+  let b = -D / Math.sqrt(5);     // B's centre is this far north of A's line (negative: south). Plan example
+  let t = 0, running = true, slow = 1, lastFrame = null;
+
+  // the collision: the push acts along the line joining the centres at the moment they touch
+  function outcome() {
+    const hit = Math.abs(b) < D;
+    if (!hit) return { hit, vA: [uA, 0], vB: [0, 0], n: [1, 0] };
+    const sinp = -b / D, cosp = Math.sqrt(1 - sinp * sinp);
+    const n = [cosp, -sinp];                     // unit vector from A's centre to B's centre at contact
+    const J = 2 * mA * mB / (mA + mB) * (uA * n[0]);  // elastic: impulse on B along n
+    return { hit, n, vA: [uA - J / mA * n[0], -J / mA * n[1]], vB: [J / mB * n[0], J / mB * n[1]] };
+  }
+  let o = outcome();
+  // positions at time tt: B at (0, b) to start; A arrives touching B at T_HIT
+  function state(tt) {
+    const xc = o.hit ? -D * o.n[0] : 0;           // A's x where they touch
+    const a0 = [xc - uA * T_HIT, 0];
+    if (!o.hit || tt <= T_HIT) return { A: [a0[0] + uA * tt, 0], B: [0, b], vA: [uA, 0], vB: [0, 0], after: o.hit ? false : tt > T_HIT };
+    const dt = tt - T_HIT, aC = [xc, 0], bC = [0, b];
+    return { A: [aC[0] + o.vA[0] * dt, aC[1] + o.vA[1] * dt], B: [bC[0] + o.vB[0] * dt, bC[1] + o.vB[1] * dt], vA: o.vA, vB: o.vB, after: true };
+  }
+
+  // ---- Canvas helpers ----
+  function makeCanvas(canvas) {
+    const c = { canvas, ctx: canvas.getContext('2d'), width: 0, height: 0 };
+    c.resize = () => {
+      const dpr = window.devicePixelRatio || 1;
+      const rect = canvas.getBoundingClientRect();
+      c.width = rect.width; c.height = rect.height;
+      canvas.width = Math.round(c.width * dpr);
+      canvas.height = Math.round(c.height * dpr);
+      c.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    };
+    return c;
+  }
+  const scene = makeCanvas($('scene')), vec = makeCanvas($('vectors'));
+  function label(ctx, text, x, y, col, { align = 'center', base = 'middle', weight = '600', size = 14 } = {}) {
+    ctx.fillStyle = col;
+    ctx.font = `${weight} ${size}px system-ui, sans-serif`;
+    ctx.textAlign = align; ctx.textBaseline = base;
+    ctx.fillText(text, x, y);
+  }
+  function arrow(ctx, x1, y1, x2, y2, col, width = 2.5, head = 10, dash = null) {
+    const len = Math.hypot(x2 - x1, y2 - y1);
+    if (len < 3) return;
+    const ux = (x2 - x1) / len, uy = (y2 - y1) / len, hd = Math.min(head, len * 0.6);
+    ctx.strokeStyle = col; ctx.fillStyle = col; ctx.lineWidth = width;
+    if (dash) ctx.setLineDash(dash);
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2 - ux * hd * 0.8, y2 - uy * hd * 0.8); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - ux * hd - uy * hd * 0.45, y2 - uy * hd + ux * hd * 0.45);
+    ctx.lineTo(x2 - ux * hd + uy * hd * 0.45, y2 - uy * hd - ux * hd * 0.45);
+    ctx.closePath(); ctx.fill();
+  }
+  // text with a subscript (and an optional prime and text after it)
+  function subLabel(ctx, main, sub, x, y, col, { align = 'center', size = 13, after = '' } = {}) {
+    const f1 = `600 ${size}px system-ui, sans-serif`, fs = `600 ${Math.round(size * 0.75)}px system-ui, sans-serif`;
+    ctx.font = f1; const w1 = ctx.measureText(main).width, w3 = ctx.measureText(after).width;
+    ctx.font = fs; const w2 = ctx.measureText(sub).width;
+    const total = w1 + w2 + w3;
+    const x0 = align === 'left' ? x : align === 'right' ? x - total : x - total / 2;
+    ctx.fillStyle = col; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.font = f1; ctx.fillText(main, x0, y);
+    ctx.font = fs; ctx.fillText(sub, x0 + w1, y + size * 0.3);
+    ctx.font = f1; ctx.fillText(after, x0 + w1 + w2, y);
+  }
+  const f2 = v => (v < 0 ? '−' : '') + Math.abs(v).toFixed(2);
+  const deg = r => r * 180 / Math.PI;
+
+  // ---- Scene: the table from above (fixed scale) ----
+  const VIEW = { x0: -7, x1: 9, y0: -4.2, y1: 4.2 };
+  const g = { s: 1, ox: 0, oy: 0 };
+  const SX = x => g.ox + (x - VIEW.x0) * g.s, SY = y => g.oy - (y - VIEW.y0) * g.s;
+  let handleB = [0, 0];
+  function drawScene() {
+    const { ctx, width: W, height: H } = scene;
+    g.s = Math.min(W / (VIEW.x1 - VIEW.x0), H / (VIEW.y1 - VIEW.y0));
+    g.ox = (W - (VIEW.x1 - VIEW.x0) * g.s) / 2; g.oy = H - (H - (VIEW.y1 - VIEW.y0) * g.s) / 2;
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#eef4ef'; ctx.fillRect(0, 0, W, H);
+
+    // A's line of travel, and B's offset from it
+    ctx.strokeStyle = 'rgba(37,99,235,.35)'; ctx.lineWidth = 1.5; ctx.setLineDash([8, 6]);
+    ctx.beginPath(); ctx.moveTo(0, SY(0)); ctx.lineTo(W, SY(0)); ctx.stroke(); ctx.setLineDash([]);
+    if (dragging && Math.abs(b) > 0.02) {
+      // while B is being dragged: how far it is from A's line, measured on its far side
+      const x = SX(0) + R * g.s + 18;
+      ctx.strokeStyle = C.muted; ctx.lineWidth = 1.2;
+      ctx.setLineDash([3, 3]); ctx.beginPath(); ctx.moveTo(SX(0), SY(b)); ctx.lineTo(x + 4, SY(b)); ctx.stroke(); ctx.setLineDash([]);
+      ctx.beginPath(); ctx.moveTo(x, SY(0)); ctx.lineTo(x, SY(b)); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(x - 4, SY(0)); ctx.lineTo(x + 4, SY(0)); ctx.moveTo(x - 4, SY(b)); ctx.lineTo(x + 4, SY(b)); ctx.stroke();
+      label(ctx, `b = ${(Math.abs(b) / D).toFixed(2)} d`, x + 8, (SY(0) + SY(b)) / 2, C.ink, { align: 'left', size: 13 });
+    }
+
+    // paths with dots every 0.2 s
+    const step = 0.2;
+    const path = (key, col) => {
+      ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.globalAlpha = 0.6;
+      ctx.beginPath();
+      for (let tt = 0; tt <= t + 1e-9; tt += 0.01) { const p = state(Math.min(tt, t))[key]; tt ? ctx.lineTo(SX(p[0]), SY(p[1])) : ctx.moveTo(SX(p[0]), SY(p[1])); }
+      const pn = state(t)[key]; ctx.lineTo(SX(pn[0]), SY(pn[1]));
+      ctx.stroke(); ctx.globalAlpha = 1;
+      for (let tt = step; tt <= t + 1e-9; tt += step) {
+        const p = state(tt)[key];
+        ctx.beginPath(); ctx.arc(SX(p[0]), SY(p[1]), 2.6, 0, 2 * Math.PI); ctx.fillStyle = col; ctx.fill();
+      }
+    };
+    path('A', C.a);
+    if (o.hit && t > T_HIT) path('B', C.b);
+
+    // pucks with their velocities (east and north components dashed)
+    const st = state(t), kv = 0.32 * g.s;      // arrow length per m/s
+    const puck = (p, v, col, name) => {
+      const x = SX(p[0]), y = SY(p[1]);
+      ctx.beginPath(); ctx.arc(x, y, R * g.s, 0, 2 * Math.PI);
+      ctx.fillStyle = col; ctx.globalAlpha = 0.2; ctx.fill(); ctx.globalAlpha = 1;
+      ctx.strokeStyle = col; ctx.lineWidth = 2.5; ctx.stroke();
+      label(ctx, name, x, y, col, { size: 16, weight: '800' });
+      const sp = Math.hypot(v[0], v[1]);
+      if (sp > 0.01) {
+        const ex = x + v[0] * kv, ey = y - v[1] * kv;
+        if (Math.abs(v[1]) > 0.05) {
+          arrow(ctx, x, y, ex, y, col, 1.5, 7, [4, 3]);
+          arrow(ctx, ex, y, ex, ey, col, 1.5, 7, [4, 3]);
+        }
+        arrow(ctx, x, y, ex, ey, col, 3, 11);
+        label(ctx, `${sp.toFixed(2)} m/s`, ex + (v[0] >= 0 ? 8 : -8), ey + (v[1] >= 0 ? -10 : 12), col, { align: v[0] >= 0 ? 'left' : 'right', size: 13 });
+      }
+      return [x, y];
+    };
+    puck(st.A, st.vA, C.a, 'A');
+    handleB = puck(st.B, st.vB, C.b, 'B');
+    // B can be dragged up and down before it is hit
+    if (!st.after) {
+      const [x, y] = handleB;
+      ctx.fillStyle = C.focus;
+      for (const sgn of [-1, 1]) { ctx.beginPath(); ctx.moveTo(x - 6, y + sgn * (R * g.s + 6)); ctx.lineTo(x + 6, y + sgn * (R * g.s + 6)); ctx.lineTo(x, y + sgn * (R * g.s + 14)); ctx.closePath(); ctx.fill(); }
+    }
+
+    // directions after: angles from due east
+    if (o.hit && t > T_HIT + 0.15) {
+      const xc = -D * o.n[0];
+      const ang = (p0, v, col) => {
+        const th = Math.atan2(v[1], v[0]);
+        if (Math.hypot(v[0], v[1]) < 0.05 || Math.abs(th) < 0.02) return;
+        const x = SX(p0[0]), y = SY(p0[1]), r = 46;
+        ctx.strokeStyle = col; ctx.lineWidth = 1.5; ctx.setLineDash([3, 3]);
+        ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + r + 14, y); ctx.stroke(); ctx.setLineDash([]);
+        ctx.beginPath(); ctx.arc(x, y, r, 0, -th, th > 0); ctx.stroke();
+        const lx = x + (r + 10) * Math.cos(th / 2), ly = y - (r + 10) * Math.sin(th / 2);
+        label(ctx, `${Math.abs(deg(th)).toFixed(0)}° ${th > 0 ? 'N' : 'S'} of E`, lx + 4, ly, col, { align: 'left', size: 12 });
+      };
+      ang([xc, 0], o.vA, C.a);
+      ang([0, b], o.vB, C.b);
+    }
+    if (!o.hit) label(ctx, 'A misses B', W / 2, 20, C.muted, { size: 13 });
+    label(ctx, `t = ${t.toFixed(2)} s`, W - 12, 18, C.ink, { align: 'right', size: 13 });
+  }
+
+  // ---- Momentum vectors: before, and after drawn tip to tail ----
+  function drawVectors() {
+    const { ctx, width: W, height: H } = vec;
+    ctx.clearRect(0, 0, W, H);
+    const pA0 = mA * uA, pA = [mA * o.vA[0], mA * o.vA[1]], pB = [mB * o.vB[0], mB * o.vB[1]];
+    // the triangle's corners, in momentum units: (0, 0), p_A′ and p_A′ + p_B′ (which equals the total before)
+    const top = Math.max(0, pA[1]), bot = Math.min(0, pA[1]);
+    const s = Math.min((W / 2 - 110) / Math.max(pA0, Math.abs(pA[0]) + 1e-9), (H - 80) / Math.max(top - bot, 1e-9));
+    const ay = H / 2 + 8 + (top + bot) / 2 * s;      // screen y of the line of the momentum before
+    // before
+    const bx = 40, by = ay;
+    label(ctx, 'before', bx, 18, C.ink, { align: 'left', size: 13 });
+    arrow(ctx, bx, by, bx + pA0 * s, by, C.a, 3.5, 12);
+    subLabel(ctx, 'p', 'A', bx + pA0 * s / 2, by - 14, C.a, { after: ` = ${f2(pA0)} kg m s⁻¹` });
+    // after: p_A′ then p_B′ from its tip; together they make the momentum before
+    const ax = W / 2 + 30;
+    const P0 = [ax, ay], P1 = [ax + pA[0] * s, ay - pA[1] * s], P2 = [P1[0] + pB[0] * s, P1[1] - pB[1] * s];
+    label(ctx, 'after', ax, 18, C.ink, { align: 'left', size: 13 });
+    // the momenta after appear only once the pucks have collided (or A has passed B)
+    if (t <= T_HIT) return;
+    arrow(ctx, P0[0], P0[1], P1[0], P1[1], C.a, 3.5, 12);
+    arrow(ctx, P1[0], P1[1], P2[0], P2[1], C.b, 3.5, 12);
+    // labels on the outside of the triangle
+    const cxT = (P0[0] + P1[0] + P2[0]) / 3, cyT = (P0[1] + P1[1] + P2[1]) / 3;
+    const lab = (Pa, Pb, sub, col, val) => {
+      const mx = (Pa[0] + Pb[0]) / 2, my = (Pa[1] + Pb[1]) / 2;
+      let nx = -(Pb[1] - Pa[1]), ny = Pb[0] - Pa[0];
+      const L = Math.hypot(nx, ny) || 1; nx /= L; ny /= L;
+      if ((mx - cxT) * nx + (my - cyT) * ny < 0) { nx = -nx; ny = -ny; }
+      subLabel(ctx, 'p', sub, mx + nx * 22, my + ny * 22, col, { align: nx > 0.3 ? 'left' : nx < -0.3 ? 'right' : 'center', after: `′ = ${val.toFixed(2)}` });
+    };
+    if (Math.hypot(pA[0], pA[1]) * s > 10) lab(P0, P1, 'A', C.a, Math.hypot(...pA));
+    if (Math.hypot(pB[0], pB[1]) * s > 10) lab(P1, P2, 'B', C.b, Math.hypot(...pB));
+    // right angle between the two paths when the masses are equal
+    if (o.hit && Math.abs(mA - mB) < 1e-9 && Math.hypot(...pA) * s > 20 && Math.hypot(...pB) * s > 20) {
+      const u1 = [(P0[0] - P1[0]), (P0[1] - P1[1])], u2 = [(P2[0] - P1[0]), (P2[1] - P1[1])];
+      const n1 = Math.hypot(...u1), n2 = Math.hypot(...u2), k = 12;
+      const q1 = [P1[0] + u1[0] / n1 * k, P1[1] + u1[1] / n1 * k], q2 = [P1[0] + u2[0] / n2 * k, P1[1] + u2[1] / n2 * k];
+      ctx.strokeStyle = C.ink; ctx.lineWidth = 1.2;
+      ctx.beginPath(); ctx.moveTo(q1[0], q1[1]); ctx.lineTo(q1[0] + q2[0] - P1[0], q1[1] + q2[1] - P1[1]); ctx.lineTo(q2[0], q2[1]); ctx.stroke();
+    }
+  }
+
+  // ---- Working ----
+  const line = (lhs, ...rhs) => `<span>${lhs}</span><span>=</span><span>${rhs.join(' = ')}</span>`;
+  const head = text => `<span class="head">${text}</span>`;
+  const wrap = v => (v < 0 ? `(${f2(v)})` : f2(v));
+  function updateWorking() {
+    const [ax, ay] = o.vA, [bxv, byv] = o.vB;
+    let rows = '';
+    if (!o.hit) { $('derivation').innerHTML = head('B is more than one diameter from A\'s line, so A misses it'); return; }
+    rows += head('A after the collision');
+    rows += line('<span class="A">v<sub>A</sub></span>', `(${f2(ax)}, ${f2(ay)}) m/s`);
+    rows += head('East–west momentum is conserved');
+    rows += line(`${f2(mA)} × ${f2(uA)}`, `${f2(mA)} × ${wrap(ax)} + ${f2(mB)} × v<sub>B,x</sub>`);
+    rows += line('<span class="B">v<sub>B,x</sub></span>', `<span class="frac"><span>${f2(mA)} × ${f2(uA)} − ${f2(mA)} × ${wrap(ax)}</span><span>${f2(mB)}</span></span>`, `${f2(bxv)} m/s`);
+    rows += head('North–south momentum is conserved');
+    rows += line('0', `${f2(mA)} × ${wrap(ay)} + ${f2(mB)} × v<sub>B,y</sub>`);
+    rows += line('<span class="B">v<sub>B,y</sub></span>', `<span class="frac"><span>−${f2(mA)} × ${wrap(ay)}</span><span>${f2(mB)}</span></span>`, `${f2(byv)} m/s`);
+    rows += head('B after the collision');
+    const sp = Math.hypot(bxv, byv), th = deg(Math.atan2(Math.abs(byv), bxv));
+    rows += line('<span class="B">speed</span>', `√(${f2(bxv)}<sup>2</sup> + ${f2(Math.abs(byv))}<sup>2</sup>)`, `${sp.toFixed(2)} m/s`);
+    rows += line('<span class="B">direction</span>', `tan<sup>−1</sup>(${f2(Math.abs(byv))} / ${f2(bxv)})`, `${th.toFixed(0)}° ${byv < 0 ? 'south' : 'north'} of east`);
+    rows += head('Kinetic energy (elastic: kept)');
+    const KB = 0.5 * mA * uA * uA, KA = 0.5 * mA * (ax * ax + ay * ay) + 0.5 * mB * (bxv * bxv + byv * byv);
+    rows += line('before', `½ × ${f2(mA)} × ${f2(uA)}<sup>2</sup>`, `${KB.toFixed(2)} J`);
+    rows += line('after', `½ × ${f2(mA)} × ${f2(Math.hypot(ax, ay))}<sup>2</sup> + ½ × ${f2(mB)} × ${f2(sp)}<sup>2</sup>`, `${KA.toFixed(2)} J`);
+    $('derivation').innerHTML = rows;
+  }
+
+  function update(restart = true) {
+    o = outcome();
+    if (restart) { t = 0; running = true; pauseBtn.textContent = '⏸'; }
+    $('mA-value').textContent = `${mA.toFixed(1)} kg`;
+    $('mB-value').textContent = `${mB.toFixed(1)} kg`;
+    $('uA-value').textContent = `${uA.toFixed(1)} m/s east`;
+    updateWorking();
+  }
+
+  // ---- Controls ----
+  const pauseBtn = $('pause-btn');
+  for (const [id, set] of [['mA', v => { mA = v; }], ['mB', v => { mB = v; }], ['uA', v => { uA = v; }]]) {
+    $(id).addEventListener('input', ev => { set(Number(ev.target.value)); update(); });
+  }
+  function togglePause() {
+    if (!running && t >= T_END) t = 0;
+    running = !running;
+    pauseBtn.textContent = running ? '⏸' : '▶';
+  }
+  pauseBtn.addEventListener('click', togglePause);
+  $('restart-btn').addEventListener('click', () => { t = 0; running = true; pauseBtn.textContent = '⏸'; });
+  $('slow-btn').addEventListener('click', () => {
+    slow = slow === 1 ? 10 : 1;
+    $('slow-btn').setAttribute('aria-pressed', String(slow === 10));
+  });
+  window.addEventListener('keydown', ev => {
+    if (ev.code === 'Space' && ev.target === document.body) { ev.preventDefault(); togglePause(); }
+  });
+
+  // drag B up and down (before it is hit) to change b; it snaps to 0.01 d
+  let dragging = false;
+  const local = ev => { const r = scene.canvas.getBoundingClientRect(); return [ev.clientX - r.left, ev.clientY - r.top]; };
+  const nearB = ([x, y]) => !state(t).after && Math.hypot(x - handleB[0], y - handleB[1]) < R * g.s + 16;
+  scene.canvas.addEventListener('pointerdown', ev => {
+    const p = local(ev);
+    if (!nearB(p)) return;
+    dragging = true; scene.canvas.setPointerCapture(ev.pointerId);
+    running = false;
+  });
+  scene.canvas.addEventListener('pointermove', ev => {
+    const p = local(ev);
+    if (!dragging) { scene.canvas.style.cursor = nearB(p) ? 'ns-resize' : ''; return; }
+    const y = (g.oy - p[1]) / g.s + VIEW.y0;
+    b = Math.max(-1.2 * D, Math.min(1.2 * D, Math.round(y / D * 100) / 100 * D));
+    update(false);
+  });
+  const endDrag = () => { if (!dragging) return; dragging = false; update(); };
+  scene.canvas.addEventListener('pointerup', endDrag);
+  scene.canvas.addEventListener('pointercancel', endDrag);
+
+  function frame(now) {
+    if (lastFrame !== null && running) {
+      t += Math.min((now - lastFrame) / 1000, 0.05) / slow;
+      if (t >= T_END) { t = T_END; running = false; pauseBtn.textContent = '▶'; }
+    }
+    lastFrame = now;
+    drawScene(); drawVectors();
+    requestAnimationFrame(frame);
+  }
+  function resizeAll() { scene.resize(); vec.resize(); }
+  window.addEventListener('resize', resizeAll);
+  resizeAll();
+  update();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
