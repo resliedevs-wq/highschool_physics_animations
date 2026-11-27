@@ -8,6 +8,10 @@ Created in [T3 Code](https://t3.codes).
 
 Each animation is a single self-contained HTML file. Open it directly in a browser; no build step or internet connection is needed.
 
+### 1 Mechanics
+
+- 1.1 [Projectile motion](projectile-motion/index.html): u_x = u cos θ, u_y = u sin θ, a_y = −g; drag the ledge to set its height (up to "very high"), with velocity–time graphs and an optional air-resistance comparison for a tennis ball or a steel ball
+
 ### 3 Wave
 
 - 3.1 [Traveling wave: period, wavelength and phase](traveling-wave/index.html): y = A·sin(2π/T·t − 2π/λ·x)

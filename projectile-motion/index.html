@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>1.1 Projectile Motion</title>
+<style>
+  :root {
+    --bg: #f7f7f5;
+    --panel: #ffffff;
+    --ink: #1f2328;
+    --muted: #6b7280;
+    --grid: #e5e7eb;
+    --axis: #9ca3af;
+    --vx: #d97706;          /* horizontal */
+    --vy: #2563eb;          /* vertical */
+    --force: #dc2626;
+    --focus: #7c3aed;       /* the ledge handle */
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+  }
+  main { max-width: 1100px; margin: 0 auto; padding: 20px; }
+  .card {
+    background: var(--panel);
+    border-radius: 10px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.08);
+    padding: 14px 18px;
+    margin-bottom: 14px;
+  }
+  .frac {
+    display: inline-flex; flex-direction: column;
+    vertical-align: middle; text-align: center;
+    font-size: .85em; line-height: 1.15; margin: 0 2px;
+  }
+  .frac > span { padding: 0 3px; }
+  .frac > span:first-child { border-bottom: 1.5px solid currentColor; }
+  .intro h1 { font-size: 1.25rem; margin: 0 0 8px; }
+  .intro .formulas {
+    display: flex; gap: 2.5em; justify-content: center; flex-wrap: wrap;
+    font-family: "Cambria Math", "Times New Roman", serif;
+    font-size: 1.3rem; line-height: 2.4; margin: 0 0 6px;
+  }
+  .intro dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; margin: 0; }
+  .intro dt { font-family: "Cambria Math", "Times New Roman", serif; font-size: 1.1rem; text-align: center; }
+  .intro dd { margin: 0; }
+  canvas { display: block; width: 100%; }
+  #scene { height: 460px; touch-action: none; }
+  #plot { height: 250px; }
+  .row { display: flex; gap: 12px 18px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
+  .row .right { margin-left: auto; display: flex; gap: 10px; }
+  .sliders { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 28px; margin-top: 12px; }
+  .slider label { display: flex; justify-content: space-between; margin-bottom: 4px; font-variant-numeric: tabular-nums; }
+  .slider input { width: 100%; accent-color: var(--ink); }
+  button {
+    font: inherit;
+    height: 2.4em; min-width: 2.4em; padding: 0 10px;
+    border-radius: 6px;
+    border: 1px solid #d1d5db;
+    background: #fff;
+    cursor: pointer;
+  }
+  button:hover { background: #f3f4f6; }
+  .switch { display: inline-flex; border: 1px solid #d1d5db; border-radius: 6px; overflow: hidden; }
+  .switch button { border: 0; border-radius: 0; }
+  .switch button + button { border-left: 1px solid #d1d5db; }
+  .switch button[aria-pressed="true"] { background: var(--ink); color: #fff; }
+  .toggle[aria-pressed="true"] { background: var(--ink); color: #fff; border-color: var(--ink); }
+  .legend { display: flex; gap: 10px 18px; align-items: center; flex-wrap: wrap; margin-bottom: 4px; color: var(--muted); }
+  .legend .title { color: var(--ink); font-weight: 600; margin-right: auto; }
+  .key { display: inline-block; width: 1.8em; vertical-align: middle; border-top: 3px solid var(--ink); margin-right: 6px; }
+  .key.dash { border-top-style: dashed; border-top-width: 2px; }
+  .derivation {
+    display: grid;
+    grid-template-columns: auto auto 1fr;
+    column-gap: .4em;
+    align-items: center;
+    font-family: "Cambria Math", "Times New Roman", serif;
+    font-size: 1.3rem;
+    line-height: 2.4;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    overflow-x: auto;
+  }
+  .derivation .head {
+    grid-column: 1 / -1;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-size: 1rem; font-weight: 600; line-height: 1.6; margin-top: .3em;
+  }
+  .hidden { display: none !important; }
+  @media (max-width: 760px) { .sliders { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<main>
+  <section class="card intro">
+    <h1>1.1 Projectile motion</h1>
+    <div class="formulas">
+      <span>u<sub>x</sub> = u cos θ</span>
+      <span>u<sub>y</sub> = u sin θ</span>
+      <span>a<sub>x</sub> = 0, &nbsp;a<sub>y</sub> = −g</span>
+      <span>s<sub>y</sub> = u<sub>y</sub>t − ½gt<sup>2</sup></span>
+      <span>s<sub>x</sub> = u<sub>x</sub>t</span>
+    </div>
+    <dl>
+      <dt>u</dt><dd>launch speed, at angle θ above the horizontal</dd>
+      <dt>h</dt><dd>height of the ledge; drag the ledge to change it</dd>
+      <dt>g</dt><dd>acceleration of free fall, 9.81 m s<sup>−2</sup>; right and up are positive</dd>
+    </dl>
+  </section>
+
+  <div class="card">
+    <canvas id="scene"></canvas>
+    <div class="row">
+      <button id="air-btn" class="toggle" aria-pressed="false">Air resistance</button>
+      <div class="switch" role="group" aria-label="Ball" id="ball-switch">
+        <button data-ball="tennis" aria-pressed="true">Tennis ball</button>
+        <button data-ball="steel" aria-pressed="false">Steel ball</button>
+      </div>
+      <div class="right">
+        <button id="pause-btn" title="Play / pause (Space)">⏸</button>
+        <button id="slow-btn" class="toggle" aria-pressed="false">10× slow</button>
+        <button id="restart-btn" title="Launch again">↺</button>
+      </div>
+    </div>
+    <div class="sliders">
+      <div class="slider">
+        <label for="u"><span>u</span><span id="u-value"></span></label>
+        <input type="range" id="u" min="0" max="30" step="0.1" value="10">
+      </div>
+      <div class="slider">
+        <label for="theta"><span>θ</span><span id="theta-value"></span></label>
+        <input type="range" id="theta" min="0" max="85" step="1" value="0">
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="legend">
+      <span class="title">Velocity against time</span>
+      <span><span class="key" style="border-top-color: var(--vx)"></span>v<sub>x</sub></span>
+      <span><span class="key" style="border-top-color: var(--vy)"></span>v<sub>y</sub></span>
+      <span id="key-air" class="hidden"><span class="key dash"></span>without air</span>
+    </div>
+    <canvas id="plot"></canvas>
+  </div>
+
+  <div class="card derivation" id="derivation"></div>
+</main>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const css = getComputedStyle(document.documentElement);
+  const color = name => css.getPropertyValue(name).trim();
+  const C = {
+    ink: color('--ink'), muted: color('--muted'), grid: color('--grid'), axis: color('--axis'),
+    vx: color('--vx'), vy: color('--vy'), force: color('--force'), focus: color('--focus'),
+  };
+
+  // ---- Physics (SI, right and up positive) ----
+  const G = 9.81;
+  const H_MIN = 5, H_MAX = 100, H_VERY = 500; // the ledge drags from 5 to 100 m; past the top it is "very high"
+  const U_MAX = 30, THETA_MAX = 85;          // the ends of the u and θ sliders
+  // drag D = k v², k = ½ρC_dA with ρ = 1.2 kg m⁻³
+  const BALLS = {
+    tennis: { name: 'tennis ball', m: 0.057, d: 0.067, cd: 0.55, fill: '#c5d82b' },
+    steel: { name: 'steel ball', m: 0.0041, d: 0.010, cd: 0.47, fill: '#94a3b8' },
+  };
+  for (const b of Object.values(BALLS)) {
+    b.k = 0.5 * 1.2 * b.cd * Math.PI * (b.d / 2) ** 2;
+    b.vt = Math.sqrt(b.m * G / b.k);
+  }
+  let u = 10, thetaDeg = 0, h = 5, veryHigh = false;
+  let air = false, ball = 'tennis';
+  const height = () => (veryHigh ? H_VERY : h);
+
+  // the two flights, worked out in advance as samples every DT until each lands
+  const DT = 0.002;
+  let flights = { vac: null, air: null };
+  function flyVacuum() {
+    const th = thetaDeg * Math.PI / 180, ux = u * Math.cos(th), uy = u * Math.sin(th), h0 = height();
+    const T = (uy + Math.sqrt(uy * uy + 2 * G * h0)) / G;
+    const pts = [];
+    for (let t = 0; t < T; t += DT) pts.push({ t, x: ux * t, y: h0 + uy * t - 0.5 * G * t * t, vx: ux, vy: uy - G * t });
+    pts.push({ t: T, x: ux * T, y: 0, vx: ux, vy: uy - G * T });
+    return { pts, T };
+  }
+  function flyAir() {
+    const b = BALLS[ball], kk = b.k / b.m;
+    const th = thetaDeg * Math.PI / 180;
+    let s = { x: 0, y: height(), vx: u * Math.cos(th), vy: u * Math.sin(th) };
+    const acc = (vx, vy) => { const sp = Math.hypot(vx, vy); return [-kk * sp * vx, -G - kk * sp * vy]; };
+    const pts = [{ t: 0, ...s }];
+    let t = 0;
+    while (s.y > 0 && t < 200) {
+      // fourth-order Runge–Kutta
+      const k1 = acc(s.vx, s.vy);
+      const k2 = acc(s.vx + k1[0] * DT / 2, s.vy + k1[1] * DT / 2);
+      const k3 = acc(s.vx + k2[0] * DT / 2, s.vy + k2[1] * DT / 2);
+      const k4 = acc(s.vx + k3[0] * DT, s.vy + k3[1] * DT);
+      const n = {
+        x: s.x + DT * (s.vx + (DT / 6) * (k1[0] + k2[0] + k3[0])),
+        y: s.y + DT * (s.vy + (DT / 6) * (k1[1] + k2[1] + k3[1])),
+        vx: s.vx + DT / 6 * (k1[0] + 2 * k2[0] + 2 * k3[0] + k4[0]),
+        vy: s.vy + DT / 6 * (k1[1] + 2 * k2[1] + 2 * k3[1] + k4[1]),
+      };
+      t += DT;
+      if (n.y <= 0) {
+        const f = s.y / (s.y - n.y);
+        pts.push({ t: t - DT + f * DT, x: s.x + f * (n.x - s.x), y: 0, vx: s.vx + f * (n.vx - s.vx), vy: s.vy + f * (n.vy - s.vy) });
+        break;
+      }
+      s = n;
+      pts.push({ t, ...s });
+    }
+    return { pts, T: pts[pts.length - 1].t };
+  }
+  function at(f, t) {
+    if (!f) return null;
+    if (t >= f.T) return { ...f.pts[f.pts.length - 1], landed: true };
+    const i = Math.min(f.pts.length - 2, Math.floor(t / DT));
+    const a = f.pts[i], b = f.pts[i + 1], k = (t - a.t) / Math.max(1e-9, b.t - a.t);
+    return { t, x: a.x + k * (b.x - a.x), y: a.y + k * (b.y - a.y), vx: a.vx + k * (b.vx - a.vx), vy: a.vy + k * (b.vy - a.vy) };
+  }
+
+  // ---- Playback ----
+  let t = 0, running = true, slow = 1, lastFrame = null;
+  const tEnd = () => Math.max(flights.vac.T, air ? flights.air.T : 0);
+  function recompute(restart = true) {
+    flights.vac = flyVacuum();
+    flights.air = air ? flyAir() : null;
+    if (restart) t = 0;
+    fitView();
+    updateWorking();
+  }
+
+  // ---- Canvas helpers ----
+  function makeCanvas(canvas) {
+    const c = { canvas, ctx: canvas.getContext('2d'), width: 0, height: 0 };
+    c.resize = () => {
+      const dpr = window.devicePixelRatio || 1;
+      const rect = canvas.getBoundingClientRect();
+      c.width = rect.width; c.height = rect.height;
+      canvas.width = Math.round(c.width * dpr);
+      canvas.height = Math.round(c.height * dpr);
+      c.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    };
+    return c;
+  }
+  const scene = makeCanvas($('scene'));
+  const plot = makeCanvas($('plot'));
+  function label(ctx, text, x, y, col, { align = 'center', base = 'middle', weight = '600', size = 14 } = {}) {
+    ctx.fillStyle = col;
+    ctx.font = `${weight} ${size}px system-ui, sans-serif`;
+    ctx.textAlign = align; ctx.textBaseline = base;
+    ctx.fillText(text, x, y);
+  }
+  // text with a subscript, e.g. v with x
+  function subLabel(ctx, main, sub, x, y, col, { align = 'left', size = 13, after = '' } = {}) {
+    ctx.font = `600 ${size}px system-ui, sans-serif`;
+    const w1 = ctx.measureText(main).width;
+    ctx.font = `600 ${Math.round(size * 0.75)}px system-ui, sans-serif`;
+    const w2 = ctx.measureText(sub).width;
+    ctx.font = `600 ${size}px system-ui, sans-serif`;
+    const w3 = ctx.measureText(after).width;
+    let x0 = align === 'left' ? x : align === 'right' ? x - w1 - w2 - w3 : x - (w1 + w2 + w3) / 2;
+    ctx.fillStyle = col; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.fillText(main, x0, y);
+    ctx.font = `600 ${Math.round(size * 0.75)}px system-ui, sans-serif`;
+    ctx.fillText(sub, x0 + w1, y + size * 0.3);
+    ctx.font = `600 ${size}px system-ui, sans-serif`;
+    ctx.fillText(after, x0 + w1 + w2, y);
+  }
+  function arrow(ctx, x1, y1, x2, y2, col, width = 2.5, head = 10, dash = null) {
+    const len = Math.hypot(x2 - x1, y2 - y1);
+    if (len < 3) return;
+    const ux = (x2 - x1) / len, uy = (y2 - y1) / len, hd = Math.min(head, len * 0.6);
+    ctx.strokeStyle = col; ctx.fillStyle = col; ctx.lineWidth = width;
+    if (dash) ctx.setLineDash(dash);
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2 - ux * hd * 0.8, y2 - uy * hd * 0.8); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - ux * hd - uy * hd * 0.45, y2 - uy * hd + ux * hd * 0.45);
+    ctx.lineTo(x2 - ux * hd + uy * hd * 0.45, y2 - uy * hd - ux * hd * 0.45);
+    ctx.closePath(); ctx.fill();
+  }
+
+  // ---- View: fit the ledge and both flights ----
+  const view = { s: 40, ox: 0, oy: 0 };       // px per metre, and where (0, 0) sits on screen
+  const M = { left: 70, right: 40, top: 46, bottom: 40 };
+  const SX = x => view.ox + x * view.s, SY = y => view.oy - y * view.s;
+  function fitView() {
+    const W = scene.width, H = scene.height;
+    if (!W) return;
+    // the scale depends on the ledge only: it fits the farthest and highest flights any u and θ on the
+    // sliders could give from this ledge (without air, which always goes farther), so moving u or θ
+    // never rescales the picture
+    const h0 = height();
+    let xMax = 1;
+    for (let th = 0; th <= THETA_MAX; th += 0.5) {
+      const r = th * Math.PI / 180, ux = U_MAX * Math.cos(r), uy = U_MAX * Math.sin(r);
+      xMax = Math.max(xMax, ux * (uy + Math.sqrt(uy * uy + 2 * G * h0)) / G);
+    }
+    const yMax = h0 + (U_MAX * Math.sin(THETA_MAX * Math.PI / 180)) ** 2 / (2 * G);
+    const ledgeW = 0.12;                      // ledge drawn as a fraction of the width
+    const s = Math.min((W - M.left - M.right) / (xMax * (1 + ledgeW)), (H - M.top - M.bottom) / yMax);
+    view.s = s;
+    view.ox = M.left + xMax * ledgeW * s;
+    view.oy = H - M.bottom;
+    view.ledgeX = M.left;
+  }
+
+  // equal time steps for the markers along each path: about a dozen per flight
+  function markStep(T) {
+    const raw = T / 12;
+    const nice = [0.02, 0.05, 0.1, 0.2, 0.25, 0.5, 1, 2, 5];
+    return nice.find(n => n >= raw) || 5;
+  }
+
+  // ---- Scene ----
+  const handle = { x: 0, y: 0 };
+  function drawScene() {
+    const { ctx, width: W, height: H } = scene;
+    ctx.clearRect(0, 0, W, H);
+    const h0 = height();
+
+    // ground and ledge
+    ctx.fillStyle = '#e7e5df';
+    ctx.fillRect(0, SY(0), W, H - SY(0));
+    ctx.strokeStyle = '#a8a29e'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(0, SY(0)); ctx.lineTo(W, SY(0)); ctx.stroke();
+    ctx.fillStyle = veryHigh ? '#d6d3cd' : '#e7e5df';
+    ctx.fillRect(view.ledgeX, SY(h0), SX(0) - view.ledgeX, SY(0) - SY(h0));
+    ctx.strokeStyle = '#a8a29e';
+    ctx.strokeRect(view.ledgeX, SY(h0), SX(0) - view.ledgeX, SY(0) - SY(h0));
+
+    // the ledge's height, with its drag handle on top
+    handle.x = (view.ledgeX + SX(0)) / 2; handle.y = SY(h0);
+    ctx.strokeStyle = C.muted; ctx.lineWidth = 1.2;
+    const dx = view.ledgeX - 18;
+    ctx.beginPath(); ctx.moveTo(dx, SY(0)); ctx.lineTo(dx, SY(h0)); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(dx - 5, SY(0)); ctx.lineTo(dx + 5, SY(0)); ctx.moveTo(dx - 5, SY(h0)); ctx.lineTo(dx + 5, SY(h0)); ctx.stroke();
+    if (veryHigh) {
+      label(ctx, 'Very high', handle.x, handle.y - 34, C.focus, { size: 18, weight: '800' });
+      label(ctx, `h = ${H_VERY} m`, handle.x, handle.y - 15, C.focus, { size: 13 });
+    } else label(ctx, `h = ${h.toFixed(2)} m`, handle.x, handle.y - 18, C.ink, { size: 13 });
+    ctx.beginPath(); ctx.arc(handle.x, handle.y, 9, 0, 2 * Math.PI);
+    ctx.fillStyle = '#fff'; ctx.fill(); ctx.strokeStyle = C.focus; ctx.lineWidth = 2.5; ctx.stroke();
+    ctx.fillStyle = C.focus;
+    for (const s of [-1, 1]) { ctx.beginPath(); ctx.moveTo(handle.x - 4, handle.y + s * 2); ctx.lineTo(handle.x + 4, handle.y + s * 2); ctx.lineTo(handle.x, handle.y + s * 6); ctx.closePath(); ctx.fill(); }
+
+    // paths so far, with markers at equal time steps
+    const step = markStep(flights.vac.T);
+    const drawPath = (f, col, dashed) => {
+      const pts = f.pts.filter(p => p.t <= t);
+      const now = at(f, Math.min(t, f.T));
+      ctx.strokeStyle = col; ctx.lineWidth = dashed ? 1.5 : 2; ctx.setLineDash(dashed ? [6, 5] : []);
+      ctx.beginPath();
+      pts.forEach((p, i) => i ? ctx.lineTo(SX(p.x), SY(p.y)) : ctx.moveTo(SX(p.x), SY(p.y)));
+      if (now) ctx.lineTo(SX(now.x), SY(now.y));
+      ctx.stroke(); ctx.setLineDash([]);
+      for (let tm = step; tm <= Math.min(t, f.T) + 1e-9; tm += step) {
+        const p = at(f, tm);
+        ctx.beginPath(); ctx.arc(SX(p.x), SY(p.y), 3, 0, 2 * Math.PI);
+        ctx.fillStyle = dashed ? '#fff' : col; ctx.fill();
+        ctx.strokeStyle = col; ctx.lineWidth = 1.2; ctx.stroke();
+      }
+    };
+    if (air) drawPath(flights.vac, C.axis, true);
+    drawPath(air ? flights.air : flights.vac, C.ink, false);
+
+    // shadows on the two axes: steady along x, speeding up along y
+    const main = at(air ? flights.air : flights.vac, t);
+    ctx.globalAlpha = 0.7;
+    ctx.fillStyle = C.vx; ctx.beginPath(); ctx.arc(SX(main.x), SY(0) + 9, 5, 0, 2 * Math.PI); ctx.fill();
+    ctx.fillStyle = C.vy; ctx.beginPath(); ctx.arc(view.ledgeX - 18, SY(main.y), 5, 0, 2 * Math.PI); ctx.fill();
+    ctx.globalAlpha = 1;
+
+    // balls, velocity arrows (and the forces on the ball in air)
+    const vMax = Math.max(...[flights.vac, flights.air].filter(Boolean).flatMap(f => [f.pts[0], f.pts[f.pts.length - 1]]).map(p => Math.hypot(p.vx, p.vy)), 1);
+    const kv = 70 / vMax;
+    const drawBall = (p, fill, ghost) => {
+      const x = SX(p.x), y = SY(p.y);
+      if (!p.landed) {
+        arrow(ctx, x, y, x + p.vx * kv, y, C.vx, ghost ? 1.5 : 2.5, 9, ghost ? [4, 3] : null);
+        arrow(ctx, x, y, x, y - p.vy * kv, C.vy, ghost ? 1.5 : 2.5, 9, ghost ? [4, 3] : null);
+        if (!ghost) {
+          if (Math.abs(p.vx * kv) > 12) subLabel(ctx, 'v', 'x', x + p.vx * kv + (p.vx >= 0 ? 6 : -6), y - 9, C.vx, { align: p.vx >= 0 ? 'left' : 'right' });
+          if (Math.abs(p.vy * kv) > 12) subLabel(ctx, 'v', 'y', x + 8, y - p.vy * kv, C.vy);
+        }
+      }
+      ctx.beginPath(); ctx.arc(x, y, ghost ? 6 : 8, 0, 2 * Math.PI);
+      ctx.fillStyle = ghost ? '#fff' : fill; ctx.fill();
+      ctx.strokeStyle = ghost ? C.axis : C.ink; ctx.lineWidth = 1.5;
+      if (ghost) ctx.setLineDash([3, 2]);
+      ctx.stroke(); ctx.setLineDash([]);
+    };
+    if (air) {
+      drawBall(at(flights.vac, t), '#fff', true);
+      const p = at(flights.air, t), b = BALLS[ball];
+      drawBall(p, b.fill, false);
+      drawCloseUp(ctx, p, b, W);
+    } else drawBall(at(flights.vac, t), '#fff', false);
+
+    label(ctx, `t = ${Math.min(t, tEnd()).toFixed(2)} s`, W - 14, 18, C.ink, { align: 'right', size: 14 });
+  }
+
+  // A close-up of the ball in air, under the clock: its weight and the drag, to scale with each other
+  // (drag equals weight at terminal speed), and the direction it is moving in
+  function drawCloseUp(ctx, p, b, W) {
+    const bw = 190, bh = 190, x0 = W - 14 - bw, y0 = 32;
+    ctx.fillStyle = 'rgba(255,255,255,.94)'; ctx.fillRect(x0, y0, bw, bh);
+    ctx.strokeStyle = '#d1d5db'; ctx.lineWidth = 1; ctx.strokeRect(x0 + 0.5, y0 + 0.5, bw, bh);
+    label(ctx, `close-up: ${b.name}`, x0 + 8, y0 + 13, C.muted, { align: 'left', size: 12, weight: '500' });
+    const cx = x0 + bw / 2, cy = y0 + bh / 2 + 4, R = 16, L = 62;
+    const sp = Math.hypot(p.vx, p.vy);
+    if (!p.landed && sp > 0.01) {
+      // direction of motion, faint
+      // drawn beside the ball (shifted sideways), so it never hides under mg or D
+      const ux = p.vx / sp, uy = -p.vy / sp, nx = -uy, ny = ux;
+      const side = ny > 0 ? -1 : 1, off = (R + 14) * side;       // the side away from mg
+      const ax = cx + nx * off, ay = cy + ny * off;
+      arrow(ctx, ax - ux * 20, ay - uy * 20, ax + ux * 22, ay + uy * 22, C.axis, 1.5, 8, [4, 3]);
+      label(ctx, 'v', ax + ux * 32, ay + uy * 32, C.muted, { size: 13 });
+    }
+    ctx.beginPath(); ctx.arc(cx, cy, R, 0, 2 * Math.PI);
+    ctx.fillStyle = b.fill; ctx.fill(); ctx.strokeStyle = C.ink; ctx.lineWidth = 1.5; ctx.stroke();
+    if (p.landed) { label(ctx, 'landed', cx, cy + R + 16, C.muted, { size: 12 }); return; }
+    arrow(ctx, cx, cy, cx, cy + L, C.force, 2.5, 10);
+    label(ctx, 'mg', cx + 8, cy + L - 6, C.force, { align: 'left', size: 13 });
+    const D = b.k * sp * sp, Ld = L * D / (b.m * G);
+    if (sp > 0.01 && Ld > 2) {
+      const ex = cx - p.vx / sp * Ld, ey = cy + p.vy / sp * Ld;
+      arrow(ctx, cx, cy, ex, ey, C.force, 2.5, 10);
+      label(ctx, 'D', ex + (p.vx > 0 ? -8 : 8), ey - 8, C.force, { align: p.vx > 0 ? 'right' : 'left', size: 13 });
+    }
+  }
+
+  // ---- Graph: velocity against time ----
+  function drawPlot() {
+    const { ctx, width: W, height: H } = plot;
+    ctx.clearRect(0, 0, W, H);
+    const PM = { left: 64, right: 18, top: 12, bottom: 38 };
+    const w = W - PM.left - PM.right, hh = H - PM.top - PM.bottom;
+    const fs = [flights.vac, flights.air].filter(Boolean);
+    const T = Math.max(...fs.map(f => f.T), 0.1);
+    let vLo = 0, vHi = 0;
+    for (const f of fs) for (const p of f.pts) { vLo = Math.min(vLo, p.vx, p.vy); vHi = Math.max(vHi, p.vx, p.vy); }
+    if (air) vLo = Math.min(vLo, -BALLS[ball].vt);
+    const span = Math.max(vHi - vLo, 1);
+    const stepV = niceStep(span / 5), stepT = niceStep(T / 6);
+    vLo = Math.floor(vLo / stepV) * stepV; vHi = Math.ceil(vHi / stepV) * stepV;
+    if (vHi === vLo) vHi = vLo + stepV;
+    const px = tt => PM.left + tt / T * w, py = v => PM.top + (vHi - v) / (vHi - vLo) * hh;
+    ctx.font = '13px system-ui, sans-serif'; ctx.fillStyle = C.muted; ctx.lineWidth = 1;
+    ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    for (let v = vLo; v <= vHi + 1e-9; v += stepV) {
+      ctx.strokeStyle = Math.abs(v) < 1e-9 ? C.axis : C.grid;
+      ctx.beginPath(); ctx.moveTo(PM.left, py(v)); ctx.lineTo(PM.left + w, py(v)); ctx.stroke();
+      ctx.fillText(fmtNum(v), PM.left - 8, py(v));
+    }
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    for (let tt = 0; tt <= T + 1e-9; tt += stepT) {
+      ctx.strokeStyle = C.grid;
+      ctx.beginPath(); ctx.moveTo(px(tt), PM.top); ctx.lineTo(px(tt), PM.top + hh); ctx.stroke();
+      ctx.fillText(fmtNum(tt), px(tt), PM.top + hh + 6);
+    }
+    ctx.fillText('t / s', PM.left + w / 2, PM.top + hh + 22);
+    ctx.save(); ctx.translate(14, PM.top + hh / 2); ctx.rotate(-Math.PI / 2); ctx.textBaseline = 'middle';
+    ctx.fillText('v / m s⁻¹', 0, 0); ctx.restore();
+    if (air) {
+      const vt = BALLS[ball].vt;
+      ctx.strokeStyle = C.muted; ctx.setLineDash([6, 5]); ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(PM.left, py(-vt)); ctx.lineTo(PM.left + w, py(-vt)); ctx.stroke(); ctx.setLineDash([]);
+      subLabel(ctx, '−v', 't', PM.left + w - 4, py(-vt) - 9, C.muted, { align: 'right', size: 12, after: ` = −${vt.toFixed(1)}` });
+    }
+    const curve = (f, key, col, dashed) => {
+      ctx.strokeStyle = col; ctx.lineWidth = dashed ? 1.5 : 2.5; ctx.setLineDash(dashed ? [6, 5] : []);
+      ctx.beginPath();
+      let first = true;
+      for (const p of f.pts) {
+        if (p.t > t) break;
+        if (first) { ctx.moveTo(px(p.t), py(p[key])); first = false; } else ctx.lineTo(px(p.t), py(p[key]));
+      }
+      ctx.stroke(); ctx.setLineDash([]);
+    };
+    if (air) { curve(flights.vac, 'vx', C.vx, true); curve(flights.vac, 'vy', C.vy, true); }
+    const main = air ? flights.air : flights.vac;
+    curve(main, 'vx', C.vx, false); curve(main, 'vy', C.vy, false);
+    ctx.strokeStyle = C.ink; ctx.setLineDash([3, 4]); ctx.lineWidth = 1;
+    const tt = Math.min(t, T);
+    ctx.beginPath(); ctx.moveTo(px(tt), PM.top); ctx.lineTo(px(tt), PM.top + hh); ctx.stroke(); ctx.setLineDash([]);
+  }
+  function niceStep(x) {
+    const p = Math.pow(10, Math.floor(Math.log10(x))), m = x / p;
+    return (m < 1.5 ? 1 : m < 3.5 ? 2 : m < 7.5 ? 5 : 10) * p;
+  }
+  const fmtNum = v => String(Number(v.toPrecision(4))).replace('-', '−');
+
+  // ---- Working ----
+  const line = (lhs, ...rhs) => `<span>${lhs}</span><span>=</span><span>${rhs.join(' = ')}</span>`;
+  const frac = (p, q) => `<span class="frac"><span>${p}</span><span>${q}</span></span>`;
+  const head = text => `<span class="head">${text}</span>`;
+  const f2 = v => v.toFixed(2).replace('-', '−');
+  function updateWorking() {
+    const th = thetaDeg * Math.PI / 180, ux = u * Math.cos(th), uy = u * Math.sin(th), h0 = height();
+    const T = flights.vac.T, R = ux * T;
+    let rows = head(air ? 'Without air resistance' : 'Resolve the launch velocity');
+    rows += line('u<sub>x</sub>', 'u cos θ', `${u.toFixed(2)} × cos ${thetaDeg}°`, `${f2(ux)} m/s`);
+    rows += line('u<sub>y</sub>', 'u sin θ', `${u.toFixed(2)} × sin ${thetaDeg}°`, `${f2(uy)} m/s`);
+    if (!air) rows += head('Vertically: a<sub>y</sub> = −g, landing at s<sub>y</sub> = −h');
+    rows += line(`−${fmtNum(h0)}`, `${f2(uy)}t − ½ × 9.81 × t<sup>2</sup>`);
+    rows += line('t', frac(`u<sub>y</sub> + √(u<sub>y</sub><sup>2</sup> + 2gh)`, 'g'), `<b>${T.toFixed(3)} s</b>`);
+    if (!air) rows += head('Horizontally: v<sub>x</sub> stays the same');
+    rows += line('s<sub>x</sub>', 'u<sub>x</sub>t', `${f2(ux)} × ${T.toFixed(3)}`, `<b>${R.toFixed(2)} m</b>`);
+    if (uy > 0) rows += line('highest point', `h + ${frac('u<sub>y</sub><sup>2</sup>', '2g')}`, `${fmtNum(h0)} + ${frac(`${f2(uy)}<sup>2</sup>`, '2 × 9.81')}`, `${(h0 + uy * uy / (2 * G)).toFixed(2)} m`);
+    if (air) {
+      const b = BALLS[ball], fa = flights.air;
+      rows += head(`With air resistance (${b.name})`);
+      rows += line('v<sub>t</sub>', `√(mg / k)`, `${b.vt.toFixed(1)} m/s`);
+      rows += line('t', `<b>${fa.T.toFixed(3)} s</b>`);
+      rows += line('s<sub>x</sub>', `<b>${fa.pts[fa.pts.length - 1].x.toFixed(2)} m</b>`);
+    }
+    $('derivation').innerHTML = rows;
+    $('u-value').textContent = `${u.toFixed(1)} m/s`;
+    $('theta-value').textContent = `${thetaDeg}°`;
+  }
+
+  // ---- Controls ----
+  $('u').addEventListener('input', ev => { u = Number(ev.target.value); recompute(); });
+  $('theta').addEventListener('input', ev => { thetaDeg = Number(ev.target.value); recompute(); });
+  const ballSwitch = $('ball-switch');
+  function setAir(on) {
+    air = on;
+    $('air-btn').setAttribute('aria-pressed', String(air));
+    ballSwitch.classList.toggle('hidden', !air);
+    $('key-air').classList.toggle('hidden', !air);
+    recompute();
+  }
+  $('air-btn').addEventListener('click', () => setAir(!air));
+  document.querySelectorAll('[data-ball]').forEach(b => b.addEventListener('click', () => {
+    ball = b.dataset.ball;
+    document.querySelectorAll('[data-ball]').forEach(o => o.setAttribute('aria-pressed', String(o === b)));
+    recompute();
+  }));
+  const pauseBtn = $('pause-btn');
+  function togglePause() {
+    if (!running && t >= tEnd()) t = 0;
+    running = !running;
+    pauseBtn.textContent = running ? '⏸' : '▶';
+  }
+  pauseBtn.addEventListener('click', togglePause);
+  $('restart-btn').addEventListener('click', () => { t = 0; running = true; pauseBtn.textContent = '⏸'; });
+  $('slow-btn').addEventListener('click', () => {
+    slow = slow === 1 ? 10 : 1;
+    $('slow-btn').setAttribute('aria-pressed', String(slow === 10));
+  });
+  window.addEventListener('keydown', ev => {
+    if (ev.code === 'Space' && ev.target === document.body) { ev.preventDefault(); togglePause(); }
+  });
+
+  // drag the ledge up and down; past the top of its range it becomes "very high"
+  let drag = null;
+  const TRACK = 300, VERY_PULL = 40;
+  const local = ev => { const r = scene.canvas.getBoundingClientRect(); return [ev.clientX - r.left, ev.clientY - r.top]; };
+  const onLedge = ([x, y]) => Math.hypot(x - handle.x, y - handle.y) < 16 || (x > view.ledgeX && x < SX(0) && Math.abs(y - handle.y) < 10);
+  scene.canvas.addEventListener('pointerdown', ev => {
+    const p = local(ev);
+    if (!onLedge(p)) return;
+    drag = { startY: p[1], s0: veryHigh ? TRACK + VERY_PULL + 10 : TRACK * Math.sqrt((h - H_MIN) / (H_MAX - H_MIN)) };
+    scene.canvas.setPointerCapture(ev.pointerId);
+    t = 0;
+  });
+  scene.canvas.addEventListener('pointermove', ev => {
+    const p = local(ev);
+    if (!drag) { scene.canvas.style.cursor = onLedge(p) ? 'ns-resize' : ''; return; }
+    // the drag runs along a track TRACK px long: height grows with the square of the distance (fine
+    // control near the ground), and pulling VERY_PULL px past the top makes the ledge very high
+    const sTrack = drag.s0 + (drag.startY - p[1]);
+    veryHigh = sTrack > TRACK + VERY_PULL;
+    if (!veryHigh) h = H_MIN + (H_MAX - H_MIN) * Math.max(0, Math.min(1, sTrack / TRACK)) ** 2;
+    recompute();
+    t = 0;
+  });
+  const endDrag = () => {
+    if (!drag) return;
+    drag = null;
+    h = Math.round(h * 20) / 20;
+    recompute();
+    running = true; pauseBtn.textContent = '⏸';
+  };
+  scene.canvas.addEventListener('pointerup', endDrag);
+  scene.canvas.addEventListener('pointercancel', endDrag);
+
+  // ---- Animation loop ----
+  function frame(now) {
+    if (lastFrame !== null && running && !drag) {
+      t += Math.min((now - lastFrame) / 1000, 0.05) / slow;
+      if (t >= tEnd()) { t = tEnd(); running = false; pauseBtn.textContent = '▶'; }
+    }
+    lastFrame = now;
+    drawScene();
+    drawPlot();
+    requestAnimationFrame(frame);
+  }
+
+  function resizeAll() { scene.resize(); plot.resize(); fitView(); }
+  window.addEventListener('resize', resizeAll);
+  resizeAll();
+  setAir(false);
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
