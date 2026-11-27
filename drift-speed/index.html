@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>2.1 Drift Speed</title>
+<style>
+  :root {
+    --bg: #f7f7f5;
+    --panel: #ffffff;
+    --ink: #1f2328;
+    --muted: #6b7280;
+    --grid: #e5e7eb;
+    --axis: #9ca3af;
+    --electron: #2563eb;
+    --current: #dc2626;
+    --swept: #f59e0b;
+    --focus: #7c3aed;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+  }
+  main { max-width: 1100px; margin: 0 auto; padding: 20px; }
+  .card {
+    background: var(--panel);
+    border-radius: 10px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.08);
+    padding: 14px 18px;
+    margin-bottom: 14px;
+  }
+  .frac {
+    display: inline-flex; flex-direction: column;
+    vertical-align: middle; text-align: center;
+    font-size: .85em; line-height: 1.15; margin: 0 2px;
+  }
+  .frac > span { padding: 0 3px; }
+  .frac > span:first-child { border-bottom: 1.5px solid currentColor; }
+  .intro h1 { font-size: 1.25rem; margin: 0 0 8px; }
+  .intro .formulas {
+    display: flex; gap: 3em; justify-content: center; flex-wrap: wrap;
+    font-family: "Cambria Math", "Times New Roman", serif;
+    font-size: 1.4rem; line-height: 2.4; margin: 0 0 6px;
+  }
+  .intro dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; margin: 0; }
+  .intro dt { font-family: "Cambria Math", "Times New Roman", serif; font-size: 1.1rem; text-align: center; }
+  .intro dd { margin: 0; }
+  canvas { display: block; width: 100%; }
+  #scene { height: 380px; touch-action: none; border-radius: 6px; }
+  .row { display: flex; gap: 12px 18px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
+  .row .right { margin-left: auto; display: flex; gap: 10px; }
+  .sliders { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 28px; margin-top: 12px; }
+  .slider label { display: flex; justify-content: space-between; margin-bottom: 4px; font-variant-numeric: tabular-nums; }
+  .slider input { width: 100%; accent-color: var(--ink); }
+  button {
+    font: inherit;
+    height: 2.4em; min-width: 2.4em; padding: 0 10px;
+    border-radius: 6px;
+    border: 1px solid #d1d5db;
+    background: #fff;
+    cursor: pointer;
+  }
+  button:hover { background: #f3f4f6; }
+  .switch { display: inline-flex; border: 1px solid #d1d5db; border-radius: 6px; overflow: hidden; }
+  .switch button { border: 0; border-radius: 0; }
+  .switch button + button { border-left: 1px solid #d1d5db; }
+  .switch button[aria-pressed="true"] { background: var(--ink); color: #fff; }
+  .toggle[aria-pressed="true"] { background: var(--ink); color: #fff; border-color: var(--ink); }
+  .derivation {
+    display: grid;
+    grid-template-columns: auto auto 1fr;
+    column-gap: .4em;
+    align-items: center;
+    font-family: "Cambria Math", "Times New Roman", serif;
+    font-size: 1.3rem;
+    line-height: 2.4;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    overflow-x: auto;
+  }
+  .derivation .head {
+    grid-column: 1 / -1;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-size: 1rem; font-weight: 600; line-height: 1.6; margin-top: .3em;
+  }
+  @media (max-width: 760px) { .sliders { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<main>
+  <section class="card intro">
+    <h1>2.1 Drift speed</h1>
+    <div class="formulas">
+      <span>I = nAvq</span>
+      <span>v = <span class="frac"><span>I</span><span>nAq</span></span></span>
+    </div>
+    <dl>
+      <dt>I</dt><dd>current; conventional current points opposite to the electrons' drift</dd>
+      <dt>n</dt><dd>number of mobile charge carriers per unit volume</dd>
+      <dt>A</dt><dd>cross-sectional area of the wire; drag the handle on the wire to change it</dd>
+      <dt>v</dt><dd>mean drift speed of the carriers</dd>
+      <dt>q</dt><dd>charge of one carrier; for an electron, e = 1.60 × 10<sup>−19</sup> C</dd>
+    </dl>
+  </section>
+
+  <div class="card">
+    <canvas id="scene"></canvas>
+    <div class="row">
+      <div class="switch" role="group" aria-label="Material">
+        <button data-n="28.929" aria-pressed="true">Copper</button>
+        <button data-n="22" aria-pressed="false">Semiconductor</button>
+      </div>
+      <button id="thermal-btn" class="toggle" aria-pressed="true">Thermal motion</button>
+      <div class="right">
+        <button id="pause-btn" title="Play / pause (Space)">⏸</button>
+        <button id="restart-btn" title="Count again">↺</button>
+      </div>
+    </div>
+    <div class="sliders">
+      <div class="slider">
+        <label for="I"><span>I</span><span id="I-value"></span></label>
+        <input type="range" id="I" min="0.2" max="3" step="0.1" value="1">
+      </div>
+    </div>
+  </div>
+
+  <div class="card derivation" id="derivation"></div>
+</main>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const css = getComputedStyle(document.documentElement);
+  const color = name => css.getPropertyValue(name).trim();
+  const C = {
+    ink: color('--ink'), muted: color('--muted'), grid: color('--grid'), axis: color('--axis'),
+    electron: color('--electron'), current: color('--current'), swept: color('--swept'), focus: color('--focus'),
+  };
+
+  // ---- Physics (SI) ----
+  const Q_E = 1.60e-19;
+  let I = 1.0, Amm = 1.0, logN = 28.929, thermal = true;
+  const A_RANGE = [0.5, 4];                  // mm²
+  const nOf = () => Math.pow(10, logN);
+  const drift = () => I / (nOf() * Amm * 1e-6 * Q_E);            // m/s
+
+  // ---- On screen ----
+  // The wire's radius follows √A. Dots and their speed are squeezed into a range that can be seen,
+  // but still go the right way: fewer carriers (smaller n) are drawn fewer and faster, a thicker wire
+  // or a smaller current gives a slower drift, so the number crossing each second follows I.
+  const R0 = 52;                             // px radius for A = 1 mm²
+  const radius = () => R0 * Math.sqrt(Amm);
+  const densFactor = () => Math.pow(10, (logN - 28.929) * 0.08);   // 1 for copper
+  const vVis = () => 34 * I / Amm / densFactor();                  // px per screen second
+  // The swept slice has a fixed length: VT_PX on screen, standing for VT_REAL of real wire. The time t
+  // its electrons take to pass the section is t = vt / v (real). On screen that takes VT_PX / vVis
+  // seconds; counts longer than MAX_SCREEN are sped up by FAST and say so.
+  const VT_PX = 160, VT_REAL = 1.0e-4, MAX_SCREEN = 8;
+  const FAST = () => Math.max(1, VT_PX / vVis() / MAX_SCREEN);
+  const countScreen = () => VT_PX / (vVis() * FAST());   // screen seconds for one count
+  const tReal = () => VT_REAL / drift();                  // seconds
+  const geo = { x0: 0, x1: 0, cy: 0, plane: 0 };
+  let dots = [];
+  function populate() {
+    const R = radius(), len = geo.x1 - geo.x0;
+    // as many dots as the volume (∝ A) and density call for; keep the ones already there
+    const count = Math.round(Math.max(20, Math.min(800, 0.18 * len * Amm * densFactor())));
+    while (dots.length < count) dots.push(newDot(geo.x0 + Math.random() * len));
+    dots.length = count;
+    for (const d of dots) d.y = Math.max(-R * 0.92, Math.min(R * 0.92, d.y));
+    markSwept();
+  }
+  function newDot(x) {
+    const R = radius();
+    const y = (Math.random() * 2 - 1) * R * 0.92;
+    const th = Math.random() * 2 * Math.PI;
+    return { x, y, z: Math.random() * 2 - 1, tvx: Math.cos(th), tvy: Math.sin(th), swept: false, crossed: false };
+  }
+
+  // ---- The count: the dots inside the swept length behind the plane at the start all cross it in time t ----
+  let tCount = 0, netCrossed = 0, running = true, lastFrame = null;
+  function markSwept() {
+    const L = sweptLen();
+    for (const d of dots) { d.swept = d.x > geo.plane && d.x <= geo.plane + L; d.crossed = false; }
+    netCrossed = 0; tCount = 0;
+  }
+  const sweptLen = () => VT_PX;
+  const sweptCount = () => dots.filter(d => d.swept).length;
+
+  function step(dt) {
+    const R = radius(), v = vVis() * FAST();
+    const len = geo.x1 - geo.x0;
+    const TH = 260;                          // thermal speed on screen (px/s), far faster than the drift
+    for (const d of dots) {
+      const xOld = d.x;
+      d.x -= v * dt;                         // electrons drift to the left
+      if (thermal) {
+        if (Math.random() < dt / 0.25) { const th = Math.random() * 2 * Math.PI; d.tvx = Math.cos(th); d.tvy = Math.sin(th); }
+        d.x += d.tvx * TH * dt;
+        d.y += d.tvy * TH * dt;
+        if (Math.abs(d.y) > R * 0.95) { d.y = Math.sign(d.y) * R * 0.95; d.tvy = -d.tvy; }
+      }
+      // net crossings of the plane: right to left counts +1, back again −1
+      // (counted only during the time t)
+      if (tCount <= countScreen()) {
+        if (xOld > geo.plane && d.x <= geo.plane) { netCrossed++; if (d.swept) d.crossed = true; }
+        else if (xOld <= geo.plane && d.x > geo.plane) { netCrossed--; if (d.swept) d.crossed = false; }
+      }
+      // the wire carries on: off one end, on at the other
+      if (d.x < geo.x0) d.x += len;
+      if (d.x > geo.x1) d.x -= len;
+    }
+  }
+
+  // ---- Canvas ----
+  const canvas = $('scene'), ctx = canvas.getContext('2d');
+  let W = 0, H = 0;
+  function resize() {
+    const dpr = window.devicePixelRatio || 1, r = canvas.getBoundingClientRect();
+    W = r.width; H = r.height;
+    canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    geo.x0 = 40; geo.x1 = W - 40; geo.cy = H / 2 + 22; geo.plane = geo.x0 + (geo.x1 - geo.x0) * 0.32;
+    populate();
+  }
+  function label(text, x, y, col, { align = 'center', base = 'middle', weight = '600', size = 14 } = {}) {
+    ctx.fillStyle = col;
+    ctx.font = `${weight} ${size}px system-ui, sans-serif`;
+    ctx.textAlign = align; ctx.textBaseline = base;
+    ctx.fillText(text, x, y);
+  }
+  function arrow(x1, y1, x2, y2, col, width = 2.5, head = 10) {
+    const len = Math.hypot(x2 - x1, y2 - y1);
+    if (len < 3) return;
+    const ux = (x2 - x1) / len, uy = (y2 - y1) / len, hd = Math.min(head, len * 0.6);
+    ctx.strokeStyle = col; ctx.fillStyle = col; ctx.lineWidth = width;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2 - ux * hd * 0.8, y2 - uy * hd * 0.8); ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - ux * hd - uy * hd * 0.45, y2 - uy * hd + ux * hd * 0.45);
+    ctx.lineTo(x2 - ux * hd + uy * hd * 0.45, y2 - uy * hd - ux * hd * 0.45);
+    ctx.closePath(); ctx.fill();
+  }
+  function fmtT(t) {
+    if (t >= 1) return `${t.toFixed(2)} s`;
+    if (t >= 1e-3) return `${(t * 1e3).toFixed(1)} ms`;
+    if (t >= 1e-6) return `${(t * 1e6).toFixed(2)} µs`;
+    return `${(t * 1e9).toFixed(1)} ns`;
+  }
+  const ellipse = (x, y, rx, ry) => { ctx.beginPath(); ctx.ellipse(x, y, rx, ry, 0, 0, 2 * Math.PI); };
+
+  const handle = { x: 0, y: 0 };
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    const R = radius(), cy = geo.cy, ex = R * 0.32;     // ends drawn as ellipses (seen at an angle)
+    const top = cy - R, bot = cy + R;
+    // the wire
+    const grad = ctx.createLinearGradient(0, top, 0, bot);
+    grad.addColorStop(0, '#f1e2cf'); grad.addColorStop(0.45, '#fbf3ea'); grad.addColorStop(1, '#e2cdb3');
+    ctx.fillStyle = grad;
+    ctx.fillRect(geo.x0, top, geo.x1 - geo.x0, 2 * R);
+    ctx.strokeStyle = '#b08a5a'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(geo.x0, top); ctx.lineTo(geo.x1, top); ctx.moveTo(geo.x0, bot); ctx.lineTo(geo.x1, bot); ctx.stroke();
+    ellipse(geo.x1, cy, ex, R); ctx.fillStyle = '#ead7c0'; ctx.fill(); ctx.stroke();
+    ctx.setLineDash([4, 4]); ellipse(geo.x0, cy, ex, R); ctx.stroke(); ctx.setLineDash([]);
+
+    // the swept volume A v t, behind the plane
+    const L = Math.min(sweptLen(), geo.x1 - geo.plane - ex);
+    ctx.fillStyle = 'rgba(245, 158, 11, .16)';
+    ctx.fillRect(geo.plane, top, L, 2 * R);
+    ellipse(geo.plane + L, cy, ex, R); ctx.strokeStyle = 'rgba(217, 119, 6, .7)'; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]); ctx.stroke(); ctx.setLineDash([]);
+    // its length, vt
+    const dy = bot + 22;
+    ctx.strokeStyle = '#b45309'; ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.moveTo(geo.plane, dy); ctx.lineTo(geo.plane + L, dy);
+    ctx.moveTo(geo.plane, dy - 5); ctx.lineTo(geo.plane, dy + 5); ctx.moveTo(geo.plane + L, dy - 5); ctx.lineTo(geo.plane + L, dy + 5); ctx.stroke();
+    label('vt = 0.10 mm', geo.plane + L / 2, dy + 14, '#b45309', { size: 14 });
+
+    // electrons, the ones that started in the swept volume picked out
+    const sorted = [...dots].sort((a, b) => a.z - b.z);
+    for (const d of sorted) {
+      const x = d.x, y = cy + d.y;
+      ctx.beginPath(); ctx.arc(x, y, 3.6, 0, 2 * Math.PI);
+      if (d.swept) { ctx.fillStyle = d.crossed ? '#b45309' : '#d97706'; }
+      else ctx.fillStyle = C.electron;
+      ctx.globalAlpha = 0.55 + 0.45 * (d.z + 1) / 2;
+      ctx.fill(); ctx.globalAlpha = 1;
+    }
+
+    // the cross-section the count is made at
+    ellipse(geo.plane, cy, ex, R);
+    ctx.fillStyle = 'rgba(124, 58, 237, .14)'; ctx.fill();
+    ctx.strokeStyle = C.focus; ctx.lineWidth = 2; ctx.stroke();
+    label('A', geo.plane, top - 12, C.focus, { size: 15 });
+
+    // directions: conventional current one way, electron drift the other
+    const ay = top - 40;
+    arrow(geo.x1 - 230, ay, geo.x1 - 120, ay, C.current, 3, 11);
+    label(`I = ${I.toFixed(1)} A`, geo.x1 - 110, ay, C.current, { align: 'left', size: 14 });
+    arrow(geo.x0 + 150, ay, geo.x0 + 40, ay, C.electron, 3, 11);
+    label('electron drift', geo.x0 + 160, ay, C.electron, { align: 'left', size: 14 });
+
+    // the handle that sets A
+    handle.x = geo.x1 - 70; handle.y = top;
+    ctx.beginPath(); ctx.arc(handle.x, handle.y, 8, 0, 2 * Math.PI);
+    ctx.fillStyle = '#fff'; ctx.fill(); ctx.strokeStyle = C.ink; ctx.lineWidth = 2; ctx.stroke();
+    label(`A = ${Amm.toFixed(2)} mm²`, handle.x, handle.y - 16, C.ink, { size: 13 });
+
+    // the count
+    const frac = Math.min(1, tCount / countScreen());
+    const N0 = sweptCount();
+    const bx = W / 2 - 110, by = 20;
+    label(`time: ${fmtT(frac * tReal())} of t = ${fmtT(tReal())}`, bx, by, C.ink, { align: 'left', size: 13 });
+    if (FAST() > 1.05) label(`shown ${Math.round(FAST())}× faster`, bx, by + 40, C.muted, { align: 'left', size: 12 });
+    label(`net crossings: ${netCrossed} of ${N0}`, bx, by + 20, '#b45309', { align: 'left', size: 13 });
+  }
+
+  // ---- Working ----
+  const line = (lhs, ...rhs) => `<span>${lhs}</span><span>=</span><span>${rhs.join(' = ')}</span>`;
+  const frac = (p, q) => `<span class="frac"><span>${p}</span><span>${q}</span></span>`;
+  const head = text => `<span class="head">${text}</span>`;
+  function sci(v, sig = 2) {
+    const ex = Math.floor(Math.log10(Math.abs(v)) + 1e-9), m = v / Math.pow(10, ex);
+    if (ex >= -2 && ex <= 2) return String(Number(v.toPrecision(sig + 1)));
+    return `${m.toFixed(sig - 1)} × 10<sup>${String(ex).replace('-', '−')}</sup>`;
+  }
+  function updateWorking() {
+    const n = nOf(), A = Amm * 1e-6, v = drift();
+    let rows = head('In time t the carriers in a length vt of wire, a volume Avt, pass through the section A');
+    rows += line('number passing', 'nAvt');
+    rows += line('charge passing', 'nAvtq');
+    rows += line('I', frac('Q', 't'), frac('nAvtq', 't'), 'nAvq');
+    rows += head('So the drift speed');
+    rows += line('v', frac('I', 'nAq'), frac(I.toFixed(1), `${sci(n)} × ${sci(A)} × 1.60 × 10<sup>−19</sup>`), `<b>${sci(v)} m/s</b>`);
+    rows += head('The slice counted, vt = 0.10 mm');
+    const t = tReal(), N = n * A * VT_REAL;
+    rows += line('t', frac('vt', 'v'), frac('1.0 × 10<sup>−4</sup>', sci(v)), `<b>${fmtT(t).replace(' ', '&nbsp;')}</b>`);
+    rows += line('number passing', 'nA(vt)', `${sci(n)} × ${sci(A)} × 1.0 × 10<sup>−4</sup>`, sci(N));
+    rows += line('Q', `${sci(N)} × 1.60 × 10<sup>−19</sup>`, `${sci(N * Q_E)} C`);
+    rows += line('I', frac('Q', 't'), frac(`${sci(N * Q_E)}`, sci(t)), `${I.toFixed(1)} A`);
+    $('derivation').innerHTML = rows;
+    $('I-value').textContent = `${I.toFixed(1)} A`;
+  }
+
+  // ---- Controls ----
+  $('I').addEventListener('input', ev => { I = Number(ev.target.value); markSwept(); updateWorking(); });
+  document.querySelectorAll('[data-n]').forEach(b => b.addEventListener('click', () => {
+    logN = Number(b.dataset.n);
+    document.querySelectorAll('[data-n]').forEach(o => o.setAttribute('aria-pressed', String(o === b)));
+    populate(); updateWorking();
+  }));
+  $('thermal-btn').addEventListener('click', () => {
+    thermal = !thermal;
+    $('thermal-btn').setAttribute('aria-pressed', String(thermal));
+    markSwept();
+  });
+  const pauseBtn = $('pause-btn');
+  function togglePause() { running = !running; pauseBtn.textContent = running ? '⏸' : '▶'; }
+  pauseBtn.addEventListener('click', togglePause);
+  $('restart-btn').addEventListener('click', () => { markSwept(); running = true; pauseBtn.textContent = '⏸'; });
+  window.addEventListener('keydown', ev => {
+    if (ev.code === 'Space' && ev.target === document.body) { ev.preventDefault(); togglePause(); }
+  });
+
+  // drag the handle up and down to change A
+  let drag = null;
+  const local = ev => { const r = canvas.getBoundingClientRect(); return [ev.clientX - r.left, ev.clientY - r.top]; };
+  const near = ([x, y]) => Math.hypot(x - handle.x, y - handle.y) < 14;
+  canvas.addEventListener('pointerdown', ev => {
+    const p = local(ev);
+    if (!near(p)) return;
+    drag = true; canvas.setPointerCapture(ev.pointerId);
+  });
+  canvas.addEventListener('pointermove', ev => {
+    const p = local(ev);
+    if (!drag) { canvas.style.cursor = near(p) ? 'ns-resize' : ''; return; }
+    const R = Math.max(R0 * Math.sqrt(A_RANGE[0]), Math.min(R0 * Math.sqrt(A_RANGE[1]), geo.cy - p[1]));
+    const old = radius();
+    Amm = Math.round((R / R0) ** 2 * 20) / 20;
+    // stretch the dots with the wire, then add or remove some to match its new size
+    const k = radius() / old;
+    for (const d of dots) d.y *= k;
+    populate();
+    updateWorking();
+  });
+  const endDrag = () => { drag = null; };
+  canvas.addEventListener('pointerup', endDrag);
+  canvas.addEventListener('pointercancel', endDrag);
+
+  function frame(now) {
+    if (lastFrame !== null && running && !drag) {
+      const dt = Math.min((now - lastFrame) / 1000, 0.05);
+      tCount += dt;
+      step(dt);
+      if (tCount >= countScreen() + 1.2) markSwept();    // count again after a short pause at the end
+    }
+    lastFrame = now;
+    draw();
+    requestAnimationFrame(frame);
+  }
+  window.addEventListener('resize', resize);
+  resize();
+  dots = []; populate();
+  updateWorking();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
