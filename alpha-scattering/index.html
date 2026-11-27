@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>4.1 Alpha Scattering</title>
+<style>
+  :root {
+    --bg: #f7f7f5;
+    --panel: #ffffff;
+    --ink: #1f2328;
+    --muted: #6b7280;
+    --grid: #e5e7eb;
+    --axis: #9ca3af;
+    --alpha: #d97706;       /* α particles on their way in */
+    --gold: #b8860b;
+    --nucleus: #dc2626;
+    --straight: #2563eb;
+    --deflected: #059669;
+    --rebound: #dc2626;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+  }
+  main { max-width: 1100px; margin: 0 auto; padding: 20px; }
+  .card {
+    background: var(--panel);
+    border-radius: 10px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.08);
+    padding: 14px 18px;
+    margin-bottom: 14px;
+  }
+  .intro h1 { font-size: 1.25rem; margin: 0 0 8px; }
+  .intro dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; margin: 0; }
+  .intro dt { font-weight: 600; text-align: right; }
+  .intro dd { margin: 0; }
+  canvas { display: block; width: 100%; }
+  #view { height: 480px; }
+  #view.nucleus { height: 560px; }
+  .stage { position: relative; }
+  .stage .corner {
+    position: absolute; display: inline-flex; align-items: center; gap: 9px;
+    height: 44px; padding: 0 15px; border-radius: 22px;
+    font-size: 14px; font-weight: 600; color: var(--ink);
+    box-shadow: 0 2px 6px rgba(31,35,40,.12);
+  }
+  .corner svg { width: 18px; height: 18px; }
+  .corner:focus-visible { outline: 3px solid #2563eb; outline-offset: 3px; }
+  #zoom-btn { font-size: inherit; width: 2.4em; height: 2.4em; border-radius: 6px; padding: 0; justify-content: center; color: white; border-color: var(--ink); background: var(--ink); }
+  #zoom-btn:hover { background: #374151; }
+  #zoom-btn .plus { display: none; }
+  #zoom-btn.zoom-in .plus { display: inline; }
+  .stage .tr { top: 10px; right: 0; }
+  .stage .bl { bottom: 10px; left: 10px; }
+  .bar { display: flex; gap: 10px 14px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
+  .bar .title { font-weight: 600; margin-right: auto; }
+  button {
+    font: inherit;
+    height: 2.4em; min-width: 2.4em; padding: 0 10px;
+    border-radius: 6px;
+    border: 1px solid #d1d5db;
+    background: #fff;
+    cursor: pointer;
+  }
+  button:hover { background: #f3f4f6; }
+  .toggle[aria-pressed="true"] { background: var(--ink); color: #fff; border-color: var(--ink); }
+  .tally { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 10px; }
+  .tally div { border-radius: 8px; padding: 8px 12px; background: #f8fafc; border: 1px solid #e5e7eb; font-variant-numeric: tabular-nums; }
+  .tally .name { font-weight: 600; }
+  .tally .num { font-size: 1.3rem; font-weight: 700; }
+  .s { color: var(--straight); } .d { color: var(--deflected); } .r { color: var(--rebound); }
+  .hidden { display: none !important; }
+  @media (max-width: 760px) { .tally { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<main>
+  <section class="card intro">
+    <h1>4.1 Alpha scattering</h1>
+    <dl>
+      <dt>α particle</dt><dd>a helium nucleus: charge +2e, fast and positively charged</dd>
+      <dt>gold foil</dt><dd>a very thin sheet of gold atoms, each with a nucleus of charge +79e</dd>
+      <dt>screen</dt><dd>zinc sulfide: it flashes where an α particle hits it</dd>
+    </dl>
+  </section>
+
+  <div class="card">
+    <div class="bar">
+      <span class="title" id="view-title">Experiment</span>
+      <button id="fast-btn" class="toggle" aria-pressed="false">1000× faster</button>
+      <button id="pause-btn" title="Play / pause (Space)">⏸</button>
+      <button id="reset-btn" title="Start the count again">↺</button>
+    </div>
+    <div class="stage">
+      <canvas id="view"></canvas>
+      <button id="zoom-btn" class="corner tr hidden" aria-label="Zoom out">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+          <circle cx="10" cy="10" r="7"/><path d="m15 15 6 6 M7 10h6"/><path class="plus" d="M10 7v6"/>
+        </svg>
+      </button>
+      <button id="back-btn" class="corner bl hidden">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M20 12H4m7-7-7 7 7 7"/>
+        </svg>
+        Experiment
+      </button>
+    </div>
+    <div class="tally" id="tally">
+      <div><span class="name s">Straight through</span><br><span class="num s" id="n-s">0</span></div>
+      <div><span class="name d">Deflected</span><br><span class="num d" id="n-d">0</span></div>
+      <div><span class="name r">Rebounded</span><br><span class="num r" id="n-r">0</span></div>
+    </div>
+  </div>
+</main>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const css = getComputedStyle(document.documentElement);
+  const color = name => css.getPropertyValue(name).trim();
+  const C = {
+    ink: color('--ink'), muted: color('--muted'), grid: color('--grid'), axis: color('--axis'),
+    alpha: color('--alpha'), gold: color('--gold'), nucleus: color('--nucleus'),
+    s: color('--straight'), d: color('--deflected'), r: color('--rebound'),
+  };
+  const catCol = c => (c === 's' ? C.s : c === 'd' ? C.d : C.r);
+  const canvas = $('view'), ctx = canvas.getContext('2d');
+  let W = 0, H = 0;
+  function label(text, x, y, col, { align = 'center', base = 'middle', weight = '600', size = 13 } = {}) {
+    ctx.fillStyle = col;
+    ctx.font = `${weight} ${size}px system-ui, sans-serif`;
+    ctx.textAlign = align; ctx.textBaseline = base;
+    ctx.fillText(text, x, y);
+  }
+  function arrow(x1, y1, x2, y2, col, width = 2, head = 9) {
+    const len = Math.hypot(x2 - x1, y2 - y1);
+    if (len < 3) return;
+    const ux = (x2 - x1) / len, uy = (y2 - y1) / len, hd = Math.min(head, len * 0.6);
+    ctx.strokeStyle = col; ctx.fillStyle = col; ctx.lineWidth = width;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2 - ux * hd * 0.8, y2 - uy * hd * 0.8); ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - ux * hd - uy * hd * 0.45, y2 - uy * hd + ux * hd * 0.45);
+    ctx.lineTo(x2 - ux * hd + uy * hd * 0.45, y2 - uy * hd - ux * hd * 0.45);
+    ctx.closePath(); ctx.fill();
+  }
+
+  // ---- Rutherford scattering by single gold nuclei: 5 MeV α particles, gold foil 0.4 µm thick ----
+  // Seen along the beam, the foil's nuclei (all its layers together) leave each one an area of
+  // π B_MAX²; an α particle passes closest to one nucleus at a distance b spread evenly over that area,
+  // and turns through θ = 2 tan⁻¹(D / 2b), D being the closest approach of a head-on α particle.
+  const D_HEAD = 4.5e-14;                      // m
+  const NT = 5.9e28 * 0.4e-6;                  // gold nuclei per m² of foil
+  const B_MAX = 1 / Math.sqrt(Math.PI * NT);   // about 81 D
+  const RATIO = B_MAX / D_HEAD;
+  const thetaFor = (b, D) => 2 * Math.atan(D / (2 * b));
+  const sampleImpact = radius => radius * Math.sqrt(Math.random());
+  const sampleTheta = () => thetaFor(sampleImpact(B_MAX), D_HEAD);
+  const category = deg => (deg < 2 ? 's' : deg <= 90 ? 'd' : 'r');
+
+  const fastRate = { exp: 1000, nucleus: 100 };
+  const fastEnabled = { exp: false, nucleus: false };
+  let view = 'exp', running = true;
+  let experimentTally;
+
+  // =====================================================================
+  // View 1: the experiment (1 α particle a second, or 1000× faster)
+  // =====================================================================
+  const EDGES = [0, 2, 4, 6, 8, 10]; for (let a = 15; a <= 180; a += 5) EDGES.push(a);
+  const NBIN = EDGES.length - 1;
+  const binOf = deg => { let i = 0; while (i < NBIN - 1 && deg >= EDGES[i + 1]) i++; return i; };
+  let bins, flashes, flying, toEmit;
+  function resetExp() {
+    bins = { up: new Array(NBIN).fill(0), down: new Array(NBIN).fill(0) };
+    flashes = []; flying = []; toEmit = 0.999;
+    experimentTally = { s: 0, d: 0, r: 0 };
+  }
+  // A cylindrical screen surrounds the foil. Tilt each scattering plane only
+  // as far as the screen can catch, keeping its Rutherford angle to +x exact.
+  const screenHalfHeight = 0.16; // in units of the cylinder radius
+  const maxTilt = Math.atan(screenHalfHeight);
+  const eg = { foil: null };
+  function scatteredRay(theta, side, tilt) {
+    const x = Math.cos(theta);
+    const y = side * Math.sin(theta) * Math.cos(tilt);
+    const z = Math.sin(theta) * Math.sin(tilt);
+    return { x, y, z, end: 1 / Math.hypot(x, y) };
+  }
+  function stepExp(dt) {
+    const mult = fastEnabled.exp ? fastRate.exp : 1;
+    toEmit += mult * dt;
+    while (toEmit >= 1) {
+      toEmit--;
+      const theta = sampleTheta(), side = Math.random() < 0.5 ? 1 : -1;
+      const ray = scatteredRay(theta, side, (2 * Math.random() - 1) * maxTilt);
+      const deg = theta * 180 / Math.PI, cat = category(deg);
+      const visible = !fastEnabled.exp || deg > 10 || Math.random() < 20 / mult;
+      flying.push({ ...ray, cat, side, bin: binOf(deg), visible, d: -0.78 });
+    }
+    for (const a of flying) a.d += 1.4 * dt;
+    flying = flying.filter(a => {
+      if (a.d < a.end) return true;
+      experimentTally[a.cat]++;
+      bins[a.side > 0 ? 'up' : 'down'][a.bin]++;
+      if (a.visible) flashes.push({ x: a.end*a.x, y: a.end*a.y, z: a.end*a.z,
+        cat: a.cat, life: a.cat === 's' && fastEnabled.exp ? 0.6 : 2.5 });
+      return false;
+    });
+    for (const f of flashes) f.life -= dt;
+    flashes = flashes.filter(f => f.life > 0);
+  }
+  function drawExp() {
+    const az = 0.24, el = 62 * Math.PI / 180;
+    const projectedHalfHeight = Math.sin(el) + screenHalfHeight * Math.cos(el);
+    const scale = Math.min(W * 0.40, (H / 2 - 32) / projectedHalfHeight);
+    const proj = (x, y, z) => [
+      W / 2 + scale * (x * Math.cos(az) + y * Math.sin(az)),
+      H / 2 + scale * ((y * Math.cos(az) - x * Math.sin(az)) * Math.sin(el) - z * Math.cos(el))
+    ];
+    const rim = (a, z, radius = 1) => proj(radius * Math.cos(a), radius * Math.sin(a), z);
+    function polygon(points, fill) {
+      ctx.fillStyle = fill; ctx.beginPath(); ctx.moveTo(...points[0]);
+      for (const point of points.slice(1)) ctx.lineTo(...point);
+      ctx.closePath(); ctx.fill();
+    }
+    function arcPoints(start, end, z, radius = 1, steps = 48) {
+      return Array.from({ length: steps + 1 }, (_, i) => rim(start + (end-start)*i/steps, z, radius));
+    }
+    function screenHalf(start, fill) {
+      const end = start + Math.PI;
+      const top = arcPoints(start, end, screenHalfHeight);
+      const bottom = arcPoints(end, start, -screenHalfHeight);
+      polygon([...top, ...bottom], fill);
+      ctx.strokeStyle = '#8b9ca9'; ctx.lineWidth = 1.5;
+      for (const edge of [top, bottom]) {
+        ctx.beginPath(); ctx.moveTo(...edge[0]);
+        for (const point of edge.slice(1)) ctx.lineTo(...point);
+        ctx.stroke();
+      }
+    }
+    screenHalf(az - Math.PI, '#dce5eb');
+    const mx = Math.max(1, ...bins.up, ...bins.down);
+    for (const [key, sign] of [['up', 1], ['down', -1]]) {
+      bins[key].forEach((n, i) => {
+        if (!n) return;
+        const start = sign * EDGES[i] * Math.PI / 180, end = sign * EDGES[i+1] * Math.PI / 180;
+        const radius = 1.02 + 0.13 * Math.log1p(n) / Math.log1p(mx);
+        ctx.globalAlpha = 0.65;
+        polygon([...arcPoints(start, end, 0, 1.02, 3), ...arcPoints(end, start, 0, radius, 3)],
+          catCol(category((EDGES[i] + EDGES[i+1]) / 2)));
+        ctx.globalAlpha = 1;
+      });
+    }
+
+    // The source aperture points along +x, normal to the foil.
+    polygon([proj(-.97,-.07,.06), proj(-.78,-.07,.06), proj(-.78,.07,.06), proj(-.97,.07,.06)], '#64748b');
+    polygon([proj(-.97,.07,.06), proj(-.78,.07,.06), proj(-.78,.07,-.06), proj(-.97,.07,-.06)], '#475569');
+    polygon([proj(-.78,-.07,.06), proj(-.78,.07,.06), proj(-.78,.07,-.06), proj(-.78,-.07,-.06)], '#273344');
+    const foil = [proj(0,-.18,.24), proj(0,.18,.24), proj(0,.18,-.24), proj(0,-.18,-.24)];
+    polygon(foil, hoverFoil ? '#e5ba43' : '#d3a329');
+    ctx.strokeStyle = C.gold; ctx.lineWidth = 2; ctx.stroke();
+    const fx = foil.map(p => p[0]), fy = foil.map(p => p[1]);
+    eg.foil = { x: Math.min(...fx), y: Math.min(...fy), w: Math.max(...fx)-Math.min(...fx), h: Math.max(...fy)-Math.min(...fy) };
+
+    for (const a of flying) {
+      if (!a.visible) continue;
+      const p = a.d < 0 ? proj(a.d, 0, 0) : proj(a.d*a.x, a.d*a.y, a.d*a.z);
+      ctx.fillStyle = a.d < 0 ? C.alpha : catCol(a.cat);
+      ctx.beginPath(); ctx.arc(...p, fastEnabled.exp && a.cat === 's' ? 2.4 : 3.6, 0, 2*Math.PI); ctx.fill();
+    }
+    screenHalf(az, 'rgba(202,216,225,.32)');
+    for (const f of flashes) {
+      const p = proj(f.x, f.y, f.z);
+      ctx.globalAlpha = Math.min(1, f.life); ctx.fillStyle = catCol(f.cat);
+      ctx.beginPath(); ctx.arc(...p, f.cat === 's' && fastEnabled.exp ? 4 : 6, 0, 2*Math.PI); ctx.fill();
+      if (f.cat === 'r') {
+        ctx.strokeStyle = C.r; ctx.lineWidth = 2; ctx.beginPath();
+        ctx.arc(...p, 7 + 12*(2.5-f.life), 0, 2*Math.PI); ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+    }
+    for (const d of [0, 30, 60, 90, 120, 150, 180]) {
+      label(d + '°', ...rim(d*Math.PI/180, -screenHalfHeight - .075), C.muted, { size: 11 });
+    }
+    label('α source', ...proj(-.82, 0, -.16), C.ink, { size: 12 });
+    label('zinc sulfide screen', W/2, rim(az-Math.PI/2,screenHalfHeight)[1]-16, C.muted);
+  }
+
+  // =====================================================================
+  // View 2: close-up of a gold nucleus, zooming out to the next one
+  // =====================================================================
+  // World units: px at the zoomed-in scale. One nucleus is at y = 0 and the next at y = S, and particles
+  // enter this planar beam uniformly across its visible height.
+  // Zoomed in, the view shows only the narrow region close to the first nucleus.
+  const Dw = 26;                               // closest approach, head-on (world units)
+  const S = 2 * RATIO * Dw;                    // world distance between the two nuclei
+  const V = 170;                               // α speed on screen (px/s), at any zoom
+  const nuclei = [0, S];
+  let zoomT = 0, zoomTo = 0;                   // 0 = in, 1 = out
+  let alphas = [], toLaunch = 0;
+  const zoomedOut = () => zoomTo === 1;
+  // the view: scale (px per world unit), and where the first nucleus is on screen. It slides from the
+  // middle to near the bottom as the view zooms out, so the next nucleus arrives near the top.
+  const EDGE = 12;
+  function viewNow() {
+    const sOut = (H - 2 * EDGE) / (2 * S);
+    const sc = Math.exp(Math.log(sOut) * zoomT);
+    const y0 = H / 2 + (S / 2) * sOut * zoomT;
+    return { sc, cx: W * 0.55, y0, cy: (y0 - H / 2) / sc };    // cy: world y at the middle of the screen
+  }
+  const toScreen = (x, y, v) => [v.cx + x * v.sc, v.y0 - y * v.sc];
+  const wideView = () => zoomedOut() && zoomT === 1;
+  function launchOne() {
+    const v = viewNow();
+    const screenY = 4 + Math.random() * (H - 8); // leave room for the particle radius
+    const y = (v.y0 - screenY) / v.sc;
+    const ny = zoomedOut() && y > S / 2 ? S : 0;
+    const offset = y - ny;
+    const x = (8 - v.cx) / v.sc;
+    const k = Dw / 2;
+    // Recover the incoming impact parameter for an orbit through this exact entry point.
+    // On the incoming branch, b² - offset*b + k*(r+x) = 0.
+    const r = Math.hypot(x, offset);
+    const impact = offset * (1 + Math.sqrt(1 - 4 * k / (r - x))) / 2;
+
+    // Rutherford hyperbola about the sampled nucleus. For incoming offset b,
+    // k = D/2 and a decreasing parameter q, x = ((b²-k²)/q - 2k - q)/2.
+    const orbitTerm = impact * impact - k * k;
+    const distance = -x - k;
+    const q = distance + Math.sqrt(distance * distance + orbitTerm);
+    alphas.push({ x, y, ny, impact, q, trail: zoomedOut() ? [] : [[x, y]], life: 1, done: false, angle: 0 });
+  }
+  function stepNucleus(dt) {
+    const rate = wideView() && fastEnabled.nucleus ? fastRate.nucleus : 1;
+    toLaunch += dt * (zoomedOut() ? 1 : 2) * rate;
+    while (toLaunch >= 1) { toLaunch--; launchOne(); }
+    const v = viewNow();
+    const distance = V * dt / v.sc;
+    const k = Dw / 2;
+    for (const a of alphas) {
+      if (a.done) { a.life -= dt / 2; continue; }
+      // Advance along the orbit. At unit incident speed, the time per unit
+      // decrease of log(q) is (q + 2k + (b² + k²)/q)/2.
+      const b2 = a.impact * a.impact;
+      const timeScale = q => (q + 2 * k + (b2 + k * k) / q) / 2;
+      const midQ = a.q * Math.exp(-distance / (2 * timeScale(a.q)));
+      a.q *= Math.exp(-distance / timeScale(midQ));
+      a.x = ((b2 - k * k) / a.q - 2 * k - a.q) / 2;
+      a.y = a.ny + a.impact * (1 + k / a.q);
+      a.angle = Math.atan2(2 * a.impact * k, a.q * a.q + b2 - k * k);
+      if (!zoomedOut()) a.trail.push([a.x, a.y]);
+      const [sx, sy] = toScreen(a.x, a.y, v);
+      if (sx < -4 || sx > W + 4 || sy < -4 || sy > H + 4) {
+        a.done = true;
+        if (zoomedOut()) a.life = 0;
+      }
+    }
+    alphas = alphas.filter(a => a.life > 0);
+  }
+  function drawNucleus() {
+    const v = viewNow();
+    nuclei.forEach((ny, i) => {
+      const [x, y] = toScreen(0, ny, v);
+      if (y < -30 || y > H + 30) return;
+      const rad = Math.max(3, 9 * Math.min(1, v.sc * 1.6));
+      if (v.sc > 0.4) {
+        ctx.strokeStyle = 'rgba(220,38,38,.35)'; ctx.setLineDash([4, 4]); ctx.lineWidth = 1.2;
+        ctx.beginPath(); ctx.arc(x, y, Dw * v.sc, 0, 2 * Math.PI); ctx.stroke(); ctx.setLineDash([]);
+        if (i === 0) label('closest approach, head-on', x + Dw * v.sc + 6, y - Dw * v.sc + 2, 'rgba(220,38,38,.8)', { align: 'left', size: 11, weight: '500' });
+      }
+      const g = ctx.createRadialGradient(x - 2, y - 2, 1, x, y, rad);
+      g.addColorStop(0, '#fca5a5'); g.addColorStop(1, C.nucleus);
+      ctx.beginPath(); ctx.arc(x, y, rad, 0, 2 * Math.PI); ctx.fillStyle = g; ctx.fill();
+      label('gold nucleus, +79e', x, y + (i === 0 ? 1 : -1) * Math.max(rad + 12, Dw * v.sc + 16), C.nucleus, { size: 12 });
+    });
+    // Draw the wide beam in a single canvas fill, including every live particle.
+    if (zoomedOut()) {
+      ctx.beginPath();
+      for (const a of alphas) {
+        if (a.done) continue;
+        const [x, y] = toScreen(a.x, a.y, v);
+        ctx.moveTo(x + 4, y);
+        ctx.arc(x, y, 4, 0, 2 * Math.PI);
+      }
+      ctx.fillStyle = C.alpha; ctx.globalAlpha = 0.85; ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+    for (const a of alphas) {
+      ctx.globalAlpha = Math.max(0, Math.min(1, a.life)) * 0.85;
+      if (!zoomedOut()) {
+        const th = Math.abs(a.angle) * 180 / Math.PI;
+        ctx.strokeStyle = catCol(category(th)); ctx.lineWidth = 1.8;
+        ctx.beginPath();
+        a.trail.forEach(([x, y], i) => { const p = toScreen(x, y, v); i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]); });
+        ctx.stroke();
+      }
+      if (!a.done) {
+        const [x, y] = toScreen(a.x, a.y, v);
+        if (!zoomedOut()) {
+          ctx.beginPath(); ctx.arc(x, y, 4, 0, 2 * Math.PI); ctx.fillStyle = C.alpha; ctx.fill();
+        }
+        // the repulsion from the nearer nucleus
+        const ny = a.ny;
+        const dx = a.x, dy = a.y - ny, rw = Math.hypot(dx, dy), r = rw * v.sc;
+        const L = Math.min(60, 1400 / (r * r) * Dw * v.sc);
+        if (L > 4) arrow(x, y, x + dx / rw * L, y - dy / rw * L, C.nucleus, 2, 8);
+      }
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // ---- Experiment tally ----
+  function updateTally() {
+    const show = view === 'exp' || wideView();
+    $('fast-btn').classList.toggle('hidden', !show);
+    $('tally').classList.toggle('hidden', view !== 'exp');
+    if (view !== 'exp') return;
+    for (const k of ['s', 'd', 'r']) {
+      $(`n-${k}`).textContent = experimentTally[k].toLocaleString('en-GB');
+    }
+  }
+
+  // ---- Views and controls ----
+  let fade = 0;
+  function updateZoomButton() {
+    $('zoom-btn').classList.toggle('zoom-in', zoomedOut());
+    $('zoom-btn').setAttribute('aria-label', zoomedOut() ? 'Zoom in' : 'Zoom out');
+  }
+  function updateViewControls() {
+    $('view-title').textContent = view === 'exp' ? 'Experiment' :
+      zoomedOut() ? 'Closer look at nuclei' : 'Closer look at one nucleus';
+    $('fast-btn').textContent = fastRate[view] + '× faster';
+    $('fast-btn').setAttribute('aria-pressed', String(fastEnabled[view]));
+  }
+  function setView(v) {
+    if (view === 'nucleus' && v === 'exp') fastEnabled.exp = true;
+    view = v; fade = 1;
+    canvas.classList.toggle('nucleus', v === 'nucleus');
+    resize();
+    $('zoom-btn').classList.toggle('hidden', v === 'exp');
+    $('back-btn').classList.toggle('hidden', v === 'exp');
+    if (v === 'nucleus') { zoomT = zoomTo = 0; updateZoomButton(); alphas = []; toLaunch = 0.999; }
+    updateViewControls();
+    canvas.style.cursor = '';
+    updateTally();
+  }
+  $('back-btn').addEventListener('click', () => setView('exp'));
+  $('zoom-btn').addEventListener('click', () => {
+    zoomTo = zoomTo ? 0 : 1;
+    fastEnabled.nucleus = false;
+    updateViewControls();
+    updateZoomButton();
+    updateTally();
+  });
+  $('fast-btn').addEventListener('click', () => {
+    fastEnabled[view] = !fastEnabled[view];
+    updateViewControls();
+  });
+  const pauseBtn = $('pause-btn');
+  function togglePause() { running = !running; pauseBtn.textContent = running ? '⏸' : '▶'; }
+  pauseBtn.addEventListener('click', togglePause);
+  $('reset-btn').addEventListener('click', () => {
+    if (view === 'exp') resetExp(); else alphas = [];
+    updateTally();
+  });
+  window.addEventListener('keydown', ev => { if (ev.code === 'Space' && ev.target === document.body) { ev.preventDefault(); togglePause(); } });
+
+  // click the foil to look closer
+  let hoverFoil = false;
+  const local = ev => { const r = canvas.getBoundingClientRect(); return [ev.clientX - r.left, ev.clientY - r.top]; };
+  const onFoil = ([x, y]) => view === 'exp' && eg.foil && x > eg.foil.x - 8 && x < eg.foil.x + eg.foil.w + 8 && y > eg.foil.y - 8 && y < eg.foil.y + eg.foil.h + 24;
+  canvas.addEventListener('pointermove', ev => { hoverFoil = onFoil(local(ev)); canvas.style.cursor = hoverFoil ? 'pointer' : ''; });
+  canvas.addEventListener('pointerleave', () => { hoverFoil = false; });
+  canvas.addEventListener('click', ev => { if (onFoil(local(ev))) { hoverFoil = false; setView('nucleus'); } });
+
+  let lastFrame = null, tallyClock = 0;
+  function frame(now) {
+    if (lastFrame !== null) {
+      const dtReal = Math.min((now - lastFrame) / 1000, 0.05);
+      // the zoom takes about 1.5 s
+      const z0 = zoomT;
+      zoomT += Math.sign(zoomTo - zoomT) * Math.min(Math.abs(zoomTo - zoomT), dtReal / 1.5);
+      if (z0 !== zoomT) updateTally();
+      if (running) {
+        stepExp(dtReal);                          // the experiment keeps counting in the background
+        if (view === 'nucleus') stepNucleus(dtReal);
+        tallyClock += dtReal;
+        if (tallyClock > 0.1) { tallyClock = 0; updateTally(); }
+      }
+      fade = Math.max(0, fade - dtReal / 0.35);
+    }
+    lastFrame = now;
+    ctx.clearRect(0, 0, W, H);
+    if (view === 'exp') drawExp(); else drawNucleus();
+    if (fade > 0) { ctx.fillStyle = `rgba(255,255,255,${fade})`; ctx.fillRect(0, 0, W, H); }
+    requestAnimationFrame(frame);
+  }
+  function resize() {
+    const dpr = window.devicePixelRatio || 1, r = canvas.getBoundingClientRect();
+    W = r.width; H = r.height;
+    canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  window.addEventListener('resize', resize);
+  resize();
+  resetExp();
+  setView('exp'); fade = 0;
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

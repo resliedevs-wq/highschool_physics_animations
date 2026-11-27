@@ -31,6 +31,10 @@ Each animation is a single self-contained HTML file. Open it directly in a brows
 - 3.9 [Double slit and diffraction grating](double-slit-grating/index.html): x = λD/a and d sin θ = nλ; fringes on a screen with point P's path difference, grating orders at their true angles and white-light spectra
 - 3.10 [Reading a CRO](cro/index.html): T = divisions × time-base, f = 1/T, V = divisions × y-gain; time-base and y-gain knobs, snapping markers, sine/square/triangle input, time-base off, and a hidden input for practice
 
+### 4 Nuclear physics
+
+- 4.1 [Alpha scattering](alpha-scattering/index.html): α particles scatter from gold foil onto a zinc sulfide screen. Click the foil to follow particles past one nucleus, then zoom out to watch particles pass between and around two nuclei. Fast mode runs at 1000× in the experiment and 100× in the two-nucleus view.
+
 ### 5 A2-Level
 
 - 5.1 [Hall effect](hall-effect/index.html): V_H = BI/(ntq); the Hall voltage builds up until qE = Bqv, with electrons or holes as charge carriers, B and n adjustable, and d and t changed by dragging the slab
