@@ -85,8 +85,11 @@
   #simulation.expanded {
     width: 100%; height: 100%; margin: 0; border-radius: 0; overflow: auto;
     display: grid; grid-template-columns: minmax(0, 1600px); justify-content: center;
-    grid-template-rows: minmax(230px, min(45vh, 700px)) auto auto minmax(max-content, 1fr) auto;
+    grid-template-rows: 1fr minmax(230px, min(45vh, 700px)) auto auto 5fr auto auto;
   }
+  #simulation.expanded::before { content: ""; }
+  #simulation.expanded .graph { grid-row: 6; }
+  #simulation.expanded .screen-tools { grid-row: 7; }
   #simulation.expanded #scene { height: 100%; min-height: 0; }
   #simulation.expanded #plot { height: clamp(120px, 18vh, 175px); }
   body.page-fullscreen { overflow: hidden; }
