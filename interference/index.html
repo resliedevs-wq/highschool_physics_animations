@@ -122,6 +122,27 @@
   @media (max-width: 700px) {
     .controls { grid-template-columns: 1fr; }
   }
+  .screen-tools { display: flex; justify-content: flex-end; margin-top: 8px; }
+  #screen-toggle { display: inline-grid; place-items: center; }
+  #screen-toggle svg { width: 18px; height: 18px; }
+  #screen-toggle .exit, #screen-toggle[aria-pressed="true"] .enter { display: none; }
+  #screen-toggle[aria-pressed="true"] .exit { display: block; }
+  .sim-panel { min-width: 0; }
+  .sim-panel + .sim-panel { margin-top: 12px; }
+  .sim-plot { border-top: 2px solid #94a3b8; padding-top: 12px; }
+  #simulation.expanded {
+    width: 100%; height: 100%; margin: 0; border-radius: 0;
+    display: grid; justify-content: center;
+    grid-template-columns: minmax(0, 1600px);
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+  .expanded .sim-content { min-height: 0; overflow: auto; }
+  .expanded input[type="range"] { max-width: 100%; margin-inline: 0; }
+  body.page-fullscreen { overflow: hidden; }
+  body.page-fullscreen main > :not(#simulation) { display: none; }
+  body.page-fullscreen #simulation { position: fixed; inset: 0; z-index: 10; }
+  #simulation.expanded #gl { height: clamp(225px, 44vh, 550px); }
+  #simulation.expanded #plot-yt { height: clamp(135px, 21vh, 270px); }
 </style>
 </head>
 <body>
@@ -145,46 +166,60 @@
     </dl>
   </section>
 
-  <div class="card">
-    <div class="view">
-      <canvas id="gl"></canvas>
-      <canvas id="overlay"></canvas>
-      <div class="phase-panel">
-        <label for="phi-slider" class="phase-value">S<sub>2</sub> is behind by <span id="phi-value"></span>π rad</label>
-        <input type="range" id="phi-slider" min="-1" max="1" step="0.05" value="0">
-        <div class="phase-ends"><span>−π</span><span>π</span></div>
-      </div>
-      <div class="amps">
-        <div class="amp-row"><span>A<sub>1</sub></span><span>1.00 m</span></div>
-        <div class="slider">
-          <label for="A2-slider"><span>A<sub>2</sub></span><span><span id="A2-value"></span> m</span></label>
-          <input type="range" id="A2-slider" min="0" max="3" step="0.05" value="1">
+  <section class="card" id="simulation" aria-label="3.2 Interference of Two Sources simulation">
+    <div class="sim-content">
+      <div class="sim-panel">
+        <div class="view">
+          <canvas id="gl"></canvas>
+          <canvas id="overlay"></canvas>
+          <div class="phase-panel">
+            <label for="phi-slider" class="phase-value">S<sub>2</sub> is behind by <span id="phi-value"></span>π rad</label>
+            <input type="range" id="phi-slider" min="-1" max="1" step="0.05" value="0">
+            <div class="phase-ends"><span>−π</span><span>π</span></div>
+          </div>
+          <div class="amps">
+            <div class="amp-row"><span>A<sub>1</sub></span><span>1.00 m</span></div>
+            <div class="slider">
+              <label for="A2-slider"><span>A<sub>2</sub></span><span><span id="A2-value"></span> m</span></label>
+              <input type="range" id="A2-slider" min="0" max="3" step="0.05" value="1">
+            </div>
+          </div>
         </div>
       </div>
-    </div>
-    <canvas id="plot-yt"></canvas>
-  </div>
 
-  <div class="card controls">
-    <div class="slider">
-      <label for="d-slider"><span>d</span><span><span id="d-value"></span> m</span></label>
-      <input type="range" id="d-slider" min="1" max="10" step="0.1" value="5">
-    </div>
-    <div class="slider">
-      <label for="L-slider"><span>λ</span><span><span id="L-value"></span> m</span></label>
-      <input type="range" id="L-slider" min="1.5" max="5" step="0.1" value="2.5">
-    </div>
-    <div class="buttons">
-      <div class="switch" role="group">
-        <button id="view-3d" aria-pressed="true">3D</button>
-        <button id="view-top" aria-pressed="false">Top</button>
+      <div class="sim-panel controls">
+        <div class="slider">
+          <label for="d-slider"><span>d</span><span><span id="d-value"></span> m</span></label>
+          <input type="range" id="d-slider" min="1" max="10" step="0.1" value="5">
+        </div>
+        <div class="slider">
+          <label for="L-slider"><span>λ</span><span><span id="L-value"></span> m</span></label>
+          <input type="range" id="L-slider" min="1.5" max="5" step="0.1" value="2.5">
+        </div>
+        <div class="buttons">
+          <div class="switch" role="group">
+            <button id="view-3d" aria-pressed="true">3D</button>
+            <button id="view-top" aria-pressed="false">Top</button>
+          </div>
+          <button id="crest-btn" aria-pressed="false">Crest lines</button>
+          <button id="pause-btn" title="Play / pause (Space)">▶</button>
+          <button id="reset-btn" title="Reset t">↺</button>
+          <span class="clock">t = <span id="t-value">0.00</span> s</span>
+        </div>
       </div>
-      <button id="crest-btn" aria-pressed="false">Crest lines</button>
-      <button id="pause-btn" title="Play / pause (Space)">▶</button>
-      <button id="reset-btn" title="Reset t">↺</button>
-      <span class="clock">t = <span id="t-value">0.00</span> s</span>
+      <div class="sim-panel sim-plot">
+        <canvas id="plot-yt"></canvas>
+      </div>
     </div>
-  </div>
+    <div class="screen-tools">
+      <button id="screen-toggle" aria-label="Full screen" aria-pressed="false" title="Enter full screen">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <path class="enter" d="M9 4H4v5m11-5h5v5M4 15v5h5m11-5v5h-5"/>
+          <path class="exit" d="M4 9h5V4m6 0v5h5M9 20v-5H4m11 5v-5h5"/>
+        </svg>
+      </button>
+    </div>
+  </section>
 
   <div class="card derivation" id="derivation"></div>
 </main>
@@ -670,6 +705,7 @@
   // arrows move the focus point by λ/16; capture phase so sliders never swallow them
   const clamp = v => Math.min(HALF, Math.max(-HALF, v));
   window.addEventListener('keydown', e => {
+    if (e.target === $('screen-toggle') && e.code === 'Space') return;
     const dirs = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, 1], ArrowDown: [0, -1] };
     if (dirs[e.key]) {
       e.preventDefault();
@@ -682,6 +718,34 @@
   }, true);
 
   function resizeAll() { resizeView(); resizeYT(); }
+  const simulation = $('simulation'), screenToggle = $('screen-toggle');
+  function syncFullscreen() {
+    const expanded = document.fullscreenElement === simulation || document.body.classList.contains('page-fullscreen');
+    simulation.classList.toggle('expanded', expanded);
+    screenToggle.setAttribute('aria-pressed', String(expanded));
+    screenToggle.title = expanded ? 'Exit full screen' : 'Enter full screen';
+    resizeAll();
+  }
+  screenToggle.addEventListener('click', async () => {
+    if (document.fullscreenElement === simulation) {
+      await document.exitFullscreen();
+    } else if (document.body.classList.contains('page-fullscreen')) {
+      document.body.classList.remove('page-fullscreen');
+      syncFullscreen();
+    } else {
+      try {
+        await simulation.requestFullscreen();
+      } catch {
+        // Embedded pages and mobile browsers can restrict native fullscreen.
+        document.body.classList.add('page-fullscreen');
+        syncFullscreen();
+      }
+    }
+  });
+  document.addEventListener('fullscreenchange', syncFullscreen);
+  window.addEventListener('keydown', ev => {
+    if (ev.key === 'Escape' && document.body.classList.contains('page-fullscreen')) screenToggle.click();
+  });
   window.addEventListener('resize', resizeAll);
   resizeAll();
   syncSliders();

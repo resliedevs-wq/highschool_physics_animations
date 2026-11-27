@@ -96,6 +96,27 @@
   @media (max-width: 860px) {
     .views { grid-template-columns: 1fr; }
   }
+  .screen-tools { display: flex; justify-content: flex-end; margin-top: 8px; }
+  #screen-toggle { display: inline-grid; place-items: center; }
+  #screen-toggle svg { width: 18px; height: 18px; }
+  #screen-toggle .exit, #screen-toggle[aria-pressed="true"] .enter { display: none; }
+  #screen-toggle[aria-pressed="true"] .exit { display: block; }
+  .sim-panel { min-width: 0; }
+  .sim-panel + .sim-panel { margin-top: 12px; }
+  .sim-plot { border-top: 2px solid #94a3b8; padding-top: 12px; }
+  #simulation.expanded {
+    width: 100%; height: 100%; margin: 0; border-radius: 0;
+    display: grid; justify-content: center;
+    grid-template-columns: minmax(0, 1600px);
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+  .expanded .sim-content { min-height: 0; overflow: auto; }
+  .expanded input[type="range"] { max-width: 100%; margin-inline: 0; }
+  body.page-fullscreen { overflow: hidden; }
+  body.page-fullscreen main > :not(#simulation) { display: none; }
+  body.page-fullscreen #simulation { position: fixed; inset: 0; z-index: 10; }
+  #simulation.expanded #view-3d, #simulation.expanded #view-end { height: clamp(190px, 33vh, 410px); }
+  #simulation.expanded #plot, #simulation.expanded #bars { height: clamp(155px, 26vh, 350px); }
 </style>
 </head>
 <body>
@@ -114,45 +135,57 @@
     </dl>
   </section>
 
-  <div class="card">
-    <div class="views">
-      <canvas id="view-3d"></canvas>
-      <canvas id="view-end"></canvas>
-    </div>
-    <div class="slider">
-      <label for="theta"><span>θ</span><span id="theta-value"></span></label>
-      <input type="range" id="theta" min="0" max="360" step="1" value="60">
-    </div>
-  </div>
+  <section class="card" id="simulation" aria-label="3.5 Plane Polarisation simulation">
+    <div class="sim-content">
+      <div class="sim-panel">
+        <div class="views">
+          <canvas id="view-3d"></canvas>
+          <canvas id="view-end"></canvas>
+        </div>
+        <div class="slider">
+          <label for="theta"><span>θ</span><span id="theta-value"></span></label>
+          <input type="range" id="theta" min="0" max="360" step="1" value="60">
+        </div>
+      </div>
 
-  <div class="card controls">
-    <div class="switch" role="group" aria-label="Source">
-      <button id="src-pol" aria-pressed="true">Plane-polarised source</button>
-      <button id="src-unpol" aria-pressed="false">Unpolarised source</button>
-    </div>
-    <button id="pause-btn" title="Play / pause (Space)">⏸</button>
-    <button id="view-btn" title="Back to the starting view (or double-click the 3D view)">Reset view</button>
-  </div>
+      <div class="sim-panel controls">
+        <div class="switch" role="group" aria-label="Source">
+          <button id="src-pol" aria-pressed="true">Plane-polarised source</button>
+          <button id="src-unpol" aria-pressed="false">Unpolarised source</button>
+        </div>
+        <button id="pause-btn" title="Play / pause (Space)">⏸</button>
+        <button id="view-btn" title="Back to the starting view (or double-click the 3D view)">Reset view</button>
+      </div>
 
-  <div class="card" id="pulse-card" hidden>
-    <div class="legend">
-      <span class="title">Intensity let through for each of the 24 pulses</span>
-      <span id="pulse-count"></span>
-      <button id="again-btn">Send 24 pulses again</button>
-    </div>
-    <canvas id="bars"></canvas>
-  </div>
+      <div class="sim-panel sim-plot" id="pulse-card" hidden>
+        <div class="legend">
+          <span class="title">Intensity let through for each of the 24 pulses</span>
+          <span id="pulse-count"></span>
+          <button id="again-btn">Send 24 pulses again</button>
+        </div>
+        <canvas id="bars"></canvas>
+      </div>
 
-  <div class="card" id="plot-card">
-    <div class="legend">
-      <span class="title">Emergent wave against θ</span>
-      <span><span class="key amp"></span>A / A<sub>0</sub></span>
-      <span><span class="key int"></span>I / I<sub>0</sub></span>
-      <button id="curve-btn" class="toggle" aria-pressed="false">Show full curves</button>
-      <button id="clear-btn">Clear graph</button>
+      <div class="sim-panel sim-plot" id="plot-card">
+        <div class="legend">
+          <span class="title">Emergent wave against θ</span>
+          <span><span class="key amp"></span>A / A<sub>0</sub></span>
+          <span><span class="key int"></span>I / I<sub>0</sub></span>
+          <button id="curve-btn" class="toggle" aria-pressed="false">Show full curves</button>
+          <button id="clear-btn">Clear graph</button>
+        </div>
+        <canvas id="plot"></canvas>
+      </div>
     </div>
-    <canvas id="plot"></canvas>
-  </div>
+    <div class="screen-tools">
+      <button id="screen-toggle" aria-label="Full screen" aria-pressed="false" title="Enter full screen">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <path class="enter" d="M9 4H4v5m11-5h5v5M4 15v5h5m11-5v5h-5"/>
+          <path class="exit" d="M4 9h5V4m6 0v5h5M9 20v-5H4m11 5v-5h5"/>
+        </svg>
+      </button>
+    </div>
+  </section>
 
   <div class="card derivation" id="derivation"></div>
 </main>
@@ -786,6 +819,7 @@
   }, (y, w) => Math.hypot(y, w) < R * 1.25);
 
   window.addEventListener('keydown', e => {
+    if (e.target === $('screen-toggle') && e.code === 'Space') return;
     if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
       e.preventDefault();
       const step = e.shiftKey ? 1 : 5;
@@ -840,6 +874,34 @@
   }
 
   function resizeAll() { v3.resize(); ve.resize(); plot.resize(); bars.resize(); }
+  const simulation = $('simulation'), screenToggle = $('screen-toggle');
+  function syncFullscreen() {
+    const expanded = document.fullscreenElement === simulation || document.body.classList.contains('page-fullscreen');
+    simulation.classList.toggle('expanded', expanded);
+    screenToggle.setAttribute('aria-pressed', String(expanded));
+    screenToggle.title = expanded ? 'Exit full screen' : 'Enter full screen';
+    resizeAll();
+  }
+  screenToggle.addEventListener('click', async () => {
+    if (document.fullscreenElement === simulation) {
+      await document.exitFullscreen();
+    } else if (document.body.classList.contains('page-fullscreen')) {
+      document.body.classList.remove('page-fullscreen');
+      syncFullscreen();
+    } else {
+      try {
+        await simulation.requestFullscreen();
+      } catch {
+        // Embedded pages and mobile browsers can restrict native fullscreen.
+        document.body.classList.add('page-fullscreen');
+        syncFullscreen();
+      }
+    }
+  });
+  document.addEventListener('fullscreenchange', syncFullscreen);
+  window.addEventListener('keydown', ev => {
+    if (ev.key === 'Escape' && document.body.classList.contains('page-fullscreen')) screenToggle.click();
+  });
   window.addEventListener('resize', resizeAll);
   resizeAll();
   mark(theta);

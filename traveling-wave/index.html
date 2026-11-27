@@ -108,6 +108,28 @@
   @media (max-width: 700px) {
     .controls { grid-template-columns: 1fr; }
   }
+  .screen-tools { display: flex; justify-content: flex-end; margin-top: 8px; }
+  #screen-toggle { display: inline-grid; place-items: center; }
+  #screen-toggle svg { width: 18px; height: 18px; }
+  #screen-toggle .exit, #screen-toggle[aria-pressed="true"] .enter { display: none; }
+  #screen-toggle[aria-pressed="true"] .exit { display: block; }
+  .sim-panel { min-width: 0; }
+  .sim-panel + .sim-panel { margin-top: 12px; }
+  .sim-plot { border-top: 2px solid #94a3b8; padding-top: 12px; }
+  #simulation.expanded {
+    width: 100%; height: 100%; margin: 0; border-radius: 0;
+    display: grid; justify-content: center;
+    grid-template-columns: minmax(0, 1600px);
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+  .expanded .sim-content { min-height: 0; overflow: auto; }
+  .expanded input[type="range"] { max-width: 100%; margin-inline: 0; }
+  body.page-fullscreen { overflow: hidden; }
+  body.page-fullscreen main > :not(#simulation) { display: none; }
+  body.page-fullscreen #simulation { position: fixed; inset: 0; z-index: 10; }
+  #simulation.expanded #plot-particles { height: clamp(75px, 12vh, 130px); }
+  #simulation.expanded #plot-yx { height: clamp(150px, 29vh, 370px); }
+  #simulation.expanded #plot-yt { height: clamp(145px, 25vh, 315px); }
 </style>
 </head>
 <body>
@@ -126,31 +148,45 @@
     </dl>
   </section>
 
-  <div class="card">
-    <canvas id="plot-particles" hidden></canvas>
-    <canvas id="plot-yx"></canvas>
-    <canvas id="plot-yt"></canvas>
-  </div>
+  <section class="card" id="simulation" aria-label="3.1 Traveling Wave: Period, Wavelength and Phase simulation">
+    <div class="sim-content">
+      <div class="sim-panel">
+        <canvas id="plot-particles" hidden></canvas>
+        <canvas id="plot-yx"></canvas>
+      </div>
 
-  <div class="card controls">
-    <div class="switch" role="group">
-      <button id="mode-transverse" aria-pressed="true">Transverse</button>
-      <button id="mode-longitudinal" aria-pressed="false">Longitudinal</button>
+      <div class="sim-panel controls">
+        <div class="switch" role="group">
+          <button id="mode-transverse" aria-pressed="true">Transverse</button>
+          <button id="mode-longitudinal" aria-pressed="false">Longitudinal</button>
+        </div>
+        <div class="slider">
+          <label for="T-slider"><span>T</span><span><span id="T-value"></span> s</span></label>
+          <input type="range" id="T-slider" min="0.5" max="6" step="0.1" value="2">
+        </div>
+        <div class="slider">
+          <label for="L-slider"><span>λ</span><span><span id="L-value"></span> m</span></label>
+          <input type="range" id="L-slider" min="1" max="8" step="0.1" value="4">
+        </div>
+        <div class="buttons">
+          <button id="pause-btn" title="Play / pause (Space)">▶</button>
+          <button id="reset-btn" title="Reset t">↺</button>
+          <span class="clock">t = <span id="t-value">0.00</span> s</span>
+        </div>
+      </div>
+      <div class="sim-panel sim-plot">
+        <canvas id="plot-yt"></canvas>
+      </div>
     </div>
-    <div class="slider">
-      <label for="T-slider"><span>T</span><span><span id="T-value"></span> s</span></label>
-      <input type="range" id="T-slider" min="0.5" max="6" step="0.1" value="2">
+    <div class="screen-tools">
+      <button id="screen-toggle" aria-label="Full screen" aria-pressed="false" title="Enter full screen">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <path class="enter" d="M9 4H4v5m11-5h5v5M4 15v5h5m11-5v5h-5"/>
+          <path class="exit" d="M4 9h5V4m6 0v5h5M9 20v-5H4m11 5v-5h5"/>
+        </svg>
+      </button>
     </div>
-    <div class="slider">
-      <label for="L-slider"><span>λ</span><span><span id="L-value"></span> m</span></label>
-      <input type="range" id="L-slider" min="1" max="8" step="0.1" value="4">
-    </div>
-    <div class="buttons">
-      <button id="pause-btn" title="Play / pause (Space)">▶</button>
-      <button id="reset-btn" title="Reset t">↺</button>
-      <span class="clock">t = <span id="t-value">0.00</span> s</span>
-    </div>
-  </div>
+  </section>
 
   <div class="card derivation" id="derivation"></div>
 </main>
@@ -442,6 +478,7 @@
   // Capture phase so the arrow keys always work, even while a slider has keyboard focus.
   // ← → step x by λ/16, so each press changes the phase by π/8 rad.
   window.addEventListener('keydown', e => {
+    if (e.target === $('screen-toggle') && e.code === 'Space') return;
     if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
       e.preventDefault();
       const step = lambda / 16;
@@ -453,6 +490,34 @@
   }, true);
 
   function resizeAll() { yx.resize(); yt.resize(); if (longitudinal) pv.resize(); }
+  const simulation = $('simulation'), screenToggle = $('screen-toggle');
+  function syncFullscreen() {
+    const expanded = document.fullscreenElement === simulation || document.body.classList.contains('page-fullscreen');
+    simulation.classList.toggle('expanded', expanded);
+    screenToggle.setAttribute('aria-pressed', String(expanded));
+    screenToggle.title = expanded ? 'Exit full screen' : 'Enter full screen';
+    resizeAll();
+  }
+  screenToggle.addEventListener('click', async () => {
+    if (document.fullscreenElement === simulation) {
+      await document.exitFullscreen();
+    } else if (document.body.classList.contains('page-fullscreen')) {
+      document.body.classList.remove('page-fullscreen');
+      syncFullscreen();
+    } else {
+      try {
+        await simulation.requestFullscreen();
+      } catch {
+        // Embedded pages and mobile browsers can restrict native fullscreen.
+        document.body.classList.add('page-fullscreen');
+        syncFullscreen();
+      }
+    }
+  });
+  document.addEventListener('fullscreenchange', syncFullscreen);
+  window.addEventListener('keydown', ev => {
+    if (ev.key === 'Escape' && document.body.classList.contains('page-fullscreen')) screenToggle.click();
+  });
   window.addEventListener('resize', resizeAll);
   resizeAll();
   syncSliders();

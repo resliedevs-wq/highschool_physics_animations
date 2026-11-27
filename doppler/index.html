@@ -100,6 +100,31 @@
   @media (max-width: 760px) {
     .sliders { grid-template-columns: 1fr; }
   }
+  .screen-tools { display: flex; justify-content: flex-end; margin-top: 8px; }
+  #screen-toggle { display: inline-grid; place-items: center; }
+  #screen-toggle svg { width: 18px; height: 18px; }
+  #screen-toggle .exit, #screen-toggle[aria-pressed="true"] .enter { display: none; }
+  #screen-toggle[aria-pressed="true"] .exit { display: block; }
+  .sim-panel { min-width: 0; }
+  .sim-panel + .sim-panel { margin-top: 12px; }
+  .sim-plot { border-top: 2px solid #94a3b8; padding-top: 12px; }
+  #simulation.expanded {
+    width: 100%; height: 100%; margin: 0; border-radius: 0;
+    display: grid; justify-content: center;
+    grid-template-columns: minmax(0, 1600px);
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+  .expanded .sim-content { min-height: 0; overflow: auto; }
+  .expanded input[type="range"] { max-width: 100%; margin-inline: 0; }
+  body.page-fullscreen { overflow: hidden; }
+  body.page-fullscreen main > :not(#simulation) { display: none; }
+  body.page-fullscreen #simulation { position: fixed; inset: 0; z-index: 10; }
+  #simulation.expanded #scene { height: clamp(195px, 36vh, 690px); }
+  #simulation.expanded #plot { height: clamp(155px, 24vh, 470px); }
+  @media (max-width: 959px) {
+    #simulation.expanded #scene { height: max(145px, 30vh); }
+    #simulation.expanded #plot { height: max(145px, 19vh); }
+  }
 </style>
 </head>
 <body>
@@ -118,42 +143,54 @@
     </dl>
   </section>
 
-  <div class="card">
-    <canvas id="scene"></canvas>
-    <div class="sliders">
-      <div class="slider">
-        <label for="u"><span>v<sub>s</sub> (speed of the source)</span><span id="u-value"></span></label>
-        <input type="range" id="u" min="0" max="272" step="2" value="34">
+  <section class="card" id="simulation" aria-label="3.7 Doppler Effect simulation">
+    <div class="sim-content">
+      <div class="sim-panel sim-scene">
+        <canvas id="scene"></canvas>
+        <div class="sliders">
+          <div class="slider">
+            <label for="u"><span>v<sub>s</sub> (speed of the source)</span><span id="u-value"></span></label>
+            <input type="range" id="u" min="0" max="272" step="2" value="34">
+          </div>
+          <div class="slider">
+            <label for="f"><span>f<sub>s</sub> (frequency of the source)</span><span id="f-value"></span></label>
+            <input type="range" id="f" min="200" max="600" step="1" value="300">
+          </div>
+        </div>
       </div>
-      <div class="slider">
-        <label for="f"><span>f<sub>s</sub> (frequency of the source)</span><span id="f-value"></span></label>
-        <input type="range" id="f" min="200" max="600" step="1" value="300">
+
+      <div class="sim-panel sim-controls controls">
+        <button id="pause-btn" title="Play / pause (Space)">⏸</button>
+        <button id="restart-btn" title="Start the drive again">↺</button>
+        <span class="muted">Slow motion</span>
+        <div class="switch" role="group" aria-label="Slow motion">
+          <button data-slow="200" aria-pressed="false">200×</button>
+          <button data-slow="100" aria-pressed="false">100×</button>
+          <button data-slow="50" aria-pressed="true">50×</button>
+          <button data-slow="25" aria-pressed="false">25×</button>
+        </div>
+        <button id="sound-btn" class="toggle" aria-pressed="false">Play sound</button>
+        <span class="clock">t = <span id="t-value">0.0</span> ms</span>
+      </div>
+
+      <div class="sim-panel sim-plot">
+        <div class="legend">
+          <span class="title">Frequency heard by the listener</span>
+          <span><span class="key"></span>f<sub>o</sub></span>
+          <span><span class="key src"></span>f<sub>s</sub> (source)</span>
+        </div>
+        <canvas id="plot"></canvas>
       </div>
     </div>
-  </div>
-
-  <div class="card controls">
-    <button id="pause-btn" title="Play / pause (Space)">⏸</button>
-    <button id="restart-btn" title="Start the drive again">↺</button>
-    <span class="muted">Slow motion</span>
-    <div class="switch" role="group" aria-label="Slow motion">
-      <button data-slow="200" aria-pressed="false">200×</button>
-      <button data-slow="100" aria-pressed="false">100×</button>
-      <button data-slow="50" aria-pressed="true">50×</button>
-      <button data-slow="25" aria-pressed="false">25×</button>
+    <div class="screen-tools">
+      <button id="screen-toggle" aria-label="Full screen" aria-pressed="false" title="Enter full screen">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <path class="enter" d="M9 4H4v5m11-5h5v5M4 15v5h5m11-5v5h-5"/>
+          <path class="exit" d="M4 9h5V4m6 0v5h5M9 20v-5H4m11 5v-5h5"/>
+        </svg>
+      </button>
     </div>
-    <button id="sound-btn" class="toggle" aria-pressed="false">Play sound</button>
-    <span class="clock">t = <span id="t-value">0.0</span> ms</span>
-  </div>
-
-  <div class="card">
-    <div class="legend">
-      <span class="title">Frequency heard by the listener</span>
-      <span><span class="key"></span>f<sub>o</sub></span>
-      <span><span class="key src"></span>f<sub>s</sub> (source)</span>
-    </div>
-    <canvas id="plot"></canvas>
-  </div>
+  </section>
 
   <div class="card derivation" id="derivation"></div>
 </main>
@@ -610,6 +647,7 @@
   pauseBtn.addEventListener('click', togglePause);
   $('restart-btn').addEventListener('click', reset);
   window.addEventListener('keydown', e => {
+    if (e.target === $('screen-toggle') && e.code === 'Space') return;
     if (e.key === ' ' || e.code === 'Space') { e.preventDefault(); togglePause(); }
   }, true);
 
@@ -632,6 +670,34 @@
   }
 
   function resizeAll() { scene.resize(); plot.resize(); }
+  const simulation = $('simulation'), screenToggle = $('screen-toggle');
+  function syncFullscreen() {
+    const expanded = document.fullscreenElement === simulation || document.body.classList.contains('page-fullscreen');
+    simulation.classList.toggle('expanded', expanded);
+    screenToggle.setAttribute('aria-pressed', String(expanded));
+    screenToggle.title = expanded ? 'Exit full screen' : 'Enter full screen';
+    resizeAll();
+  }
+  screenToggle.addEventListener('click', async () => {
+    if (document.fullscreenElement === simulation) {
+      await document.exitFullscreen();
+    } else if (document.body.classList.contains('page-fullscreen')) {
+      document.body.classList.remove('page-fullscreen');
+      syncFullscreen();
+    } else {
+      try {
+        await simulation.requestFullscreen();
+      } catch {
+        // Embedded pages and mobile browsers can restrict native fullscreen.
+        document.body.classList.add('page-fullscreen');
+        syncFullscreen();
+      }
+    }
+  });
+  document.addEventListener('fullscreenchange', syncFullscreen);
+  window.addEventListener('keydown', ev => {
+    if (ev.key === 'Escape' && document.body.classList.contains('page-fullscreen')) screenToggle.click();
+  });
   window.addEventListener('resize', resizeAll);
   resizeAll();
   reset();

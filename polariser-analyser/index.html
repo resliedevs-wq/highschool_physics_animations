@@ -89,6 +89,33 @@
   @media (max-width: 760px) {
     .ends { grid-template-columns: 1fr; }
   }
+  .screen-tools { display: flex; justify-content: flex-end; margin-top: 8px; }
+  #screen-toggle { display: inline-grid; place-items: center; }
+  #screen-toggle svg { width: 18px; height: 18px; }
+  #screen-toggle .exit, #screen-toggle[aria-pressed="true"] .enter { display: none; }
+  #screen-toggle[aria-pressed="true"] .exit { display: block; }
+  .sim-panel { min-width: 0; }
+  .sim-panel + .sim-panel { margin-top: 12px; }
+  .sim-plot { border-top: 2px solid #94a3b8; padding-top: 12px; }
+  #simulation.expanded {
+    width: 100%; height: 100%; margin: 0; border-radius: 0;
+    display: grid; justify-content: center;
+    grid-template-columns: minmax(0, 1600px);
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+  .expanded .sim-content { min-height: 0; overflow: auto; }
+  .expanded input[type="range"] { max-width: 100%; margin-inline: 0; }
+  body.page-fullscreen { overflow: hidden; }
+  body.page-fullscreen main > :not(#simulation) { display: none; }
+  body.page-fullscreen #simulation { position: fixed; inset: 0; z-index: 10; }
+  #simulation.expanded #view-3d { height: clamp(160px, 25vh, 480px); }
+  #simulation.expanded .ends canvas { height: clamp(140px, 20vh, 360px); }
+  #simulation.expanded #plot { height: clamp(145px, 20vh, 410px); }
+  @media (max-width: 959px) {
+    #simulation.expanded #view-3d { height: max(145px, 25vh); }
+    #simulation.expanded .ends canvas { height: max(145px, 18vh); }
+    #simulation.expanded #plot { height: max(145px, 22vh); }
+  }
 </style>
 </head>
 <body>
@@ -106,45 +133,57 @@
     </dl>
   </section>
 
-  <div class="card">
-    <canvas id="view-3d"></canvas>
-    <div class="ends">
-      <div>
-        <canvas id="end-1"></canvas>
-        <div class="slider">
-          <label for="theta-1"><span>θ<sub>1</sub> (polariser)</span><span id="theta-1-value"></span></label>
-          <input type="range" id="theta-1" min="0" max="360" step="1" value="45">
+  <section class="card" id="simulation" aria-label="3.6 Polariser and Analyser simulation">
+    <div class="sim-content">
+      <div class="sim-panel sim-scene">
+        <canvas id="view-3d"></canvas>
+        <div class="ends">
+          <div>
+            <canvas id="end-1"></canvas>
+            <div class="slider">
+              <label for="theta-1"><span>θ<sub>1</sub> (polariser)</span><span id="theta-1-value"></span></label>
+              <input type="range" id="theta-1" min="0" max="360" step="1" value="45">
+            </div>
+          </div>
+          <div>
+            <canvas id="end-2"></canvas>
+            <div class="slider">
+              <label for="theta-2"><span>θ<sub>2</sub> (analyser)</span><span id="theta-2-value"></span></label>
+              <input type="range" id="theta-2" min="0" max="360" step="1" value="90">
+            </div>
+          </div>
         </div>
       </div>
-      <div>
-        <canvas id="end-2"></canvas>
-        <div class="slider">
-          <label for="theta-2"><span>θ<sub>2</sub> (analyser)</span><span id="theta-2-value"></span></label>
-          <input type="range" id="theta-2" min="0" max="360" step="1" value="90">
+
+      <div class="sim-panel sim-controls controls">
+        <div class="switch" role="group" aria-label="Source">
+          <button id="src-pol" aria-pressed="true">Plane-polarised source</button>
+          <button id="src-unpol" aria-pressed="false">Unpolarised source</button>
         </div>
+        <button id="pause-btn" title="Play / pause (Space)">⏸</button>
+        <button id="view-btn" title="Back to the starting view (or double-click the 3D view)">Reset view</button>
+      </div>
+
+      <div class="sim-panel sim-plot">
+        <div class="legend">
+          <span class="title">Intensity after the analyser against θ<sub>2</sub></span>
+          <span><span class="key i2"></span>I<sub>2</sub> / I<sub>0</sub></span>
+          <span><span class="key i1"></span>I<sub>1</sub> / I<sub>0</sub> (after the polariser)</span>
+          <button id="curve-btn" class="toggle" aria-pressed="false">Show full curve</button>
+          <button id="clear-btn">Clear graph</button>
+        </div>
+        <canvas id="plot"></canvas>
       </div>
     </div>
-  </div>
-
-  <div class="card controls">
-    <div class="switch" role="group" aria-label="Source">
-      <button id="src-pol" aria-pressed="true">Plane-polarised source</button>
-      <button id="src-unpol" aria-pressed="false">Unpolarised source</button>
+    <div class="screen-tools">
+      <button id="screen-toggle" aria-label="Full screen" aria-pressed="false" title="Enter full screen">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <path class="enter" d="M9 4H4v5m11-5h5v5M4 15v5h5m11-5v5h-5"/>
+          <path class="exit" d="M4 9h5V4m6 0v5h5M9 20v-5H4m11 5v-5h5"/>
+        </svg>
+      </button>
     </div>
-    <button id="pause-btn" title="Play / pause (Space)">⏸</button>
-    <button id="view-btn" title="Back to the starting view (or double-click the 3D view)">Reset view</button>
-  </div>
-
-  <div class="card">
-    <div class="legend">
-      <span class="title">Intensity after the analyser against θ<sub>2</sub></span>
-      <span><span class="key i2"></span>I<sub>2</sub> / I<sub>0</sub></span>
-      <span><span class="key i1"></span>I<sub>1</sub> / I<sub>0</sub> (after the polariser)</span>
-      <button id="curve-btn" class="toggle" aria-pressed="false">Show full curve</button>
-      <button id="clear-btn">Clear graph</button>
-    </div>
-    <canvas id="plot"></canvas>
-  </div>
+  </section>
 
   <div class="card derivation" id="derivation"></div>
 </main>
@@ -718,6 +757,7 @@
 
   // ← → turn the analyser (5°, Shift for 1°)
   window.addEventListener('keydown', e => {
+    if (e.target === $('screen-toggle') && e.code === 'Space') return;
     if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
       e.preventDefault();
       const step = e.shiftKey ? 1 : 5;
@@ -765,6 +805,34 @@
   }
 
   function resizeAll() { v3.resize(); ve1.resize(); ve2.resize(); plot.resize(); }
+  const simulation = $('simulation'), screenToggle = $('screen-toggle');
+  function syncFullscreen() {
+    const expanded = document.fullscreenElement === simulation || document.body.classList.contains('page-fullscreen');
+    simulation.classList.toggle('expanded', expanded);
+    screenToggle.setAttribute('aria-pressed', String(expanded));
+    screenToggle.title = expanded ? 'Exit full screen' : 'Enter full screen';
+    resizeAll();
+  }
+  screenToggle.addEventListener('click', async () => {
+    if (document.fullscreenElement === simulation) {
+      await document.exitFullscreen();
+    } else if (document.body.classList.contains('page-fullscreen')) {
+      document.body.classList.remove('page-fullscreen');
+      syncFullscreen();
+    } else {
+      try {
+        await simulation.requestFullscreen();
+      } catch {
+        // Embedded pages and mobile browsers can restrict native fullscreen.
+        document.body.classList.add('page-fullscreen');
+        syncFullscreen();
+      }
+    }
+  });
+  document.addEventListener('fullscreenchange', syncFullscreen);
+  window.addEventListener('keydown', ev => {
+    if (ev.key === 'Escape' && document.body.classList.contains('page-fullscreen')) screenToggle.click();
+  });
   window.addEventListener('resize', resizeAll);
   resizeAll();
   mark(theta2);
