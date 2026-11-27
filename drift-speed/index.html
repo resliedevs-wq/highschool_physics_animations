@@ -52,9 +52,9 @@
   #scene { height: 380px; touch-action: none; border-radius: 6px; }
   .row { display: flex; gap: 12px 18px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
   .row .right { margin-left: auto; display: flex; gap: 10px; }
-  .sliders { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 28px; margin-top: 12px; }
+  .slider { flex: 1 1 160px; max-width: 500px; min-width: 0; }
   .slider label { display: flex; justify-content: space-between; margin-bottom: 4px; font-variant-numeric: tabular-nums; }
-  .slider input { width: 100%; accent-color: var(--ink); }
+  .slider input { display: block; width: 100%; margin-inline: 0; accent-color: var(--ink); }
   button {
     font: inherit;
     height: 2.4em; min-width: 2.4em; padding: 0 10px;
@@ -86,7 +86,6 @@
     font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
     font-size: 1rem; font-weight: 600; line-height: 1.6; margin-top: .3em;
   }
-  @media (max-width: 760px) { .sliders { grid-template-columns: 1fr; } }
   .screen-tools { display: flex; justify-content: flex-end; margin-top: 8px; }
   #screen-toggle { display: inline-grid; place-items: center; }
   #screen-toggle svg { width: 18px; height: 18px; }
@@ -139,15 +138,13 @@
             <button data-n="22" aria-pressed="false">Semiconductor</button>
           </div>
           <button id="thermal-btn" class="toggle" aria-pressed="true">Thermal motion</button>
-          <div class="right">
-            <button id="pause-btn" title="Play / pause (Space)">⏸</button>
-            <button id="restart-btn" title="Count again">↺</button>
-          </div>
-        </div>
-        <div class="sliders">
           <div class="slider">
             <label for="I"><span>I</span><span id="I-value"></span></label>
             <input type="range" id="I" min="0.2" max="3" step="0.1" value="1">
+          </div>
+          <div class="right">
+            <button id="pause-btn" title="Play / pause (Space)">⏸</button>
+            <button id="restart-btn" title="Count again">↺</button>
           </div>
         </div>
       </div>
