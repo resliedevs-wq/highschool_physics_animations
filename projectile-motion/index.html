@@ -40,6 +40,7 @@
   .frac > span { padding: 0 3px; }
   .frac > span:first-child { border-bottom: 1.5px solid currentColor; }
   .intro h1 { font-size: 1.25rem; margin: 0 0 8px; }
+  .intro p { margin: 0 0 10px; }
   .intro .formulas {
     display: flex; gap: 2.5em; justify-content: center; flex-wrap: wrap;
     font-family: "Cambria Math", "Times New Roman", serif;
@@ -74,6 +75,37 @@
   .legend .title { color: var(--ink); font-weight: 600; margin-right: auto; }
   .key { display: inline-block; width: 1.8em; vertical-align: middle; border-top: 3px solid var(--ink); margin-right: 6px; }
   .key.dash { border-top-style: dashed; border-top-width: 2px; }
+  .graph { border-top: 1px solid var(--grid); margin-top: 16px; padding-top: 12px; }
+  .screen-tools { display: flex; justify-content: flex-end; margin-top: 8px; }
+  #screen-toggle { display: inline-grid; place-items: center; }
+  #screen-toggle svg { width: 18px; height: 18px; }
+  #screen-toggle .exit, #screen-toggle[aria-pressed="true"] .enter { display: none; }
+  #screen-toggle[aria-pressed="true"] .exit { display: block; }
+  #simulation.expanded {
+    width: 100%; height: 100%; margin: 0; border-radius: 0; overflow: auto;
+    display: grid; grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(230px, 3fr) auto auto minmax(150px, 2fr) auto;
+  }
+  #simulation.expanded #scene, #simulation.expanded #plot { height: 100%; min-height: 0; }
+  #simulation.expanded .graph { display: grid; grid-template-rows: auto minmax(0, 1fr); }
+  body.page-fullscreen { overflow: hidden; }
+  body.page-fullscreen main > :not(#simulation) { display: none; }
+  body.page-fullscreen #simulation { position: fixed; inset: 0; z-index: 1; }
+  @media (min-aspect-ratio: 3/2) and (min-width: 700px) {
+    #simulation.expanded {
+      grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+      grid-template-rows: minmax(230px, 1fr) auto auto auto;
+      column-gap: 18px;
+    }
+    #simulation.expanded .graph {
+      grid-area: 1 / 2; border: 0; margin: 0; padding: 0;
+    }
+    #simulation.expanded :is(.row, .sliders, .screen-tools) { grid-column: 1 / -1; }
+  }
+  @media (min-width: 700px) and (max-height: 500px) {
+    #simulation.expanded { padding: 6px 12px; }
+    #simulation.expanded :is(.row, .sliders, .screen-tools) { margin-top: 4px; }
+  }
   .derivation {
     display: grid;
     grid-template-columns: auto auto 1fr;
@@ -99,6 +131,7 @@
 <main>
   <section class="card intro">
     <h1>1.1 Projectile motion</h1>
+    <p>Launch a ball from a ledge and track its horizontal and vertical velocity. Turn on air resistance to compare its flight with the vacuum trajectory.</p>
     <div class="formulas">
       <span>u<sub>x</sub> = u cos θ</span>
       <span>u<sub>y</sub> = u sin θ</span>
@@ -113,7 +146,7 @@
     </dl>
   </section>
 
-  <div class="card">
+  <section class="card" id="simulation" aria-label="Projectile motion simulation">
     <canvas id="scene"></canvas>
     <div class="row">
       <button id="air-btn" class="toggle" aria-pressed="false">Air resistance</button>
@@ -137,17 +170,24 @@
         <input type="range" id="theta" min="0" max="85" step="1" value="0">
       </div>
     </div>
-  </div>
-
-  <div class="card">
-    <div class="legend">
-      <span class="title">Velocity against time</span>
-      <span><span class="key" style="border-top-color: var(--vx)"></span>v<sub>x</sub></span>
-      <span><span class="key" style="border-top-color: var(--vy)"></span>v<sub>y</sub></span>
-      <span id="key-air" class="hidden"><span class="key dash"></span>without air</span>
+    <div class="graph">
+      <div class="legend">
+        <span class="title">Velocity against time</span>
+        <span><span class="key" style="border-top-color: var(--vx)"></span>v<sub>x</sub></span>
+        <span><span class="key" style="border-top-color: var(--vy)"></span>v<sub>y</sub></span>
+        <span id="key-air" class="hidden"><span class="key dash"></span>without air</span>
+      </div>
+      <canvas id="plot"></canvas>
     </div>
-    <canvas id="plot"></canvas>
-  </div>
+    <div class="screen-tools">
+      <button id="screen-toggle" aria-label="Full screen" aria-pressed="false" title="Enter full screen">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <path class="enter" d="M9 4H4v5m11-5h5v5M4 15v5h5m11-5v5h-5"/>
+          <path class="exit" d="M4 9h5V4m6 0v5h5M9 20v-5H4m11 5v-5h5"/>
+        </svg>
+      </button>
+    </div>
+  </section>
 
   <div class="card derivation" id="derivation"></div>
 </main>
@@ -293,7 +333,9 @@
 
   // ---- View: fit the ledge and both flights ----
   const view = { s: 40, ox: 0, oy: 0 };       // px per metre, and where (0, 0) sits on screen
-  const M = { left: 70, right: 40, top: 46, bottom: 40 };
+  const velocityArrowLength = 70;
+  // Reserve room past the landing point for the velocity arrows and component labels.
+  const M = { left: 70, right: velocityArrowLength + 24, top: 46, bottom: velocityArrowLength + 12 };
   const SX = x => view.ox + x * view.s, SY = y => view.oy - y * view.s;
   function fitView() {
     const W = scene.width, H = scene.height;
@@ -309,7 +351,8 @@
     }
     const yMax = h0 + (U_MAX * Math.sin(THETA_MAX * Math.PI / 180)) ** 2 / (2 * G);
     const ledgeW = 0.12;                      // ledge drawn as a fraction of the width
-    const s = Math.min((W - M.left - M.right) / (xMax * (1 + ledgeW)), (H - M.top - M.bottom) / yMax);
+    const top = veryHigh ? 68 : M.top;
+    const s = Math.min((W - M.left - M.right) / (xMax * (1 + ledgeW)), (H - top - M.bottom) / yMax);
     view.s = s;
     view.ox = M.left + xMax * ledgeW * s;
     view.oy = H - M.bottom;
@@ -347,8 +390,8 @@
     ctx.beginPath(); ctx.moveTo(dx, SY(0)); ctx.lineTo(dx, SY(h0)); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(dx - 5, SY(0)); ctx.lineTo(dx + 5, SY(0)); ctx.moveTo(dx - 5, SY(h0)); ctx.lineTo(dx + 5, SY(h0)); ctx.stroke();
     if (veryHigh) {
-      label(ctx, 'Very high', handle.x, handle.y - 34, C.focus, { size: 18, weight: '800' });
-      label(ctx, `h = ${H_VERY} m`, handle.x, handle.y - 15, C.focus, { size: 13 });
+      label(ctx, 'Very high', handle.x, handle.y - 54, C.focus, { size: 18, weight: '800' });
+      label(ctx, `h = ${H_VERY} m`, handle.x, handle.y - 35, C.focus, { size: 13 });
     } else label(ctx, `h = ${h.toFixed(2)} m`, handle.x, handle.y - 18, C.ink, { size: 13 });
     ctx.beginPath(); ctx.arc(handle.x, handle.y, 9, 0, 2 * Math.PI);
     ctx.fillStyle = '#fff'; ctx.fill(); ctx.strokeStyle = C.focus; ctx.lineWidth = 2.5; ctx.stroke();
@@ -384,29 +427,33 @@
 
     // balls, velocity arrows (and the forces on the ball in air)
     const vMax = Math.max(...[flights.vac, flights.air].filter(Boolean).flatMap(f => [f.pts[0], f.pts[f.pts.length - 1]]).map(p => Math.hypot(p.vx, p.vy)), 1);
-    const kv = 70 / vMax;
+    const scale = velocityArrowLength / vMax;
     const drawBall = (p, fill, ghost) => {
       const x = SX(p.x), y = SY(p.y);
-      if (!p.landed) {
-        arrow(ctx, x, y, x + p.vx * kv, y, C.vx, ghost ? 1.5 : 2.5, 9, ghost ? [4, 3] : null);
-        arrow(ctx, x, y, x, y - p.vy * kv, C.vy, ghost ? 1.5 : 2.5, 9, ghost ? [4, 3] : null);
-        if (!ghost) {
-          if (Math.abs(p.vx * kv) > 12) subLabel(ctx, 'v', 'x', x + p.vx * kv + (p.vx >= 0 ? 6 : -6), y - 9, C.vx, { align: p.vx >= 0 ? 'left' : 'right' });
-          if (Math.abs(p.vy * kv) > 12) subLabel(ctx, 'v', 'y', x + 8, y - p.vy * kv, C.vy);
-        }
-      }
       ctx.beginPath(); ctx.arc(x, y, ghost ? 6 : 8, 0, 2 * Math.PI);
       ctx.fillStyle = ghost ? '#fff' : fill; ctx.fill();
       ctx.strokeStyle = ghost ? C.axis : C.ink; ctx.lineWidth = 1.5;
       if (ghost) ctx.setLineDash([3, 2]);
       ctx.stroke(); ctx.setLineDash([]);
     };
-    if (air) {
-      drawBall(at(flights.vac, t), '#fff', true);
-      const p = at(flights.air, t), b = BALLS[ball];
-      drawBall(p, b.fill, false);
-      drawCloseUp(ctx, p, b, W);
-    } else drawBall(at(flights.vac, t), '#fff', false);
+    const drawVelocity = (p, ghost) => {
+      const x = SX(p.x), y = SY(p.y);
+      const dx = p.vx * scale, dy = -p.vy * scale;
+      const width = ghost ? 1.5 : 2.5, dash = ghost ? [4, 3] : null;
+      if (p.landed) arrow(ctx, x, y, x + dx, y + dy, C.force, width + 2, 11, dash);
+      arrow(ctx, x, y, x + dx, y, C.vx, width, 9, dash);
+      arrow(ctx, x, y, x, y + dy, C.vy, width, 9, dash);
+      if (!ghost) {
+        if (Math.abs(dx) > 12) subLabel(ctx, 'v', 'x', x + dx + (dx >= 0 ? 6 : -6), y - 9, C.vx, { align: dx >= 0 ? 'left' : 'right' });
+        if (Math.abs(dy) > 12) subLabel(ctx, 'v', 'y', x + 8, Math.min(H - 10, y + dy), C.vy);
+      }
+    };
+    const comparison = air ? at(flights.vac, t) : null;
+    if (comparison) drawBall(comparison, '#fff', true);
+    drawBall(main, air ? BALLS[ball].fill : '#fff', false);
+    if (comparison) drawVelocity(comparison, true);
+    drawVelocity(main, false);
+    if (air) drawCloseUp(ctx, main, BALLS[ball], W);
 
     label(ctx, `t = ${Math.min(t, tEnd()).toFixed(2)} s`, W - 14, 18, C.ink, { align: 'right', size: 14 });
   }
@@ -419,6 +466,8 @@
     ctx.strokeStyle = '#d1d5db'; ctx.lineWidth = 1; ctx.strokeRect(x0 + 0.5, y0 + 0.5, bw, bh);
     label(ctx, `close-up: ${b.name}`, x0 + 8, y0 + 13, C.muted, { align: 'left', size: 12, weight: '500' });
     const cx = x0 + bw / 2, cy = y0 + bh / 2 + 4, R = 16, L = 62;
+    ctx.beginPath(); ctx.arc(cx, cy, R, 0, 2 * Math.PI);
+    ctx.fillStyle = b.fill; ctx.fill(); ctx.strokeStyle = C.ink; ctx.lineWidth = 1.5; ctx.stroke();
     const sp = Math.hypot(p.vx, p.vy);
     if (!p.landed && sp > 0.01) {
       // direction of motion, faint
@@ -429,8 +478,6 @@
       arrow(ctx, ax - ux * 20, ay - uy * 20, ax + ux * 22, ay + uy * 22, C.axis, 1.5, 8, [4, 3]);
       label(ctx, 'v', ax + ux * 32, ay + uy * 32, C.muted, { size: 13 });
     }
-    ctx.beginPath(); ctx.arc(cx, cy, R, 0, 2 * Math.PI);
-    ctx.fillStyle = b.fill; ctx.fill(); ctx.strokeStyle = C.ink; ctx.lineWidth = 1.5; ctx.stroke();
     if (p.landed) { label(ctx, 'landed', cx, cy + R + 16, C.muted, { size: 12 }); return; }
     arrow(ctx, cx, cy, cx, cy + L, C.force, 2.5, 10);
     label(ctx, 'mg', cx + 8, cy + L - 6, C.force, { align: 'left', size: 13 });
@@ -611,6 +658,37 @@
   }
 
   function resizeAll() { scene.resize(); plot.resize(); fitView(); }
+  const simulation = $('simulation'), screenToggle = $('screen-toggle');
+  function syncFullscreen() {
+    const expanded = document.fullscreenElement === simulation || document.body.classList.contains('page-fullscreen');
+    simulation.classList.toggle('expanded', expanded);
+    screenToggle.setAttribute('aria-pressed', String(expanded));
+    screenToggle.title = expanded ? 'Exit full screen' : 'Enter full screen';
+    resizeAll();
+  }
+  screenToggle.addEventListener('click', async () => {
+    if (document.fullscreenElement === simulation) {
+      await document.exitFullscreen();
+    } else if (document.body.classList.contains('page-fullscreen')) {
+      document.body.classList.remove('page-fullscreen');
+      syncFullscreen();
+    } else {
+      try {
+        await simulation.requestFullscreen();
+      } catch {
+        // Embedded pages and mobile browsers can restrict native fullscreen.
+        document.body.classList.add('page-fullscreen');
+        syncFullscreen();
+      }
+    }
+  });
+  document.addEventListener('fullscreenchange', syncFullscreen);
+  window.addEventListener('keydown', ev => {
+    if (ev.key === 'Escape' && document.body.classList.contains('page-fullscreen')) screenToggle.click();
+  });
+  const canvasObserver = new ResizeObserver(resizeAll);
+  canvasObserver.observe(scene.canvas);
+  canvasObserver.observe(plot.canvas);
   window.addEventListener('resize', resizeAll);
   resizeAll();
   setAir(false);
