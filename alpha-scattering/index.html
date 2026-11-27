@@ -39,8 +39,8 @@
   .intro dt { font-weight: 600; text-align: right; }
   .intro dd { margin: 0; }
   canvas { display: block; width: 100%; }
-  #view { height: 480px; }
-  #view.nucleus { height: 560px; }
+  #view { height: 560px; }
+  #view.nucleus { height: 640px; }
   .stage { position: relative; }
   .stage .corner {
     position: absolute; display: inline-flex; align-items: center; gap: 9px;
@@ -93,7 +93,7 @@
   body.page-fullscreen { overflow: hidden; }
   body.page-fullscreen main > :not(#simulation) { display: none; }
   body.page-fullscreen #simulation { position: fixed; inset: 0; z-index: 10; }
-  #simulation.expanded #view, #simulation.expanded #view.nucleus { height: clamp(320px, 62vh, 800px); }
+  #simulation.expanded #view, #simulation.expanded #view.nucleus { height: clamp(370px, 70vh, 980px); }
 </style>
 </head>
 <body>

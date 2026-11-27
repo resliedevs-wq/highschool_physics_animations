@@ -55,7 +55,7 @@
     display: grid; grid-template-columns: 1fr 250px; gap: 18px;
     background: #2b2f36; border-radius: 12px; padding: 16px;
   }
-  #screen { display: block; width: 100%; aspect-ratio: 10 / 8; border-radius: 8px; touch-action: none; background: #06130c; }
+  #screen { display: block; width: 100%; aspect-ratio: 10 / 9; border-radius: 8px; touch-action: none; background: #06130c; }
   .front { display: flex; flex-direction: column; gap: 10px; align-items: center; color: #e5e7eb; }
   .front .caption { font-size: .9rem; font-weight: 600; color: #cbd5e1; text-align: center; }
   .front .reading { font-size: 1.05rem; font-weight: 600; font-variant-numeric: tabular-nums; text-align: center; min-height: 1.3em; }
@@ -150,7 +150,7 @@
   body.page-fullscreen { overflow: hidden; }
   body.page-fullscreen main > :not(#simulation) { display: none; }
   body.page-fullscreen #simulation { position: fixed; inset: 0; z-index: 10; }
-  #simulation.expanded #screen { height: clamp(260px, 62vh, 620px); }
+  #simulation.expanded #screen { height: clamp(300px, 69vh, 780px); }
 </style>
 </head>
 <body>

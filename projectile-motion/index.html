@@ -51,7 +51,7 @@
   .intro dd { margin: 0; }
   canvas { display: block; width: 100%; }
   #scene { height: 460px; touch-action: none; }
-  #plot { height: 250px; }
+  #plot { height: 175px; max-height: 175px; }
   .row { display: flex; gap: 12px 18px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
   .row .right { margin-left: auto; display: flex; gap: 10px; }
   .sliders { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 28px; margin-top: 12px; }
@@ -75,7 +75,8 @@
   .legend .title { color: var(--ink); font-weight: 600; margin-right: auto; }
   .key { display: inline-block; width: 1.8em; vertical-align: middle; border-top: 3px solid var(--ink); margin-right: 6px; }
   .key.dash { border-top-style: dashed; border-top-width: 2px; }
-  .graph { border-top: 2px solid #94a3b8; margin-top: 16px; padding-top: 12px; }
+  .graph { border-top: 2px solid #94a3b8; margin-top: 16px; padding-top: clamp(24px, 3vh, 48px); }
+  #simulation.expanded .graph { border-top: 0; }
   .screen-tools { display: flex; justify-content: flex-end; margin-top: 8px; }
   #screen-toggle { display: inline-grid; place-items: center; }
   #screen-toggle svg { width: 18px; height: 18px; }
@@ -84,10 +85,10 @@
   #simulation.expanded {
     width: 100%; height: 100%; margin: 0; border-radius: 0; overflow: auto;
     display: grid; grid-template-columns: minmax(0, 1600px); justify-content: center;
-    grid-template-rows: minmax(230px, 3fr) auto auto minmax(150px, 2fr) auto;
+    grid-template-rows: minmax(230px, 1fr) auto auto auto auto;
   }
-  #simulation.expanded #scene, #simulation.expanded #plot { height: 100%; min-height: 0; }
-  #simulation.expanded .graph { display: grid; grid-template-rows: auto minmax(0, 1fr); }
+  #simulation.expanded #scene { height: 100%; min-height: 0; }
+  #simulation.expanded #plot { height: clamp(120px, 18vh, 175px); }
   body.page-fullscreen { overflow: hidden; }
   body.page-fullscreen main > :not(#simulation) { display: none; }
   body.page-fullscreen #simulation { position: fixed; inset: 0; z-index: 1; }

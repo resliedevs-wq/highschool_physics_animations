@@ -50,9 +50,9 @@
   .intro dt { font-family: "Cambria Math", "Times New Roman", serif; font-size: 1.1rem; text-align: center; }
   .intro dd { margin: 0; }
   canvas { display: block; width: 100%; }
-  #scene { height: 480px; border-radius: 6px; background: var(--dark); touch-action: none; }
-  #front { height: 150px; touch-action: none; }
-  #plot { height: 250px; }
+  #scene { height: 560px; border-radius: 6px; background: var(--dark); touch-action: none; }
+  #front { height: 140px; max-height: 140px; touch-action: none; }
+  #plot { height: 160px; max-height: 160px; }
   .sliders { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px 28px; margin-top: 12px; }
   .slider label { display: flex; justify-content: space-between; margin-bottom: 4px; font-variant-numeric: tabular-nums; }
   .slider input { width: 100%; accent-color: var(--ink); }
@@ -113,7 +113,8 @@
   #screen-toggle[aria-pressed="true"] .exit { display: block; }
   .sim-panel { min-width: 0; }
   .sim-panel + .sim-panel { margin-top: 12px; }
-  .sim-plot { border-top: 2px solid #94a3b8; padding-top: 12px; }
+  .sim-plot { border-top: 2px solid #94a3b8; padding-top: clamp(24px, 3vh, 48px); }
+  #simulation.expanded .sim-plot { border-top: 0; }
   #simulation.expanded {
     width: 100%; height: 100%; margin: 0; border-radius: 0;
     display: grid; justify-content: center;
@@ -125,10 +126,10 @@
   body.page-fullscreen { overflow: hidden; }
   body.page-fullscreen main > :not(#simulation) { display: none; }
   body.page-fullscreen #simulation { position: fixed; inset: 0; z-index: 10; }
-  #simulation.expanded #scene { height: clamp(225px, 39vh, 750px); }
+  #simulation.expanded #scene { height: clamp(255px, 45vh, 880px); }
   #simulation.expanded #plot { height: clamp(150px, 23vh, 450px); }
   @media (max-width: 959px) {
-    #simulation.expanded #scene { height: max(145px, 36vh); }
+    #simulation.expanded #scene { height: max(175px, 42vh); }
   }
 </style>
 </head>
