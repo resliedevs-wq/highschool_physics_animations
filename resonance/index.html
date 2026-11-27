@@ -105,14 +105,15 @@
   .sim-panel { min-width: 0; }
   .sim-panel + .sim-panel { margin-top: 12px; }
   .sim-plot { border-top: 2px solid #94a3b8; padding-top: clamp(24px, 3vh, 48px); }
-  #simulation.expanded .sim-plot { border-top: 0; }
+  #simulation.expanded .sim-plot { margin-top: auto; border-top: 0; }
   #simulation.expanded {
     width: 100%; height: 100%; margin: 0; border-radius: 0;
     display: grid; justify-content: center;
     grid-template-columns: minmax(0, 1600px);
     grid-template-rows: minmax(0, 1fr) auto;
   }
-  .expanded .sim-content { min-height: 0; overflow: auto; }
+  .expanded .sim-content { display: flex; flex-direction: column; min-height: 0; overflow: auto; }
+  .expanded .sim-panel { flex: none; }
   .expanded input[type="range"] { max-width: 100%; margin-inline: 0; }
   body.page-fullscreen { overflow: hidden; }
   body.page-fullscreen main > :not(#simulation) { display: none; }

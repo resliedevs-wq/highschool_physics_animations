@@ -76,7 +76,7 @@
   .key { display: inline-block; width: 1.8em; vertical-align: middle; border-top: 3px solid var(--ink); margin-right: 6px; }
   .key.dash { border-top-style: dashed; border-top-width: 2px; }
   .graph { border-top: 2px solid #94a3b8; margin-top: 16px; padding-top: clamp(24px, 3vh, 48px); }
-  #simulation.expanded .graph { border-top: 0; }
+  #simulation.expanded .graph { align-self: end; border-top: 0; }
   .screen-tools { display: flex; justify-content: flex-end; margin-top: 8px; }
   #screen-toggle { display: inline-grid; place-items: center; }
   #screen-toggle svg { width: 18px; height: 18px; }
@@ -85,7 +85,7 @@
   #simulation.expanded {
     width: 100%; height: 100%; margin: 0; border-radius: 0; overflow: auto;
     display: grid; grid-template-columns: minmax(0, 1600px); justify-content: center;
-    grid-template-rows: minmax(230px, 1fr) auto auto auto auto;
+    grid-template-rows: minmax(230px, min(45vh, 700px)) auto auto minmax(max-content, 1fr) auto;
   }
   #simulation.expanded #scene { height: 100%; min-height: 0; }
   #simulation.expanded #plot { height: clamp(120px, 18vh, 175px); }
