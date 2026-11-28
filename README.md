@@ -32,6 +32,7 @@ Each animation is a single self-contained HTML file. Open it directly in a brows
 - 3.10 [Reading a CRO](cro/index.html): T = divisions × time-base, f = 1/T, V = divisions × y-gain; time-base and y-gain knobs, snapping markers, sine/square/triangle input, time-base off, and a hidden input for practice
 - 3.11 [Speed of sound with a two-beam CRO](speed-of-sound/index.html): v = fλ; switch the speaker on and the sound travels down the bench, reaching the microphone after a short delay, and the CRO's spot, sweeping on the same slowed clock, starts the Y2 wave where it arrives; drag the microphone along a metre rule until the Y1 (signal generator) and Y2 (microphone) traces come back into phase, mark each position, and the wavelength and speed are worked out from the marks
 - 3.12 [Refraction and total internal reflection](refraction/index.html): n₁ sin θ₁ = n₂ sin θ₂, n = c/v, sin C = 1/n; drag the ray box onto a rectangular or semicircular block of glass, water or diamond, with the reflected and refracted shares of the light; optional wavefronts slow down in the block, and zooming in on them shows broad wavefronts bending at the surface
+- 3.13 [Pulse-echo (ultrasound A-scan)](pulse-echo/index.html): 2d = vt, λ = v/f; pulses of N cycles go into soft tissue and the echoes from two boundaries and a small object are plotted on an A-scan with the same depth scale; drag the boundaries closer than half the pulse length and their echoes merge, or shrink the object below λ and its echo fades
 
 ### 4 Nuclear physics
 
@@ -40,3 +41,4 @@ Each animation is a single self-contained HTML file. Open it directly in a brows
 ### 5 A2-Level
 
 - 5.1 [Hall effect](hall-effect/index.html): V_H = BI/(ntq); the Hall voltage builds up until qE = Bqv, with electrons or holes as charge carriers, B and n adjustable, and d and t changed by dragging the slab
+- 5.2 [Cyclotron](cyclotron/index.html): r = p/BQ, f = BQ/2πm; a proton, deuteron or α particle spirals out through two dees in a field into the page, gaining QV at each crossing of the gap while the alternating p.d. keeps time with it, then leaves past a deflector
