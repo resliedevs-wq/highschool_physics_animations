@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>5.8 Emission and absorption line spectra</title>
+<style>
+  :root {
+    --bg: #f7f7f5;
+    --panel: #ffffff;
+    --ink: #1f2328;
+    --muted: #6b7280;
+    --grid: #e5e7eb;
+    --axis: #9ca3af;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+  }
+  main { max-width: 1100px; margin: 0 auto; padding: 20px; }
+  .card {
+    background: var(--panel);
+    border-radius: 10px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.08);
+    padding: 14px 18px;
+    margin-bottom: 14px;
+  }
+  .frac {
+    display: inline-flex; flex-direction: column;
+    vertical-align: middle; text-align: center;
+    font-size: .85em; line-height: 1.15; margin: 0 2px;
+  }
+  .frac > span { padding: 0 3px; }
+  .frac > span:first-child { border-bottom: 1.5px solid currentColor; }
+  .intro h1 { font-size: 1.25rem; margin: 0 0 8px; }
+  .intro .formulas {
+    display: flex; gap: 0 3em; justify-content: center; flex-wrap: wrap;
+    font-family: "Cambria Math", "Times New Roman", serif;
+    font-size: 1.4rem; line-height: 2.4; margin: 0 0 6px;
+  }
+  .intro dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; margin: 0; }
+  .intro dt { font-family: "Cambria Math", "Times New Roman", serif; font-size: 1.1rem; text-align: center; }
+  .intro dd { margin: 0; }
+  canvas { display: block; width: 100%; }
+  .views { display: grid; grid-template-columns: 2fr 3fr; gap: 12px; }
+  #levels, #spec { height: 460px; }
+  #levels { cursor: pointer; }
+  .levels-wrap { position: relative; min-width: 0; }
+  .why {
+    position: absolute; width: 26px; height: 26px; min-width: 0; padding: 0;
+    border-radius: 50%; border: 1.5px solid var(--ink); background: #fff;
+    font-weight: 700; font-size: 14px; line-height: 1; transform: translate(-50%, -50%);
+  }
+  .why[aria-expanded="true"] { background: var(--ink); color: #fff; }
+  .why-box {
+    position: absolute; left: 8px; z-index: 2; width: min(330px, calc(100% - 16px));
+    background: #fff; border: 1px solid #d1d5db; border-radius: 8px;
+    box-shadow: 0 4px 14px rgba(0,0,0,.12); padding: 4px 12px; font-size: .9rem; line-height: 1.45;
+  }
+  .why-box p { margin: 8px 0; }
+  @media (max-width: 720px) {
+    .views { grid-template-columns: 1fr; }
+    #levels { height: 340px; }
+    #spec { height: 330px; }
+  }
+  .row { display: flex; gap: 12px 18px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
+  .row .right { margin-left: auto; display: flex; gap: 10px; }
+  button {
+    font: inherit;
+    height: 2.4em; min-width: 2.4em; padding: 0 10px;
+    border-radius: 6px;
+    border: 1px solid #d1d5db;
+    background: #fff;
+    cursor: pointer;
+  }
+  button:hover { background: #f3f4f6; }
+  .switch { display: inline-flex; border: 1px solid #d1d5db; border-radius: 6px; overflow: hidden; }
+  .switch button { border: 0; border-radius: 0; }
+  .switch button + button { border-left: 1px solid #d1d5db; }
+  .switch button[aria-pressed="true"] { background: var(--ink); color: #fff; }
+  [hidden] { display: none !important; }
+  .derivation {
+    display: grid;
+    grid-template-columns: auto auto 1fr;
+    column-gap: .4em;
+    align-items: center;
+    font-family: "Cambria Math", "Times New Roman", serif;
+    font-size: 1.3rem;
+    line-height: 2.4;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    overflow-x: auto;
+  }
+  .derivation .head {
+    grid-column: 1 / -1;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-size: 1rem; font-weight: 600; line-height: 1.6; margin-top: .3em;
+  }
+  .screen-tools { display: flex; justify-content: flex-end; margin-top: 8px; }
+  #screen-toggle { display: inline-grid; place-items: center; }
+  #screen-toggle svg { width: 18px; height: 18px; }
+  #screen-toggle .exit, #screen-toggle[aria-pressed="true"] .enter { display: none; }
+  #screen-toggle[aria-pressed="true"] .exit { display: block; }
+  .sim-panel { min-width: 0; }
+  #simulation.expanded {
+    width: 100%; height: 100%; margin: 0; border-radius: 0;
+    display: grid; justify-content: center;
+    grid-template-columns: minmax(0, 1600px);
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+  .expanded .sim-content { display: flex; flex-direction: column; min-height: 0; overflow: auto; }
+  .expanded .sim-panel { flex: none; }
+  .expanded .sim-content::before { content: ""; flex: 1 0 0; max-height: 120px; }
+  .expanded .sim-content::after { content: ""; flex: 5 0 0; order: 1; }
+  body.page-fullscreen { overflow: hidden; }
+  body.page-fullscreen main > :not(#simulation) { display: none; }
+  body.page-fullscreen #simulation { position: fixed; inset: 0; z-index: 10; }
+  #simulation.expanded #levels, #simulation.expanded #spec { height: clamp(360px, 66vh, 820px); }
+</style>
+</head>
+<body>
+<main>
+  <section class="card intro">
+    <h1>5.8 Emission and absorption line spectra</h1>
+    <div class="formulas">
+      <span>hf = E<sub>1</sub> − E<sub>2</sub></span>
+      <span>E<sub>n</sub> = −<span class="frac"><span>13.6 eV</span><span>n<sup>2</sup></span></span></span>
+      <span>c = fλ</span>
+    </div>
+    <dl>
+      <dt>h</dt><dd>Planck constant, 6.63 × 10<sup>−34</sup> J s</dd>
+      <dt>f</dt><dd>frequency of the photon emitted or absorbed</dd>
+      <dt>E<sub>1</sub>, E<sub>2</sub></dt><dd>energies of the higher and lower levels</dd>
+      <dt>E<sub>n</sub></dt><dd>energy of level n in a hydrogen atom</dd>
+      <dt>c</dt><dd>speed of light, 3.00 × 10<sup>8</sup> m s<sup>−1</sup></dd>
+      <dt>λ</dt><dd>wavelength of the photon</dd>
+    </dl>
+  </section>
+
+  <section class="card" id="simulation" aria-label="5.8 Line spectra simulation">
+    <div class="sim-content">
+      <div class="sim-panel">
+        <div class="views">
+          <div class="levels-wrap">
+            <canvas id="levels" aria-label="Energy levels of hydrogen"></canvas>
+            <button id="why-btn" class="why" aria-label="Why can an electron in n = 2 absorb another photon?" aria-expanded="false" hidden>?</button>
+            <div id="why-box" class="why-box" role="note" hidden>
+              <p><b>Normally</b> an electron lifted to n = 2 falls back to n = 1 in about a nanosecond, long before another photon can reach it, so cool hydrogen absorbs only ultraviolet. Hydrogen absorbs visible light only when it is hot, as in a star's atmosphere, where collisions keep knocking some electrons up to n = 2.</p>
+              <p><b>But in this demonstration</b> an electron lifted to n = 2 stays there until it absorbs a second photon, so the visible lines from n = 2 appear as well. Electrons lifted above n = 2 fall back without absorbing again.</p>
+            </div>
+          </div>
+          <canvas id="spec" aria-label="Apparatus and spectrum"></canvas>
+        </div>
+        <div class="row">
+          <div class="switch" role="group" aria-label="Spectrum">
+            <button data-mode="emission" aria-pressed="true">Emission</button>
+            <button data-mode="absorption" aria-pressed="false">Absorption</button>
+          </div>
+          <div class="right">
+            <button id="pause-btn" title="Play / pause (Space)">⏸</button>
+            <button id="clear-btn" title="Clear the spectrum">↺</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="screen-tools">
+      <button id="screen-toggle" aria-label="Full screen" aria-pressed="false" title="Enter full screen">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <path class="enter" d="M9 4H4v5m11-5h5v5M4 15v5h5m11-5v5h-5"/>
+          <path class="exit" d="M4 9h5V4m6 0v5h5M9 20v-5H4m11 5v-5h5"/>
+        </svg>
+      </button>
+    </div>
+  </section>
+
+  <div class="card derivation" id="derivation"></div>
+</main>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const css = getComputedStyle(document.documentElement);
+  const color = name => css.getPropertyValue(name).trim();
+  const C = { ink: color('--ink'), muted: color('--muted'), grid: color('--grid'), axis: color('--axis') };
+
+  // ---- Hydrogen, with the data-sheet constants ----
+  const H = 6.63e-34, CL = 3.00e8, QE = 1.60e-19, NMAX = 6;
+  const En = n => -13.6 / (n * n);                                   // eV
+  const lambdaNm = (u, l) => H * CL / ((En(u) - En(l)) * QE) * 1e9;  // nm
+  const region = nm => nm < 380 ? 'ultraviolet' : nm > 750 ? 'infrared' : 'visible';
+  // colour of visible light; null outside the visible
+  function wlColour(nm, a = 1) {
+    if (nm < 380 || nm > 750) return null;
+    let r, g, b;
+    if (nm < 440) { r = (440 - nm) / 60; g = 0; b = 1; }
+    else if (nm < 490) { r = 0; g = (nm - 440) / 50; b = 1; }
+    else if (nm < 510) { r = 0; g = 1; b = (510 - nm) / 20; }
+    else if (nm < 580) { r = (nm - 510) / 70; g = 1; b = 0; }
+    else if (nm < 645) { r = 1; g = (645 - nm) / 65; b = 0; }
+    else { r = 1; g = 0; b = 0; }
+    const f = nm < 420 ? 0.35 + 0.65 * (nm - 380) / 40 : nm > 700 ? 0.35 + 0.65 * (750 - nm) / 50 : 1;
+    return `rgba(${Math.round(255 * r * f)}, ${Math.round(255 * g * f)}, ${Math.round(255 * b * f)}, ${a})`;
+  }
+  const INVISIBLE = '#9ca3af';
+  const photonColour = nm => wlColour(nm) || INVISIBLE;
+
+  // ---- State ----
+  let mode = 'emission', auto = true;
+  let elec = { n: 1, x: null };            // the electron in the atom shown on the diagram
+  let queue = [], step = null;              // steps of the atom shown
+  let arrows = [];                          // recent transitions on the diagram, fading
+  let photons = [];                         // photons in flight in the apparatus
+  let counts = {};                          // photons landed on the spectrum (emission) or taken out (absorption)
+  let flashes = {};                         // recent arrivals on the spectrum, for a brief highlight
+  let last = null;                          // the transition shown in the working
+  let selected = null;                      // first click when choosing an emission by hand
+  let time = 0;
+  const key = (u, l) => `${u}-${l}`;
+
+  // ---- Canvases ----
+  const lv = $('levels'), lc = lv.getContext('2d');
+  const sp = $('spec'), scx = sp.getContext('2d');
+  const sz = { lW: 0, lH: 0, sW: 0, sH: 0 };
+  function sizeCanvas(cv, c) {
+    const dpr = window.devicePixelRatio || 1;
+    const r = cv.getBoundingClientRect();
+    cv.width = Math.round(r.width * dpr); cv.height = Math.round(r.height * dpr);
+    c.setTransform(dpr, 0, 0, dpr, 0, 0);
+    return r;
+  }
+  function resize() {
+    const a = sizeCanvas(lv, lc), b = sizeCanvas(sp, scx);
+    sz.lW = a.width; sz.lH = a.height; sz.sW = b.width; sz.sH = b.height;
+  }
+  function text(c, s, x, y, col = C.muted, align = 'center', base = 'middle', font = '12px system-ui, sans-serif') {
+    c.font = font; c.fillStyle = col; c.textAlign = align; c.textBaseline = base; c.fillText(s, x, y);
+  }
+  function arrowHead(c, x, y, ang, col, size = 9) {
+    c.fillStyle = col; c.beginPath(); c.moveTo(x, y);
+    c.lineTo(x - size * Math.cos(ang - 0.42), y - size * Math.sin(ang - 0.42));
+    c.lineTo(x - size * Math.cos(ang + 0.42), y - size * Math.sin(ang + 0.42));
+    c.closePath(); c.fill();
+  }
+
+  // ---- Energy-level diagram: height in proportion to 1/n (not to scale), so the upper levels can be told apart ----
+  function lgeom() {
+    const W = sz.lW, H = sz.lH;
+    const top = 34, bot = H - 30;
+    const xl = 54, xr = W - 78;
+    const Y = n => n === Infinity ? top : top + (bot - top) / n;
+    // each transition has its own column: grouped by the lower level, then by the upper
+    const gw = (xr - xl) / 5;
+    const X = (u, l) => xl + (l - 1) * gw + gw * (0.18 + 0.15 * (u - l - 1));
+    return { W, H, top, bot, xl, xr, Y, X };
+  }
+  function drawLevels() {
+    const g = lgeom(), c = lc;
+    c.clearRect(0, 0, g.W, g.H);
+    text(c, 'E / eV', g.xr + 8, 12, C.muted, 'left', 'middle');
+    text(c, 'not to scale', 8, 12, C.muted, 'left', 'middle', '11px system-ui, sans-serif');
+    // ionisation
+    c.save(); c.setLineDash([4, 4]); c.strokeStyle = C.axis; c.lineWidth = 1.2;
+    c.beginPath(); c.moveTo(g.xl, g.Y(Infinity)); c.lineTo(g.xr, g.Y(Infinity)); c.stroke(); c.restore();
+    text(c, 'n = ∞', g.xl - 6, g.Y(Infinity), C.muted, 'right');
+    text(c, '0', g.xr + 8, g.Y(Infinity), C.muted, 'left');
+    for (let n = 1; n <= NMAX; n++) {
+      const y = g.Y(n), on = selected === n;
+      c.strokeStyle = on ? '#7c3aed' : '#475569';
+      c.lineWidth = on ? 3.5 : 2;
+      c.beginPath(); c.moveTo(g.xl, y); c.lineTo(g.xr, y); c.stroke();
+      // the top levels crowd together on small screens
+      const fs = Math.max(8, Math.min(12, Math.floor(g.Y(5) - g.Y(6)) - 1));
+      text(c, `n = ${n}`, g.xl - 6, y, C.ink, 'right', 'middle', `${fs}px system-ui, sans-serif`);
+      text(c, En(n).toFixed(2).replace('-', '−'), g.xr + 8, y, C.ink, 'left', 'middle', `${fs}px system-ui, sans-serif`);
+    }
+    const why = $('why-btn');
+    why.hidden = mode !== 'absorption';
+    if (!why.hidden) { why.style.left = `${g.xl - 24}px`; why.style.top = `${g.Y(2) - 21}px`; $('why-box').style.top = `${g.Y(2) + 4}px`; }
+    // recent transitions, fading
+    arrows = arrows.filter(a => time - a.t < 6);
+    for (const a of arrows) {
+      const alpha = Math.max(0, 1 - (time - a.t) / 6), x = a.x, y0 = g.Y(a.from), y1 = g.Y(a.to);
+      // collisions and the unseen falls after absorbing are grey and dotted; photon jumps take the photon's colour
+      const plain = a.kind === 'collision' || a.kind === 'drop';
+      const col = plain ? `rgba(107,114,128,${alpha})` : (wlColour(a.nm, alpha) || `rgba(156,163,175,${alpha})`);
+      c.save(); c.strokeStyle = col; c.lineWidth = 2.5;
+      if (plain) c.setLineDash([3, 4]);
+      const p = a.kind === 'collision' ? 1 : Math.min(1, (time - a.t) / a.dur);
+      const ye = y0 + (y1 - y0) * p;
+      c.beginPath(); c.moveTo(x, y0); c.lineTo(x, ye); c.stroke(); c.restore();
+      if (p >= 1) arrowHead(c, x, y1, y1 > y0 ? Math.PI / 2 : -Math.PI / 2, col);
+    }
+    // the electron
+    const ex = elec.x ?? g.X(2, 1);
+    let ey = g.Y(elec.n);
+    if (step && (step.type === 'emit' || step.type === 'absorb' || step.type === 'drop' || step.type === 'excite')) {
+      const p = Math.min(1, step.t / step.dur);
+      ey = g.Y(step.from) + (g.Y(step.to) - g.Y(step.from)) * p;
+    }
+    const exNow = step && step.x != null ? step.x : ex;
+    c.save(); c.fillStyle = '#2563eb'; c.shadowColor = '#2563eb'; c.shadowBlur = 8;
+    c.beginPath(); c.arc(exNow, ey, 6, 0, 2 * Math.PI); c.fill(); c.restore();
+    text(c, 'e⁻', exNow + 10, ey - 10, '#2563eb', 'left', 'middle', '600 12px system-ui, sans-serif');
+  }
+
+  // ---- Apparatus and spectrum ----
+  // wavelength axis: ultraviolet 90–380 nm (log), visible 380–750 nm (linear), infrared 750–8000 nm (log)
+  const SEG = [[90, 380, 0, 0.24, 'log'], [380, 750, 0.24, 0.72, 'lin'], [750, 8000, 0.72, 1, 'log']];
+  function stripFrac(nm) {
+    for (const [a, b, f0, f1, k] of SEG) if (nm <= b || b === 8000) {
+      const u = k === 'log' ? Math.log(nm / a) / Math.log(b / a) : (nm - a) / (b - a);
+      return f0 + (f1 - f0) * Math.max(0, Math.min(1, u));
+    }
+    return 1;
+  }
+  function sgeom() {
+    const W = sz.sW, H = sz.sH;
+    const ay = H * 0.27;                                   // beam height in the apparatus
+    const sx0 = 14, sx1 = W - 14, sy = H * 0.64, sh = Math.min(60, H * 0.13);
+    const px = W - 34;                                     // the spectrometer is just a slit and a prism
+    const src = mode === 'emission' ? { x: W * 0.42, y: ay } : { x: W * 0.07, y: ay };
+    const gas = { x: W * 0.47, y: ay, w: W * 0.5, h: Math.min(110, H * 0.24) };
+    const spec = { x0: px - 16, x1: px + 16, y0: ay - 16, y1: ay + 16 };
+    return { W, H, ay, sx0, sx1, sy, sh, spec, src, gas, SX: nm => sx0 + (sx1 - sx0) * stripFrac(nm) };
+  }
+  function drawSpec() {
+    const g = sgeom(), c = scx;
+    c.clearRect(0, 0, g.W, g.H);
+    // spectrometer, kept small: a slit, a prism, and the light spread out down to the spectrum
+    const pcx = (g.spec.x0 + g.spec.x1) / 2, pr = 12;
+    c.fillStyle = 'rgba(148,163,184,.10)';
+    c.beginPath(); c.moveTo(pcx + 4, g.ay + pr); c.lineTo(g.sx1, g.sy); c.lineTo(g.sx0, g.sy); c.lineTo(pcx - 4, g.ay + pr); c.closePath(); c.fill();
+    c.fillStyle = 'rgba(191,219,254,.9)'; c.strokeStyle = '#64748b'; c.lineWidth = 1.5;
+    c.beginPath(); c.moveTo(pcx, g.ay - pr); c.lineTo(pcx + pr, g.ay + pr * 0.8); c.lineTo(pcx - pr, g.ay + pr * 0.8); c.closePath(); c.fill(); c.stroke();
+    c.fillStyle = '#334155'; c.fillRect(g.spec.x0 - 3, g.ay - 16, 3, 13); c.fillRect(g.spec.x0 - 3, g.ay + 3, 3, 13);
+    text(c, 'spectrometer', pcx - 4, g.ay - 26, C.muted, 'center', 'middle', '11px system-ui, sans-serif');
+    if (mode === 'emission') {
+      // discharge tube of hot hydrogen
+      const tw = g.W * 0.62, th = Math.min(56, g.H * 0.13);
+      const grad = c.createLinearGradient(0, g.ay - th / 2, 0, g.ay + th / 2);
+      grad.addColorStop(0, 'rgba(236, 72, 153, .25)'); grad.addColorStop(0.5, 'rgba(244, 114, 182, .6)'); grad.addColorStop(1, 'rgba(236, 72, 153, .25)');
+      c.fillStyle = grad; c.strokeStyle = '#94a3b8'; c.lineWidth = 1.5;
+      c.beginPath(); c.roundRect(g.src.x - tw / 2, g.ay - th / 2, tw, th, th / 2); c.fill(); c.stroke();
+      c.fillStyle = '#475569';
+      c.fillRect(g.src.x - tw / 2 - 8, g.ay - 4, 10, 8); c.fillRect(g.src.x + tw / 2 - 2, g.ay - 4, 10, 8);
+      text(c, 'hot hydrogen gas', g.src.x, g.ay + th / 2 + 14, C.muted);
+    } else {
+      // white light through cool gas
+      c.fillStyle = 'rgba(250, 250, 240, .9)';
+      const bx0 = g.src.x + 14, bx1 = g.spec.x0;
+      const beam = c.createLinearGradient(bx0, 0, bx1, 0);
+      beam.addColorStop(0, 'rgba(253, 230, 138, .55)'); beam.addColorStop(1, 'rgba(253, 230, 138, .25)');
+      c.fillStyle = beam; c.fillRect(bx0, g.ay - 8, bx1 - bx0, 16);
+      const glow = c.createRadialGradient(g.src.x, g.ay, 2, g.src.x, g.ay, 30);
+      glow.addColorStop(0, 'rgba(255, 251, 235, 1)'); glow.addColorStop(0.5, 'rgba(253, 224, 71, .5)'); glow.addColorStop(1, 'rgba(253, 224, 71, 0)');
+      c.fillStyle = glow; c.beginPath(); c.arc(g.src.x, g.ay, 30, 0, 2 * Math.PI); c.fill();
+      c.fillStyle = '#fffbeb'; c.strokeStyle = '#94a3b8'; c.beginPath(); c.arc(g.src.x, g.ay, 13, 0, 2 * Math.PI); c.fill(); c.stroke();
+      text(c, 'white light', g.src.x, g.ay + 42, C.muted);
+      c.fillStyle = 'rgba(186, 230, 253, .35)'; c.strokeStyle = '#94a3b8';
+      c.beginPath(); c.roundRect(g.gas.x - g.gas.w / 2, g.ay - g.gas.h / 2, g.gas.w, g.gas.h, 8); c.fill(); c.stroke();
+      text(c, 'hydrogen gas', g.gas.x, g.ay + g.gas.h / 2 + 14, C.muted);
+    }
+    // photons in flight
+    photons = photons.filter(p => time - p.t0 < p.dur + 0.05);
+    for (const p of photons) {
+      const u = Math.min(1, (time - p.t0) / p.dur);
+      const x = p.x0 + (p.x1 - p.x0) * u, y = p.y0 + (p.y1 - p.y0) * u;
+      const alpha = p.fade ? 1 - u : 1;
+      drawPacket(c, x, y, Math.atan2(p.y1 - p.y0, p.x1 - p.x0), p.nm, alpha);
+    }
+    drawStrip(g);
+  }
+  // a short wave packet; its wiggles are spaced more widely for longer wavelengths
+  function drawPacket(c, x, y, ang, nm, alpha) {
+    const col = wlColour(nm, alpha) || `rgba(156,163,175,${alpha})`;
+    const k = Math.max(5, Math.min(22, 5 + 13 * Math.log(nm / 90) / Math.log(8000 / 90) * 1.8));
+    c.save(); c.translate(x, y); c.rotate(ang);
+    c.strokeStyle = col; c.lineWidth = 2.2; c.beginPath();
+    for (let s = -24; s <= 24; s += 1) {
+      const env = Math.cos(s / 24 * Math.PI / 2);
+      const yy = 6 * env * Math.sin(2 * Math.PI * s / k);
+      s === -24 ? c.moveTo(s, yy) : c.lineTo(s, yy);
+    }
+    c.stroke(); c.restore();
+  }
+  function drawStrip(g) {
+    const c = scx, x0 = g.sx0, x1 = g.sx1, y = g.sy, h = g.sh;
+    // background: dark for emission; a continuous spectrum for absorption (grey where it is not visible)
+    if (mode === 'emission') { c.fillStyle = '#0b0f19'; c.fillRect(x0, y, x1 - x0, h); }
+    else {
+      for (let px = x0; px < x1; px++) {
+        const nm = fracToNm((px - x0) / (x1 - x0));
+        c.fillStyle = wlColour(nm) || '#6b7280';
+        c.fillRect(px, y, 1.5, h);
+      }
+    }
+    // lines
+    for (let u = 2; u <= NMAX; u++) for (let l = 1; l < u; l++) {
+      const n = counts[key(u, l)] || 0;
+      if (!n) continue;
+      const nm = lambdaNm(u, l), x = g.SX(nm);
+      const strength = 1 - Math.exp(-n / 3);
+      if (mode === 'emission') {
+        c.fillStyle = wlColour(nm, strength) || `rgba(229,231,235,${strength})`;
+        c.fillRect(x - 1.5, y, 3, h);
+      } else {
+        c.fillStyle = `rgba(0,0,0,${0.9 * strength})`;
+        c.fillRect(x - 1.5, y, 3, h);
+      }
+      const f = flashes[key(u, l)];
+      if (f != null && time - f < 0.8) {
+        const a = 1 - (time - f) / 0.8;
+        c.strokeStyle = `rgba(124,58,237,${a})`; c.lineWidth = 2;
+        c.strokeRect(x - 5, y - 3, 10, h + 6);
+      }
+    }
+    // the line of the transition in the working
+    if (last) {
+      const x = g.SX(last.nm);
+      c.fillStyle = '#7c3aed';
+      c.beginPath(); c.moveTo(x, y + h + 2); c.lineTo(x - 5, y + h + 10); c.lineTo(x + 5, y + h + 10); c.closePath(); c.fill();
+    }
+    c.strokeStyle = C.axis; c.lineWidth = 1; c.strokeRect(x0 + 0.5, y + 0.5, x1 - x0 - 1, h - 1);
+    // region labels and ticks
+    const xb1 = x0 + (x1 - x0) * 0.24, xb2 = x0 + (x1 - x0) * 0.72;
+    c.strokeStyle = 'rgba(31,35,40,.5)'; c.setLineDash([3, 3]);
+    c.beginPath(); c.moveTo(xb1, y - 18); c.lineTo(xb1, y); c.moveTo(xb2, y - 18); c.lineTo(xb2, y); c.stroke(); c.setLineDash([]);
+    text(c, 'ultraviolet', (x0 + xb1) / 2, y - 10, C.muted);
+    text(c, 'visible', (xb1 + xb2) / 2, y - 10, C.muted);
+    text(c, 'infrared', (xb2 + x1) / 2, y - 10, C.muted);
+    const ticks = [100, 200, 300, 400, 500, 600, 700, 1000, 2000, 5000];
+    c.strokeStyle = C.axis;
+    for (const t of ticks) {
+      const x = g.SX(t);
+      c.beginPath(); c.moveTo(x, y + h); c.lineTo(x, y + h + 5); c.stroke();
+      if (g.W > 500 || [100, 400, 700, 2000].includes(t)) text(c, `${t}`, x, y + h + 16, C.muted, 'center', 'middle', '11px system-ui, sans-serif');
+    }
+    text(c, 'λ / nm (scale changes at 380 nm and 750 nm)', x1, y + h + 34, C.muted, 'right', 'middle', '11px system-ui, sans-serif');
+  }
+  function fracToNm(f) {
+    for (const [a, b, f0, f1, k] of SEG) if (f <= f1) {
+      const u = (f - f0) / (f1 - f0);
+      return k === 'log' ? a * Math.pow(b / a, u) : a + (b - a) * u;
+    }
+    return 8000;
+  }
+
+  // ---- The atom shown: steps ----
+  const DUR = { excite: 0.5, emit: 0.6, absorb: 0.45, drop: 0.5, incoming: 1.0, pause: 0.35 };
+  // the gas has many atoms: alongside the one followed on the diagram, a few others add to the spectrum unseen
+  function otherAtoms() {
+    const add = k => { counts[k] = (counts[k] || 0) + 1; };
+    if (mode === 'emission') {
+      for (let a = 0; a < 2; a++) {
+        let n = 2 + Math.floor(Math.random() * (NMAX - 1));
+        while (n > 1) { const l = 1 + Math.floor(Math.random() * (n - 1)); add(key(n, l)); n = l; }
+      }
+    } else {
+      for (let a = 0; a < 4; a++) { const l = Math.random() < 0.5 ? 1 : 2; add(key(l + 1 + Math.floor(Math.random() * (NMAX - l)), l)); }
+    }
+  }
+  function plan() {
+    if (mode === 'emission') {
+      // a collision lifts the electron to a random higher level; it then drops back down level by level
+      const u = 2 + Math.floor(Math.random() * (NMAX - 1));
+      queue.push({ type: 'excite', from: elec.n, to: u });
+      queue.push({ type: 'pause' });
+      let n = u;
+      while (n > 1) { const l = 1 + Math.floor(Math.random() * (n - 1)); queue.push({ type: 'emit', from: n, to: l }); queue.push({ type: 'pause' }); n = l; }
+    } else {
+      // from n = 1, often only as far as n = 2, where (in this demonstration) it can take a second photon
+      const from = elec.n;
+      const u = from === 1 && Math.random() < 0.4 ? 2 : from + 1 + Math.floor(Math.random() * (NMAX - from));
+      absorbPlan(from, u);
+    }
+  }
+  // the electron takes a photon from n = from up to n = u; above n = 2 it falls back without absorbing again
+  function absorbPlan(from, u) {
+    queue.push({ type: 'incoming', from, to: u });
+    queue.push({ type: 'absorb', from, to: u });
+    queue.push({ type: 'pause' }, { type: 'pause' });
+    if (u > 2) { queue.push({ type: 'drop', from: u, to: Math.random() < 0.5 ? 1 : 2 }); queue.push({ type: 'pause' }, { type: 'pause' }); }
+  }
+  function beginStep(s) {
+    const g = lgeom(), sg = sgeom();
+    s.t = 0; s.dur = DUR[s.type];
+    if (s.type === 'pause') return;
+    const u = Math.max(s.from, s.to), l = Math.min(s.from, s.to), nm = lambdaNm(u, l);
+    s.x = g.X(u, l); s.nm = nm;
+    if (s.type === 'excite') arrows.push({ from: s.from, to: s.to, x: g.X(s.to, 1) - 6, kind: 'collision', t: time, dur: s.dur });
+    if (s.type === 'excite') s.x = g.X(s.to, 1) - 6;
+    if (s.type === 'emit') {
+      arrows.push({ from: s.from, to: s.to, x: s.x, nm, kind: 'emit', t: time, dur: s.dur });
+      // emitted towards the spectrometer
+      photons.push({ x0: sg.src.x + (Math.random() - 0.5) * sz.sW * 0.5, y0: sg.ay + (Math.random() - 0.5) * 20, x1: sg.spec.x0, y1: sg.ay, nm, t0: time, dur: 1.2, land: key(u, l) });
+      setLast(u, l, 'emission');
+    }
+    if (s.type === 'incoming') {
+      photons.push({ x0: sg.src.x + 16, y0: sg.ay, x1: sg.gas.x + (Math.random() - 0.3) * sg.gas.w * 0.5, y1: sg.ay, nm, t0: time, dur: s.dur });
+    }
+    if (s.type === 'absorb') {
+      arrows.push({ from: s.from, to: s.to, x: s.x, nm, kind: 'absorb', t: time, dur: s.dur });
+      counts[key(u, l)] = (counts[key(u, l)] || 0) + 1;
+      flashes[key(u, l)] = time;
+      otherAtoms();
+      setLast(u, l, 'absorption');
+    }
+    if (s.type === 'drop') arrows.push({ from: s.from, to: s.to, x: s.x + 6, kind: 'drop', t: time, dur: s.dur });
+  }
+  function endStep(s) {
+    if (s.type === 'excite' || s.type === 'emit' || s.type === 'absorb' || s.type === 'drop') { elec.n = s.to; elec.x = s.x; }
+  }
+  function advance(dt) {
+    // photons landing on the spectrum (emission)
+    for (const p of photons) if (p.land && !p.done && time - p.t0 >= p.dur) {
+      p.done = true; counts[p.land] = (counts[p.land] || 0) + 1; flashes[p.land] = time;
+      otherAtoms();
+    }
+    if (!step) {
+      if (!queue.length) {
+        if (!auto) return;
+        plan();
+      }
+      step = queue.shift(); beginStep(step);
+    }
+    step.t += dt;
+    if (step.t >= step.dur) { endStep(step); step = null; }
+  }
+
+  // ---- Working ----
+  function setLast(u, l, kind) { last = { u, l, kind, nm: lambdaNm(u, l) }; updateWorking(); }
+  const sci = (v, dp = 2) => {
+    const e = Math.floor(Math.log10(Math.abs(v))), m = v / 10 ** e;
+    return `${m.toFixed(dp)} × 10<sup>${e < 0 ? '−' + -e : e}</sup>`;
+  };
+  const row = (lhs, ...rhs) => `<span>${lhs}</span><span>=</span><span>${rhs.join(' = ')}</span>`;
+  const frac = (p, q) => `<span class="frac"><span>${p}</span><span>${q}</span></span>`;
+  const head = s => `<span class="head">${s}</span>`;
+  const ev = v => `${v.toFixed(2).replace('-', '−')} eV`;
+  function updateWorking() {
+    $('derivation').hidden = !last;
+    if (!last) return;
+    const { u, l, kind } = last, dE = En(u) - En(l), dEJ = dE * QE, f = dEJ / H, nm = lambdaNm(u, l);
+    let h = head(kind === 'emission' ? `n = ${u} → n = ${l}: a photon is emitted` : `n = ${l} → n = ${u}: a photon is absorbed`);
+    h += row('hf', `E<sub>${u}</sub> − E<sub>${l}</sub>`, `(${ev(En(u))}) − (${ev(En(l))})`, ev(dE));
+    h += row('', `${dE.toFixed(2)} × 1.60 × 10<sup>−19</sup> J`, `${sci(dEJ)} J`);
+    h += row('f', frac(`${sci(dEJ)} J`, '6.63 × 10<sup>−34</sup> J s'), `${sci(f)} Hz`);
+    h += row('λ', frac('c', 'f'), frac('3.00 × 10<sup>8</sup> m s<sup>−1</sup>', `${sci(f)} Hz`), `${sci(nm * 1e-9)} m`, `${nm.toFixed(0)} nm (${region(nm)})`);
+    $('derivation').innerHTML = h;
+  }
+
+  // ---- Choosing a transition by hand ----
+  lv.addEventListener('click', e => {
+    const r = lv.getBoundingClientRect(), y = e.clientY - r.top, g = lgeom();
+    let best = null, bd = Infinity;
+    for (let n = 1; n <= NMAX; n++) { const d = Math.abs(g.Y(n) - y); if (d < bd) { bd = d; best = n; } }
+    if (bd > 22) return;
+    setAuto(false);
+    if (mode === 'absorption') {
+      queue = []; step = null; selected = null;
+      let from = elec.n;
+      // an electron above n = 2 can't absorb again: it falls back to n = 1 first
+      if (from > 2) { queue.push({ type: 'drop', from, to: 1 }); from = 1; }
+      if (best > from) absorbPlan(from, best);
+      else if (best < from) queue.push({ type: 'drop', from, to: best });
+      return;
+    }
+    // emission: first click the upper level, then the lower one
+    if (selected == null || best >= selected) {
+      selected = best;
+      queue = []; step = null;
+      if (elec.n !== best) queue.push({ type: 'excite', from: elec.n, to: best });
+      updateWorking();
+      return;
+    }
+    const u = selected; selected = null;
+    queue = []; step = null; elec.n = u;
+    queue.push({ type: 'emit', from: u, to: best });
+  });
+
+  // ---- Loop and controls ----
+  let lastFrame = null;
+  function tick(now) {
+    const dt = lastFrame === null ? 0 : Math.min(0.1, (now - lastFrame) / 1000);
+    lastFrame = now; time += dt;
+    advance(dt);
+    drawLevels(); drawSpec();
+    requestAnimationFrame(tick);
+  }
+  function clearAll() {
+    counts = {}; flashes = {}; photons = []; arrows = []; queue = []; step = null; selected = null; last = null;
+    elec = { n: 1, x: null };
+    updateWorking();
+  }
+  function setAuto(a) { auto = a; $('pause-btn').textContent = auto ? '⏸' : '▶'; }
+  document.querySelectorAll('[data-mode]').forEach(b => b.addEventListener('click', () => {
+    mode = b.dataset.mode;
+    document.querySelectorAll('[data-mode]').forEach(o => o.setAttribute('aria-pressed', String(o === b)));
+    showWhy(false);
+    clearAll();
+  }));
+  function showWhy(on) { $('why-box').hidden = !on; $('why-btn').setAttribute('aria-expanded', String(on)); }
+  $('why-btn').addEventListener('click', e => { e.stopPropagation(); showWhy($('why-box').hidden); });
+  document.addEventListener('click', e => { if (!$('why-box').hidden && !$('why-box').contains(e.target)) showWhy(false); });
+  $('pause-btn').addEventListener('click', () => { setAuto(!auto); selected = null; });
+  $('clear-btn').addEventListener('click', clearAll);
+  window.addEventListener('keydown', e => {
+    if (e.code === 'Space' && e.target === document.body) { e.preventDefault(); setAuto(!auto); }
+  });
+
+  const simulation = $('simulation'), screenToggle = $('screen-toggle');
+  function syncFullscreen() {
+    const expanded = document.fullscreenElement === simulation || document.body.classList.contains('page-fullscreen');
+    simulation.classList.toggle('expanded', expanded);
+    screenToggle.setAttribute('aria-pressed', String(expanded));
+    screenToggle.title = expanded ? 'Exit full screen' : 'Enter full screen';
+    resize();
+  }
+  screenToggle.addEventListener('click', async () => {
+    if (document.fullscreenElement === simulation) {
+      await document.exitFullscreen();
+    } else if (document.body.classList.contains('page-fullscreen')) {
+      document.body.classList.remove('page-fullscreen');
+      syncFullscreen();
+    } else {
+      try {
+        await simulation.requestFullscreen();
+      } catch {
+        // Embedded pages and mobile browsers can restrict native fullscreen.
+        document.body.classList.add('page-fullscreen');
+        syncFullscreen();
+      }
+    }
+  });
+  document.addEventListener('fullscreenchange', syncFullscreen);
+  window.addEventListener('keydown', ev => {
+    if (ev.key === 'Escape' && document.body.classList.contains('page-fullscreen')) screenToggle.click();
+  });
+  window.addEventListener('resize', resize);
+  resize();
+  clearAll();
+  requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>
