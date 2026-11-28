@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>5.9 X-ray tube</title>
+<style>
+  :root {
+    --bg: #f7f7f5;
+    --panel: #ffffff;
+    --ink: #1f2328;
+    --muted: #6b7280;
+    --grid: #e5e7eb;
+    --axis: #9ca3af;
+    --electron: #2563eb;
+    --xray: #6b7280;
+    --spectrum: #7c3aed;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+  }
+  main { max-width: 1100px; margin: 0 auto; padding: 20px; }
+  .card {
+    background: var(--panel);
+    border-radius: 10px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.08);
+    padding: 14px 18px;
+    margin-bottom: 14px;
+  }
+  .frac {
+    display: inline-flex; flex-direction: column;
+    vertical-align: middle; text-align: center;
+    font-size: .85em; line-height: 1.15; margin: 0 2px;
+  }
+  .frac > span { padding: 0 3px; }
+  .frac > span:first-child { border-bottom: 1.5px solid currentColor; }
+  .intro h1 { font-size: 1.25rem; margin: 0 0 8px; }
+  .intro .formulas {
+    display: flex; gap: 0 3em; justify-content: center; flex-wrap: wrap;
+    font-family: "Cambria Math", "Times New Roman", serif;
+    font-size: 1.4rem; line-height: 2.4; margin: 0 0 6px;
+  }
+  .intro dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; margin: 0; }
+  .intro dt { font-family: "Cambria Math", "Times New Roman", serif; font-size: 1.1rem; text-align: center; }
+  .intro dd { margin: 0; }
+  canvas { display: block; width: 100%; }
+  #tube { height: 320px; }
+  #plot { height: 270px; margin-top: 6px; }
+  @media (max-width: 720px) { #tube { height: 250px; } #plot { height: 250px; } }
+  .row { display: flex; gap: 12px 18px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
+  .row .right { margin-left: auto; display: flex; gap: 10px; }
+  .slider { flex: 1 1 180px; max-width: 360px; min-width: 0; }
+  .slider label { display: flex; justify-content: space-between; margin-bottom: 4px; font-variant-numeric: tabular-nums; }
+  .slider input { display: block; width: 100%; margin-inline: 0; accent-color: var(--ink); }
+  button {
+    font: inherit;
+    height: 2.4em; min-width: 2.4em; padding: 0 10px;
+    border-radius: 6px;
+    border: 1px solid #d1d5db;
+    background: #fff;
+    cursor: pointer;
+  }
+  button:hover { background: #f3f4f6; }
+  .derivation {
+    display: grid;
+    grid-template-columns: auto auto 1fr;
+    column-gap: .4em;
+    align-items: center;
+    font-family: "Cambria Math", "Times New Roman", serif;
+    font-size: 1.3rem;
+    line-height: 2.4;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    overflow-x: auto;
+  }
+  .derivation .head {
+    grid-column: 1 / -1;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-size: 1rem; font-weight: 600; line-height: 1.6; margin-top: .3em;
+  }
+  .screen-tools { display: flex; justify-content: flex-end; margin-top: 8px; }
+  #screen-toggle { display: inline-grid; place-items: center; }
+  #screen-toggle svg { width: 18px; height: 18px; }
+  #screen-toggle .exit, #screen-toggle[aria-pressed="true"] .enter { display: none; }
+  #screen-toggle[aria-pressed="true"] .exit { display: block; }
+  .sim-panel { min-width: 0; }
+  #simulation.expanded {
+    width: 100%; height: 100%; margin: 0; border-radius: 0;
+    display: grid; justify-content: center;
+    grid-template-columns: minmax(0, 1600px);
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+  .expanded .sim-content { display: flex; flex-direction: column; min-height: 0; overflow: auto; }
+  .expanded .sim-panel { flex: none; }
+  .expanded .sim-content::before { content: ""; flex: 1 0 0; max-height: 120px; }
+  .expanded .sim-content::after { content: ""; flex: 5 0 0; order: 1; }
+  .expanded input[type="range"] { max-width: 100%; margin-inline: 0; }
+  body.page-fullscreen { overflow: hidden; }
+  body.page-fullscreen main > :not(#simulation) { display: none; }
+  body.page-fullscreen #simulation { position: fixed; inset: 0; z-index: 10; }
+  #simulation.expanded #tube { height: clamp(260px, 40vh, 500px); }
+  #simulation.expanded #plot { height: clamp(220px, 32vh, 420px); }
+</style>
+</head>
+<body>
+<main>
+  <section class="card intro">
+    <h1>5.9 X-ray tube</h1>
+    <div class="formulas">
+      <span>eV = <span class="frac"><span>hc</span><span>λ<sub>min</sub></span></span></span>
+      <span>λ<sub>min</sub> = <span class="frac"><span>hc</span><span>eV</span></span></span>
+      <span>P = VI</span>
+    </div>
+    <dl>
+      <dt>e</dt><dd>elementary charge, 1.60 × 10<sup>−19</sup> C</dd>
+      <dt>V</dt><dd>accelerating p.d. between the cathode and the anode</dd>
+      <dt>h</dt><dd>Planck constant, 6.63 × 10<sup>−34</sup> J s</dd>
+      <dt>c</dt><dd>speed of light, 3.00 × 10<sup>8</sup> m s<sup>−1</sup></dd>
+      <dt>λ<sub>min</sub></dt><dd>minimum wavelength of the X-rays: an electron gives all its kinetic energy to one photon</dd>
+      <dt>I</dt><dd>tube current, the rate at which charge (electrons) reaches the target</dd>
+      <dt>P</dt><dd>power delivered to the target by the electrons</dd>
+    </dl>
+  </section>
+
+  <section class="card" id="simulation" aria-label="5.9 X-ray tube simulation">
+    <div class="sim-content">
+      <div class="sim-panel">
+        <canvas id="tube" aria-label="X-ray tube"></canvas>
+        <canvas id="plot" aria-label="X-ray spectrum: intensity against wavelength"></canvas>
+        <div class="row">
+          <div class="slider">
+            <label for="V"><span>Accelerating p.d. V</span><span id="V-value"></span></label>
+            <input type="range" id="V" min="20" max="150" step="5" value="100">
+          </div>
+          <div class="slider">
+            <label for="I"><span>Tube current I</span><span id="I-value"></span></label>
+            <input type="range" id="I" min="1" max="10" step="0.5" value="5">
+          </div>
+          <div class="right">
+            <button id="pause-btn" title="Play / pause (Space)">⏸</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="screen-tools">
+      <button id="screen-toggle" aria-label="Full screen" aria-pressed="false" title="Enter full screen">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <path class="enter" d="M9 4H4v5m11-5h5v5M4 15v5h5m11-5v5h-5"/>
+          <path class="exit" d="M4 9h5V4m6 0v5h5M9 20v-5H4m11 5v-5h5"/>
+        </svg>
+      </button>
+    </div>
+  </section>
+
+  <div class="card derivation" id="derivation"></div>
+</main>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const css = getComputedStyle(document.documentElement);
+  const color = name => css.getPropertyValue(name).trim();
+  const C = {
+    ink: color('--ink'), muted: color('--muted'), grid: color('--grid'), axis: color('--axis'),
+    electron: color('--electron'), xray: color('--xray'), spectrum: color('--spectrum'),
+  };
+
+  // ---- Physics, with the data-sheet constants ----
+  const H = 6.63e-34, CL = 3.00e8, QE = 1.60e-19, Z = 74;
+  let Vkv = 100, ImA = 5, playing = true;
+  const lambdaMinPm = () => H * CL / (QE * Vkv * 1e3) * 1e12;
+  // tungsten characteristic lines; they need the K shell emptied, which takes 69.5 keV
+  const K_EDGE = 69.5;
+  const LINES = [
+    { name: 'Kα', keV: 59.3, rel: 1 },
+    { name: 'Kβ', keV: 67.2, rel: 0.22 },
+  ].map(l => ({ ...l, pm: H * CL / (QE * l.keV * 1e3) * 1e12 }));
+  // fraction of the electrons' energy that leaves as X-rays (about 1.1 × 10⁻⁹ Z V)
+  const efficiency = () => 1.1e-9 * Z * Vkv * 1e3;
+
+  // ---- Spectrum: intensity against wavelength, 0–150 pm ----
+  // continuous (braking) X-rays, Kramers' law: I(λ) ∝ (λ/λmin − 1)/λ³ from λmin upwards, with the long wavelengths
+  // partly absorbed in the tube's window; plus the two lines once V passes the K edge
+  const L_MAX = 150, NB = 300, DL = L_MAX / NB;
+  const binLambda = i => (i + 0.5) * DL;
+  const FILTER = 80;                         // pm: window absorption, ∝ λ³
+  let spectrum = new Float64Array(NB);       // expected intensity per bin (energy), per mA
+  let photonCdf = new Float64Array(NB);      // for drawing photons one by one (number, not energy)
+  // photons drawn for the graph: 6000 a second per mA. The graph's height is reset whenever V changes (the peak goes
+  // up roughly as V³, too much to show on one scale), so only the tube current changes its height at a given V.
+  let photonsPerSec = 0;
+  function buildSpectrum() {
+    const lm = lambdaMinPm();
+    let nTot = 0;
+    for (let i = 0; i < NB; i++) {
+      const l = binLambda(i);
+      let s = l > lm ? (l / lm - 1) / (l ** 3) : 0;
+      s *= Math.exp(-((l / FILTER) ** 3));
+      if (Vkv > K_EDGE) {
+        const a = 5.2e-7 * (Vkv - K_EDGE) ** 1.6, sig = 0.35;
+        for (const ln of LINES) s += a * ln.rel * Math.exp(-0.5 * ((l - ln.pm) / sig) ** 2) / (sig * Math.sqrt(2 * Math.PI));
+      }
+      spectrum[i] = s * DL;
+      nTot += spectrum[i] * l;               // photon number ∝ energy × λ
+      photonCdf[i] = nTot;
+    }
+    for (let i = 0; i < NB; i++) photonCdf[i] /= nTot;
+    photonsPerSec = 6000 * ImA;
+    // on average bin i gains rate × (share of photons in bin i) / λ ∝ spectrum[i] each second; at 10 mA the highest
+    // bin reaches 90% of the height
+    let top = 0; for (let i = 0; i < NB; i++) top = Math.max(top, spectrum[i]);
+    histScale = 0.9 * nTot / (6000 * 10 * top);
+  }
+  // the graph is built from photons: each adds its energy (∝ 1/λ) to its bin, counted from when the first electron
+  // reaches the target after the last change; the graph shows the total divided by the time, so its scatter
+  // shrinks the longer it runs
+  let hist = new Float64Array(NB), histScale = 1, counting = false, countTime = 0;
+  function resetCount() { hist = new Float64Array(NB); counting = false; countTime = 0; }
+  const shown = i => hist[i] / Math.max(countTime, 0.5) * histScale;
+  function samplePhoton() {
+    const r = Math.random();
+    let lo = 0, hi = NB - 1;
+    while (lo < hi) { const m = (lo + hi) >> 1; if (photonCdf[m] < r) lo = m + 1; else hi = m; }
+    return lo;
+  }
+  function addPhotons(dt) {
+    if (!counting) return;
+    countTime += dt;
+    const n = Math.round(photonsPerSec * dt + Math.random() - 0.5);
+    for (let j = 0; j < n; j++) { const i = samplePhoton(); hist[i] += 1 / binLambda(i); }
+  }
+  // ---- Canvases ----
+  const tube = $('tube'), tc = tube.getContext('2d');
+  const plot = $('plot'), pc = plot.getContext('2d');
+  const sz = { tW: 0, tH: 0, pW: 0, pH: 0 };
+  function sizeCanvas(cv, c) {
+    const dpr = window.devicePixelRatio || 1;
+    const r = cv.getBoundingClientRect();
+    cv.width = Math.round(r.width * dpr); cv.height = Math.round(r.height * dpr);
+    c.setTransform(dpr, 0, 0, dpr, 0, 0);
+    return r;
+  }
+  function resize() {
+    const a = sizeCanvas(tube, tc), b = sizeCanvas(plot, pc);
+    sz.tW = a.width; sz.tH = a.height; sz.pW = b.width; sz.pH = b.height;
+  }
+  function text(c, s, x, y, col = C.muted, align = 'center', base = 'middle', font = '12px system-ui, sans-serif') {
+    c.font = font; c.fillStyle = col; c.textAlign = align; c.textBaseline = base; c.fillText(s, x, y);
+  }
+
+  // ---- Tube ----
+  function tgeom() {
+    const W = sz.tW, H = sz.tH;
+    const cx = W / 2, cy = H * 0.42;
+    const narrow = W < 600;
+    const gw = narrow ? W - 118 : Math.min(W * 0.62, 620), gh = Math.min(H * 0.42, 130);
+    const x0 = narrow ? 72 : cx - gw / 2, x1 = x0 + gw;
+    const cathX = x0 + gw * 0.16, targX = x1 - gw * 0.2;
+    return { W, H, cx: (x0 + x1) / 2, cy, gw, gh, x0, x1, cathX, targX, narrow, fs: narrow ? '10px system-ui, sans-serif' : '12px system-ui, sans-serif' };
+  }
+  let electrons = [], xrays = [], spawnAcc = 0, glow = 0, time = 0;
+  const E_TRAVEL = 0.9;
+  function drawTube(dt) {
+    const g = tgeom(), c = tc;
+    c.clearRect(0, 0, g.W, g.H);
+    // lead shielding, with a window underneath the target
+    const sh = 10, winW = g.gw * 0.22, wx = g.targX - 8;
+    c.fillStyle = '#475569';
+    c.beginPath(); c.roundRect(g.x0 - sh - 6, g.cy - g.gh / 2 - sh - 6, g.gw + 2 * sh + 12, g.gh + 2 * sh + 12, 26); c.fill();
+    c.fillStyle = '#fff';
+    c.beginPath(); c.roundRect(g.x0 - 6, g.cy - g.gh / 2 - 6, g.gw + 12, g.gh + 12, 20); c.fill();
+    c.fillRect(wx - winW / 2, g.cy + g.gh / 2, winW, sh + 8);
+    text(c, 'lead shielding', g.x0 - sh - 6, g.cy + g.gh / 2 + sh + 18, C.muted, 'left', 'middle', g.fs);
+    // glass envelope (vacuum)
+    c.fillStyle = '#f1f5f9'; c.strokeStyle = '#94a3b8'; c.lineWidth = 2;
+    c.beginPath(); c.roundRect(g.x0, g.cy - g.gh / 2, g.gw, g.gh, 18); c.fill(); c.stroke();
+    if (!g.narrow) text(c, 'vacuum', g.cx - g.gw * 0.08, g.cy - g.gh / 2 + 14, '#94a3b8');
+    // cathode: filament in a focusing cup, on its own heater supply
+    const cupH = g.gh * 0.5;
+    c.strokeStyle = '#475569'; c.lineWidth = 4;
+    c.beginPath(); c.moveTo(g.cathX + 10, g.cy - cupH / 2); c.lineTo(g.cathX - 6, g.cy - cupH / 2); c.lineTo(g.cathX - 6, g.cy + cupH / 2); c.lineTo(g.cathX + 10, g.cy + cupH / 2); c.stroke();
+    const hot = `rgb(${230}, ${120 + 40 * Math.sin(time * 9) ** 2}, 40)`;
+    c.strokeStyle = hot; c.lineWidth = 2.2;
+    c.beginPath();
+    for (let k = 0; k <= 8; k++) { const y = g.cy - cupH * 0.32 + cupH * 0.64 * k / 8; c.lineTo(g.cathX + (k % 2 ? 6 : 0), y); }
+    c.stroke();
+    // heater leads out to the left
+    c.strokeStyle = '#6b7280'; c.lineWidth = 1.5;
+    c.beginPath(); c.moveTo(g.cathX, g.cy - cupH * 0.32); c.lineTo(g.x0 - 30, g.cy - cupH * 0.32); c.moveTo(g.cathX, g.cy + cupH * 0.32); c.lineTo(g.x0 - 30, g.cy + cupH * 0.32); c.stroke();
+    text(c, 'heater', g.x0 - 34, g.cy, C.muted, 'right', 'middle', g.fs);
+    text(c, g.narrow ? 'cathode' : 'filament (cathode)', g.cathX, g.cy + g.gh / 2 - 12, C.muted, 'center', 'middle', g.fs);
+    // anode: copper block with a tungsten target facing the cathode and the window
+    const aw = g.gw * 0.22;
+    c.fillStyle = '#c2783f'; c.strokeStyle = '#7c4a24'; c.lineWidth = 1.5;
+    c.beginPath(); c.moveTo(g.targX - 10, g.cy - 22); c.lineTo(g.targX + 12, g.cy + 22); c.lineTo(g.x1 + 30, g.cy + 22); c.lineTo(g.x1 + 30, g.cy - 22); c.closePath(); c.fill(); c.stroke();
+    // tungsten face, glowing as the anode heats up
+    c.strokeStyle = '#4b5563'; c.lineWidth = 6;
+    c.beginPath(); c.moveTo(g.targX - 8, g.cy - 18); c.lineTo(g.targX + 10, g.cy + 18); c.stroke();
+    if (glow > 0.02) {
+      const gr = c.createRadialGradient(g.targX, g.cy, 1, g.targX, g.cy, 34);
+      gr.addColorStop(0, `rgba(255, 170, 60, ${0.85 * glow})`); gr.addColorStop(1, 'rgba(255, 120, 40, 0)');
+      c.fillStyle = gr; c.beginPath(); c.arc(g.targX, g.cy, 34, 0, 2 * Math.PI); c.fill();
+    }
+    text(c, g.narrow ? 'target' : 'tungsten target', g.targX - 6, g.cy - g.gh / 2 + 14, C.muted, 'center', 'middle', g.fs);
+    text(c, g.narrow ? 'anode' : 'copper anode', g.x1 - 16, g.cy + 34, C.muted, 'right', 'top', g.fs);
+    // high-voltage supply across the tube: − on the cathode, + on the anode
+    const yHV = Math.max(14, g.cy - g.gh / 2 - 40);
+    c.strokeStyle = '#6b7280'; c.lineWidth = 1.5;
+    c.beginPath();
+    c.moveTo(g.cathX - 6, g.cy - cupH / 2); c.lineTo(g.cathX - 6, yHV); c.lineTo(g.cx - 34, yHV);
+    c.moveTo(g.x1 + 30, g.cy - 22); c.lineTo(g.x1 + 30, yHV); c.lineTo(g.cx + 34, yHV);
+    c.stroke();
+    c.fillStyle = '#fff'; c.strokeStyle = C.ink; c.lineWidth = 1.5;
+    c.beginPath(); c.roundRect(g.cx - 34, yHV - 13, 68, 26, 5); c.fill(); c.stroke();
+    text(c, `${Vkv} kV`, g.cx, yHV, C.ink, 'center', 'middle', '600 13px system-ui, sans-serif');
+    text(c, '−', g.cx - 44, yHV - 10, C.ink, 'center', 'middle', '600 14px system-ui, sans-serif');
+    text(c, '+', g.cx + 44, yHV - 10, C.ink, 'center', 'middle', '600 14px system-ui, sans-serif');
+
+    // electrons: speeding up all the way across (dots spread out as they go faster)
+    const xs = g.cathX + 8, xe = g.targX - 2;
+    if (dt > 0) {
+      spawnAcc += dt * (2 + 1.2 * ImA);
+      while (spawnAcc >= 1) { spawnAcc -= 1; electrons.push({ t: 0, y: g.cy + (Math.random() - 0.5) * 10 }); }
+    }
+    c.fillStyle = C.electron;
+    electrons = electrons.filter(e => {
+      e.t += dt;
+      const u = e.t / E_TRAVEL;
+      if (u >= 1) {
+        counting = true;
+        // most electrons just heat the target; now and then one makes an X-ray photon
+        if (Math.random() < 0.22) {
+          const i = samplePhoton(), lam = binLambda(i);
+          const a = Math.PI / 2 + (Math.random() - 0.5) * 0.7;
+          xrays.push({ t: 0, x: g.targX, y: g.cy + 4, a, lam });
+        }
+        return false;
+      }
+      const x = xs + (xe - xs) * u * u;
+      c.beginPath(); c.arc(x, e.y, 3, 0, 2 * Math.PI); c.fill();
+      return true;
+    });
+    // X-ray photons leaving through the window: short grey wave packets, wiggles closer for shorter λ
+    xrays = xrays.filter(p => {
+      p.t += dt;
+      const d = p.t * 260;
+      const x = p.x + Math.cos(p.a) * d, y = p.y + Math.sin(p.a) * d;
+      if (y > g.H + 20) return false;
+      const k = 3 + p.lam / 12;
+      c.save(); c.translate(x, y); c.rotate(p.a);
+      c.strokeStyle = C.xray; c.lineWidth = 1.8; c.beginPath();
+      for (let s = -16; s <= 16; s++) { const yy = 4 * Math.cos(s / 16 * Math.PI / 2) * Math.sin(2 * Math.PI * s / k); s === -16 ? c.moveTo(s, yy) : c.lineTo(s, yy); }
+      c.stroke(); c.restore();
+      return true;
+    });
+    text(c, 'X-rays', wx + winW / 2 + 10, g.cy + g.gh / 2 + sh + 26, C.muted, 'left', 'middle', g.fs);
+    // where the energy goes
+    const eff = efficiency();
+    text(c, `X-rays ≈ ${(eff * 100).toFixed(1)}%   ·   heating the target ≈ ${(100 - eff * 100).toFixed(1)}%`, g.W - 10, g.H - 6, C.muted, 'right', 'bottom', g.fs);
+  }
+
+  // ---- Spectrum graph ----
+  function drawPlot() {
+    const W = sz.pW, Hh = sz.pH, c = pc;
+    c.clearRect(0, 0, W, Hh);
+    const box = { x: 44, y: 22, w: W - 44 - 16, h: Hh - 22 - 42 };
+    const X = l => box.x + l / L_MAX * box.w, Y = v => box.y + box.h - v * box.h;
+    c.strokeStyle = C.grid; c.lineWidth = 1; c.beginPath();
+    for (let l = 10; l <= L_MAX; l += 10) { const x = Math.round(X(l)) + 0.5; c.moveTo(x, box.y); c.lineTo(x, box.y + box.h); }
+    c.stroke();
+    c.strokeStyle = C.axis; c.beginPath(); c.moveTo(box.x + 0.5, box.y); c.lineTo(box.x + 0.5, box.y + box.h + 0.5); c.lineTo(box.x + box.w, box.y + box.h + 0.5); c.stroke();
+    for (let l = 0; l <= L_MAX; l += 10) if (W > 520 || l % 30 === 0) text(c, `${l}`, X(l), box.y + box.h + 6, C.muted, 'center', 'top', '11px system-ui, sans-serif');
+    text(c, 'λ / pm', box.x + box.w, box.y + box.h + 22, C.muted, 'right', 'top');
+    c.save(); c.translate(14, box.y + box.h / 2); c.rotate(-Math.PI / 2);
+    text(c, 'intensity (rescaled when V changes)', 0, 0, C.muted); c.restore();
+    // the spectrum, from the photons
+    c.save(); c.beginPath(); c.rect(box.x, box.y - 4, box.w, box.h + 4); c.clip();
+    c.beginPath(); c.moveTo(X(0), Y(0));
+    for (let i = 0; i < NB; i++) c.lineTo(X(binLambda(i)), Y(Math.min(1.1, shown(i))));
+    c.lineTo(X(L_MAX), Y(0)); c.closePath();
+    c.fillStyle = 'rgba(124, 58, 237, .18)'; c.fill();
+    c.strokeStyle = C.spectrum; c.lineWidth = 1.8; c.stroke();
+    c.restore();
+    // λmin
+    const lm = lambdaMinPm();
+    c.save(); c.setLineDash([5, 4]); c.strokeStyle = C.ink; c.lineWidth = 1.2;
+    c.beginPath(); c.moveTo(X(lm), box.y + box.h); c.lineTo(X(lm), box.y + 8); c.stroke(); c.restore();
+    c.font = '600 12px system-ui, sans-serif'; c.lineWidth = 4; c.strokeStyle = 'rgba(255,255,255,.9)'; c.textAlign = 'right'; c.textBaseline = 'middle';
+    const lmText = `λmin = ${lm.toFixed(1)} pm`;
+    const lx = Math.max(X(lm) - 6, box.x + 6 + c.measureText(lmText).width);
+    c.strokeText(lmText, lx, box.y + box.h - 14);
+    text(c, lmText, lx, box.y + box.h - 14, C.ink, 'right', 'middle', '600 12px system-ui, sans-serif');
+    // characteristic lines
+    if (Vkv > K_EDGE && counting) for (const ln of LINES) {
+      const i0 = Math.round(ln.pm / DL - 0.5);
+      const top = Math.min(1.1, Math.max(...[-2, -1, 0, 1, 2].map(d => shown(i0 + d) || 0)));
+      text(c, ln.name, X(ln.pm) + (ln.name === 'Kα' ? 8 : -8), Math.max(box.y + 18, Y(top) - 8), C.spectrum, ln.name === 'Kα' ? 'left' : 'right', 'middle', '600 12px system-ui, sans-serif');
+    }
+  }
+
+  // ---- Working ----
+  const sci = (v, dp = 2) => {
+    const e = Math.floor(Math.log10(Math.abs(v))), m = v / 10 ** e;
+    return `${m.toFixed(dp)} × 10<sup>${e < 0 ? '−' + -e : e}</sup>`;
+  };
+  const row = (lhs, ...rhs) => `<span>${lhs}</span><span>=</span><span>${rhs.join(' = ')}</span>`;
+  const frac = (p, q) => `<span class="frac"><span>${p}</span><span>${q}</span></span>`;
+  const head = s => `<span class="head">${s}</span>`;
+  function updateWorking() {
+    const Ek = QE * Vkv * 1e3, lm = H * CL / Ek, P = Vkv * 1e3 * ImA * 1e-3, eff = efficiency();
+    let h = head('Kinetic energy of each electron reaching the target');
+    h += row('E<sub>k</sub>', 'eV', `1.60 × 10<sup>−19</sup> C × ${sci(Vkv * 1e3, 1)} V`, `${sci(Ek)} J`);
+    h += head('The shortest wavelength: all of that energy goes to one photon');
+    h += row('λ<sub>min</sub>', frac('hc', 'eV'), frac('6.63 × 10<sup>−34</sup> J s × 3.00 × 10<sup>8</sup> m s<sup>−1</sup>', `${sci(Ek)} J`), `${sci(lm)} m`, `${(lm * 1e12).toFixed(1)} pm`);
+    h += head('Power delivered to the target');
+    h += row('P', 'VI', `${sci(Vkv * 1e3, 1)} V × ${(ImA).toFixed(1)} × 10<sup>−3</sup> A`, `${P.toFixed(0)} W`);
+    h += row('X-ray power', `about ${(eff * 100).toFixed(1)}% of P`, `${(P * eff).toFixed(1)} W; the other ${(P * (1 - eff)).toFixed(0)} W heats the target`);
+    $('derivation').innerHTML = h;
+  }
+
+  // ---- Loop and controls ----
+  let lastFrame = null;
+  function tick(now) {
+    const dt = lastFrame === null ? 0 : Math.min(0.1, (now - lastFrame) / 1000);
+    lastFrame = now;
+    if (playing) {
+      time += dt;
+      addPhotons(dt);
+      // the target warms up and cools down over a few seconds, following the power
+      glow += ((counting ? Vkv * ImA / 1500 : 0) - glow) * Math.min(1, dt / 3);
+      drawTube(dt);
+      drawPlot();
+    }
+    requestAnimationFrame(tick);
+  }
+  function refresh() {
+    resetCount(); electrons = []; xrays = []; spawnAcc = 1;
+    $('V-value').textContent = `${Vkv} kV`;
+    $('I-value').textContent = `${ImA.toFixed(1)} mA`;
+    buildSpectrum();
+    updateWorking();
+    drawTube(0); drawPlot();
+  }
+  $('V').addEventListener('input', () => { Vkv = Number($('V').value); refresh(); });
+  $('I').addEventListener('input', () => { ImA = Number($('I').value); refresh(); });
+  function setPlaying(p) { playing = p; $('pause-btn').textContent = playing ? '⏸' : '▶'; }
+  $('pause-btn').addEventListener('click', () => setPlaying(!playing));
+  window.addEventListener('keydown', e => {
+    if (e.code === 'Space' && e.target === document.body) { e.preventDefault(); setPlaying(!playing); }
+  });
+
+  const simulation = $('simulation'), screenToggle = $('screen-toggle');
+  function syncFullscreen() {
+    const expanded = document.fullscreenElement === simulation || document.body.classList.contains('page-fullscreen');
+    simulation.classList.toggle('expanded', expanded);
+    screenToggle.setAttribute('aria-pressed', String(expanded));
+    screenToggle.title = expanded ? 'Exit full screen' : 'Enter full screen';
+    resize(); drawTube(0); drawPlot();
+  }
+  screenToggle.addEventListener('click', async () => {
+    if (document.fullscreenElement === simulation) {
+      await document.exitFullscreen();
+    } else if (document.body.classList.contains('page-fullscreen')) {
+      document.body.classList.remove('page-fullscreen');
+      syncFullscreen();
+    } else {
+      try {
+        await simulation.requestFullscreen();
+      } catch {
+        // Embedded pages and mobile browsers can restrict native fullscreen.
+        document.body.classList.add('page-fullscreen');
+        syncFullscreen();
+      }
+    }
+  });
+  document.addEventListener('fullscreenchange', syncFullscreen);
+  window.addEventListener('keydown', ev => {
+    if (ev.key === 'Escape' && document.body.classList.contains('page-fullscreen')) screenToggle.click();
+  });
+  window.addEventListener('resize', () => { resize(); drawTube(0); drawPlot(); });
+  resize();
+  refresh();
+  requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>
