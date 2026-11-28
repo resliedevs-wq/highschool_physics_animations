@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>3.11 Speed of sound with a two-beam CRO</title>
+<style>
+  :root {
+    --bg: #f7f7f5;
+    --panel: #ffffff;
+    --ink: #1f2328;
+    --muted: #6b7280;
+    --grid: #e5e7eb;
+    --axis: #9ca3af;
+    --y1: #4ade80;          /* signal generator trace and lead */
+    --y2: #facc15;          /* microphone trace and lead */
+    --mark: #d97706;        /* marked positions */
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+  }
+  main { max-width: 1100px; margin: 0 auto; padding: 20px; }
+  .card {
+    background: var(--panel);
+    border-radius: 10px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.08);
+    padding: 14px 18px;
+    margin-bottom: 14px;
+  }
+  .frac {
+    display: inline-flex; flex-direction: column;
+    vertical-align: middle; text-align: center;
+    font-size: .85em; line-height: 1.15; margin: 0 2px;
+  }
+  .frac > span { padding: 0 3px; }
+  .frac > span:first-child { border-bottom: 1.5px solid currentColor; }
+  .intro h1 { font-size: 1.25rem; margin: 0 0 8px; }
+  .intro .formulas {
+    display: flex; gap: 2.5em; justify-content: center; flex-wrap: wrap;
+    font-family: "Cambria Math", "Times New Roman", serif;
+    font-size: 1.3rem;
+    line-height: 2.4;
+    margin: 0 0 6px;
+  }
+  .intro dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; margin: 0; }
+  .intro dt { font-family: "Cambria Math", "Times New Roman", serif; font-size: 1.1rem; text-align: center; }
+  .intro dd { margin: 0; }
+
+  canvas { display: block; width: 100%; }
+  #bench { height: 230px; touch-action: none; border-radius: 6px; }
+  #bench:focus-visible { outline: 2px solid var(--mark); outline-offset: 2px; }
+
+  /* the oscilloscope: screen on the left, front panel on the right */
+  .scope {
+    display: grid; grid-template-columns: auto 220px; gap: 18px; justify-content: center;
+    background: #2b2f36; border-radius: 12px; padding: 16px;
+  }
+  #screen { width: auto; height: 360px; aspect-ratio: 10.8 / 8.4; border-radius: 8px; background: #06130c; }
+  .front { display: flex; flex-direction: column; gap: 10px; align-items: center; justify-content: center; color: #e5e7eb; }
+  .front .caption { font-size: .9rem; font-weight: 600; color: #cbd5e1; text-align: center; }
+  .front .reading { font-size: 1.05rem; font-weight: 600; font-variant-numeric: tabular-nums; text-align: center; min-height: 1.3em; }
+  .knob { position: relative; width: 200px; height: 150px; }
+  .knob .dial {
+    position: absolute; left: 50%; top: 58%; width: 66px; height: 66px; margin: -33px 0 0 -33px;
+    border-radius: 50%; cursor: grab; touch-action: none;
+    background: radial-gradient(circle at 35% 30%, #6b7280, #1f2328 70%);
+    box-shadow: 0 2px 4px rgba(0,0,0,.5), inset 0 1px 1px rgba(255,255,255,.2);
+    transform: rotate(var(--angle, 0deg));
+  }
+  .knob .dial:focus-visible { outline: 2px solid #fbbf24; outline-offset: 3px; }
+  .knob .dial::after {
+    content: ""; position: absolute; left: 50%; top: 5px; width: 4px; height: 20px; margin-left: -2px;
+    border-radius: 2px; background: #f8fafc;
+  }
+  .knob .mark {
+    position: absolute; transform: translate(-50%, -50%);
+    font: 600 .8rem system-ui, sans-serif; font-variant-numeric: tabular-nums;
+    background: none; border: 0; color: #94a3b8; padding: 2px 3px; height: auto; min-width: 0; cursor: pointer;
+  }
+  .knob .mark[aria-pressed="true"] { color: #fff; }
+  .knob .mark:hover { color: #e5e7eb; background: none; }
+
+  .row { display: flex; gap: 12px 18px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
+  .row .right { margin-left: auto; display: flex; gap: 10px; }
+  .slider { flex: 1 1 160px; max-width: 500px; min-width: 0; }
+  .slider label { display: flex; justify-content: space-between; margin-bottom: 4px; font-variant-numeric: tabular-nums; }
+  .slider input { display: block; width: 100%; margin-inline: 0; accent-color: var(--ink); }
+  button {
+    font: inherit;
+    height: 2.4em; min-width: 2.4em; padding: 0 10px;
+    border-radius: 6px;
+    border: 1px solid #d1d5db;
+    background: #fff;
+    cursor: pointer;
+  }
+  button:hover { background: #f3f4f6; }
+  button:disabled { color: #9ca3af; cursor: default; background: #fff; }
+
+  .derivation {
+    display: grid;
+    grid-template-columns: auto auto 1fr;
+    column-gap: .4em;
+    align-items: center;
+    font-family: "Cambria Math", "Times New Roman", serif;
+    font-size: 1.3rem;
+    line-height: 2.4;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    overflow-x: auto;
+  }
+  .derivation .head {
+    grid-column: 1 / -1;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-size: 1rem; font-weight: 600; line-height: 1.6; margin-top: .3em;
+  }
+  .M { color: var(--mark); }
+  @media (max-width: 800px) {
+    .scope { grid-template-columns: 1fr; }
+    #screen { width: 100%; height: auto; }
+    .front { flex-direction: row; flex-wrap: wrap; }
+  }
+  .screen-tools { display: flex; justify-content: flex-end; margin-top: 8px; }
+  #screen-toggle { display: inline-grid; place-items: center; }
+  #screen-toggle svg { width: 18px; height: 18px; }
+  #screen-toggle .exit, #screen-toggle[aria-pressed="true"] .enter { display: none; }
+  #screen-toggle[aria-pressed="true"] .exit { display: block; }
+  .sim-panel { min-width: 0; }
+  .sim-panel + .sim-panel { margin-top: 12px; }
+  #simulation.expanded {
+    width: 100%; height: 100%; margin: 0; border-radius: 0;
+    display: grid; justify-content: center;
+    grid-template-columns: minmax(0, 1600px);
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+  .expanded .sim-content { display: flex; flex-direction: column; min-height: 0; overflow: auto; }
+  .expanded .sim-panel { flex: none; }
+  /* Give the scene one sixth of the unused height above it, up to 120px. */
+  .expanded .sim-content::before { content: ""; flex: 1 0 0; max-height: 120px; }
+  .expanded .sim-content::after { content: ""; flex: 5 0 0; order: 1; }
+  .expanded input[type="range"] { max-width: 100%; margin-inline: 0; }
+  body.page-fullscreen { overflow: hidden; }
+  body.page-fullscreen main > :not(#simulation) { display: none; }
+  body.page-fullscreen #simulation { position: fixed; inset: 0; z-index: 10; }
+  #simulation.expanded #bench { height: clamp(200px, 30vh, 340px); }
+  #simulation.expanded #screen { height: clamp(260px, 42vh, 560px); }
+</style>
+</head>
+<body>
+<main>
+  <section class="card intro">
+    <h1>3.11 Speed of sound with a two-beam CRO</h1>
+    <div class="formulas">
+      <span>v = fλ</span>
+      <span>phase difference = 360° × <span class="frac"><span>Δx</span><span>λ</span></span></span>
+    </div>
+    <dl>
+      <dt>v</dt><dd>speed of sound in air</dd>
+      <dt>f</dt><dd>frequency set on the signal generator</dd>
+      <dt>λ</dt><dd>wavelength: the distance the microphone moves between two positions where the Y1 and Y2 traces are in phase</dd>
+      <dt>Δx</dt><dd>distance the microphone is moved along the rule</dd>
+      <dt>Y1, Y2</dt><dd>the two inputs of the CRO: Y1 from the signal generator, Y2 from the microphone</dd>
+    </dl>
+  </section>
+
+  <section class="card" id="simulation" aria-label="3.11 Speed of sound simulation">
+    <div class="sim-content">
+      <div class="sim-panel">
+        <canvas id="bench" tabindex="0" aria-label="Speaker, microphone and metre rule"></canvas>
+      </div>
+
+      <div class="sim-panel">
+        <div class="scope">
+          <canvas id="screen"></canvas>
+          <div class="front">
+            <div class="caption">Time-base (ms/div)</div>
+            <div class="knob" id="tb-knob"></div>
+            <div class="reading" id="tb-reading"></div>
+          </div>
+        </div>
+        <div class="row">
+          <div class="slider">
+            <label for="f"><span>Frequency f</span><span id="f-value"></span></label>
+            <input type="range" id="f" min="1" max="5" step="0.1" value="2">
+          </div>
+          <button id="mark-btn" title="Mark the microphone's position (M)">Mark position</button>
+          <button id="clear-btn">Clear marks</button>
+          <div class="right">
+            <button id="pause-btn" title="Play / pause (Space)">⏸</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="screen-tools">
+      <button id="screen-toggle" aria-label="Full screen" aria-pressed="false" title="Enter full screen">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <path class="enter" d="M9 4H4v5m11-5h5v5M4 15v5h5m11-5v5h-5"/>
+          <path class="exit" d="M4 9h5V4m6 0v5h5M9 20v-5H4m11 5v-5h5"/>
+        </svg>
+      </button>
+    </div>
+  </section>
+
+  <div class="card derivation" id="derivation"></div>
+</main>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const css = getComputedStyle(document.documentElement);
+  const color = name => css.getPropertyValue(name).trim();
+  const C = { ink: color('--ink'), muted: color('--muted'), y1: color('--y1'), y2: color('--y2'), mark: color('--mark') };
+
+  // ---- Physics ----
+  const V_SOUND = 340;                  // m/s
+  const SPEAKER_CM = -6;                // the speaker cone sits 6 cm before the rule's zero
+  const X_MIN = 0, X_MAX = 100;         // the microphone can be read anywhere on the rule (cm)
+  const SLOW = 2000;                    // the bench is shown 2000× slower than real
+  let f = 2000;                         // Hz
+  let micCm = 20.0;
+  let marks = [];                       // marked microphone positions (cm)
+  let playing = true;
+  let phaseT = 0;                       // cycles of the source on the slowed bench clock
+  const lambdaCm = () => V_SOUND / f * 100;
+  // cycles by which the sound at the microphone lags the signal generator
+  const lagCycles = () => (micCm - SPEAKER_CM) / lambdaCm();
+
+  // ---- Bench ----
+  const bench = $('bench'), bx = bench.getContext('2d');
+  const bg = { W: 0, H: 0, r0: 0, r1: 0, pxcm: 1, cy: 0, band: 0, ruleY: 0 };
+  function sizeCanvas(cv, ctx) {
+    const dpr = window.devicePixelRatio || 1;
+    const r = cv.getBoundingClientRect();
+    cv.width = Math.round(r.width * dpr); cv.height = Math.round(r.height * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    return r;
+  }
+  function resizeBench() {
+    const r = sizeCanvas(bench, bx);
+    bg.W = r.width; bg.H = r.height;
+    // leave room for the generator (GEN_W) and the speaker cabinet in front of the rule's zero
+    bg.r0 = (GEN_X + GEN_W + 54 - SPEAKER_CM * (bg.W - 36) / 100) / (1 - SPEAKER_CM / 100);
+    bg.r1 = bg.W - 36;
+    bg.pxcm = (bg.r1 - bg.r0) / 100;
+    bg.ruleY = bg.H - 66;
+    bg.cy = Math.round(bg.ruleY * 0.48);
+    bg.band = Math.min(84, bg.ruleY * 0.62);
+  }
+  const PX = cm => bg.r0 + cm * bg.pxcm;
+  const GEN_X = 14, GEN_W = 118;
+
+  function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+  }
+
+  function drawAir() {
+    // pressure in the air: darker where the air is compressed, lighter where it is rarefied
+    const x0 = PX(SPEAKER_CM), x1 = bg.W - 8, top = bg.cy - bg.band / 2;
+    const lamPx = lambdaCm() * bg.pxcm;
+    for (let x = Math.floor(x0); x < x1; x += 2) {
+      const p = Math.cos(2 * Math.PI * (phaseT - (x - x0) / lamPx));
+      const a = 0.08 + 0.26 * (p + 1) / 2;
+      bx.fillStyle = `rgba(51, 65, 85, ${a.toFixed(3)})`;
+      bx.fillRect(x, top, 2, bg.band);
+    }
+    bx.strokeStyle = 'rgba(51, 65, 85, .18)'; bx.lineWidth = 1;
+    bx.strokeRect(Math.round(x0) + 0.5, Math.round(top) + 0.5, Math.round(x1 - x0), Math.round(bg.band));
+  }
+
+  function drawSpeaker() {
+    const face = PX(SPEAKER_CM), cy = bg.cy, h = bg.band * 0.9;
+    // cabinet
+    bx.fillStyle = '#374151';
+    roundRect(bx, face - 34, cy - h / 2 - 6, 26, h + 12, 4); bx.fill();
+    // cone: the diaphragm moves with the signal
+    const push = 2.5 * Math.cos(2 * Math.PI * phaseT);
+    bx.fillStyle = '#9ca3af';
+    bx.beginPath();
+    bx.moveTo(face - 10, cy - 12); bx.lineTo(face + push, cy - h / 2); bx.lineTo(face + push, cy + h / 2); bx.lineTo(face - 10, cy + 12);
+    bx.closePath(); bx.fill();
+    bx.strokeStyle = '#4b5563'; bx.lineWidth = 1.5; bx.stroke();
+    bx.fillStyle = '#4b5563';
+    bx.fillRect(face - 12, cy - 12, 4, 24);
+    bx.fillStyle = C.muted; bx.font = '12px system-ui, sans-serif'; bx.textAlign = 'center'; bx.textBaseline = 'top';
+    bx.fillText('speaker', face - 16, cy + h / 2 + 10);
+  }
+
+  function drawGenerator() {
+    const w = GEN_W, h = 62, x = GEN_X, y = bg.cy - h / 2;
+    bx.fillStyle = '#e5e7eb'; roundRect(bx, x, y, w, h, 6); bx.fill();
+    bx.strokeStyle = '#9ca3af'; bx.lineWidth = 1; bx.stroke();
+    bx.fillStyle = '#0f172a'; roundRect(bx, x + 8, y + 8, w - 16, 24, 3); bx.fill();
+    bx.fillStyle = '#86efac'; bx.font = '600 14px ui-monospace, Menlo, monospace'; bx.textAlign = 'center'; bx.textBaseline = 'middle';
+    bx.fillText(`${(f / 1000).toFixed(2)} kHz`, x + w / 2, y + 20);
+    bx.fillStyle = C.muted; bx.font = '11px system-ui, sans-serif';
+    bx.fillText('signal generator', x + w / 2, y + 47);
+    // lead to the speaker
+    const face = PX(SPEAKER_CM);
+    bx.strokeStyle = '#6b7280'; bx.lineWidth = 2;
+    bx.beginPath(); bx.moveTo(x + w, bg.cy); bx.lineTo(face - 34, bg.cy); bx.stroke();
+    // lead to Y1, down towards the CRO
+    bx.strokeStyle = C.y1; bx.lineWidth = 2.5;
+    bx.beginPath(); bx.moveTo(x + w * 0.5, y + h); bx.bezierCurveTo(x + w * 0.5, bg.H - 30, x + w * 0.35, bg.H - 20, x + w * 0.35, bg.H); bx.stroke();
+    tagText('Y1', x + w * 0.35 + 8, bg.H - 12, C.y1);
+  }
+
+  function tagText(text, x, y, col) {
+    bx.font = '600 12px system-ui, sans-serif'; bx.textAlign = 'left'; bx.textBaseline = 'middle';
+    const tw = bx.measureText(text).width;
+    bx.fillStyle = '#1f2328'; roundRect(bx, x, y - 9, tw + 10, 18, 4); bx.fill();
+    bx.fillStyle = col; bx.fillText(text, x + 5, y);
+  }
+
+  function drawRule() {
+    const y = bg.ruleY, h = 28, x0 = PX(0) - 10, x1 = PX(100) + 10;
+    bx.fillStyle = '#fde68a'; roundRect(bx, x0, y, x1 - x0, h, 3); bx.fill();
+    bx.strokeStyle = '#b45309'; bx.lineWidth = 1; bx.stroke();
+    bx.strokeStyle = '#78350f'; bx.fillStyle = '#78350f';
+    bx.font = '11px system-ui, sans-serif'; bx.textAlign = 'center'; bx.textBaseline = 'top';
+    const mmTicks = bg.pxcm >= 4;
+    bx.beginPath();
+    for (let mm = 0; mm <= 1000; mm += mmTicks ? 1 : 5) {
+      const x = Math.round(PX(mm / 10)) + 0.5;
+      const len = mm % 100 === 0 ? 12 : mm % 50 === 0 ? 9 : mm % 10 === 0 ? 6 : 3;
+      if (!mmTicks && mm % 10 && mm % 50) continue;
+      bx.moveTo(x, y); bx.lineTo(x, y + len);
+    }
+    bx.lineWidth = 0.8; bx.stroke();
+    for (let cm = 0; cm <= 100; cm += bg.pxcm < 3.5 ? 20 : 10) bx.fillText(String(cm), PX(cm), y + 13);
+    bx.textAlign = 'left'; bx.fillText('cm', x1 + 5, y + 8);
+  }
+
+  function drawMarks() {
+    for (const m of marks) {
+      const x = PX(m), y = bg.ruleY;
+      bx.fillStyle = C.mark;
+      bx.beginPath(); bx.moveTo(x - 6, y - 9); bx.lineTo(x + 6, y - 9); bx.lineTo(x, y); bx.closePath(); bx.fill();
+    }
+  }
+
+  function drawMic() {
+    const x = PX(micCm), cy = bg.cy;
+    // stand down to the rule, with a pointer onto the scale
+    bx.fillStyle = '#6b7280';
+    bx.fillRect(x - 1.5, cy + 8, 3, bg.ruleY - cy - 10);
+    bx.fillStyle = '#374151';
+    bx.fillRect(x - 12, bg.ruleY - 4, 24, 4);
+    bx.strokeStyle = '#dc2626'; bx.lineWidth = 1.5;
+    bx.beginPath(); bx.moveTo(x, bg.ruleY - 4); bx.lineTo(x, bg.ruleY + 14); bx.stroke();
+    // body, facing the speaker; its front is at the stand
+    bx.fillStyle = '#1f2937';
+    roundRect(bx, x, cy - 7, 38, 14, 5); bx.fill();
+    bx.fillStyle = '#9ca3af';
+    roundRect(bx, x - 4, cy - 9, 8, 18, 3); bx.fill();
+    bx.strokeStyle = '#4b5563'; bx.lineWidth = 1;
+    for (let k = -6; k <= 6; k += 3) { bx.beginPath(); bx.moveTo(x - 3, cy + k); bx.lineTo(x + 3, cy + k); bx.stroke(); }
+    // lead to Y2
+    bx.strokeStyle = C.y2; bx.lineWidth = 2.5;
+    bx.beginPath(); bx.moveTo(x + 38, cy); bx.bezierCurveTo(x + 64, cy, x + 50, bg.H - 26, x + 50, bg.H); bx.stroke();
+    tagText('Y2', x + 58, bg.H - 12, C.y2);
+    // reading under the rule
+    const label = `${micCm.toFixed(1)} cm`;
+    bx.font = '600 13px system-ui, sans-serif';
+    const tw = bx.measureText(label).width;
+    const lx = Math.max(PX(0) - 10, Math.min(PX(100) + 10 - tw - 10, x - tw / 2 - 5));
+    bx.fillStyle = '#dc2626'; roundRect(bx, lx, bg.ruleY + 31, tw + 10, 18, 4); bx.fill();
+    bx.fillStyle = '#fff'; bx.textAlign = 'left'; bx.textBaseline = 'middle';
+    bx.fillText(label, lx + 5, bg.ruleY + 40);
+  }
+
+  function drawBench() {
+    bx.clearRect(0, 0, bg.W, bg.H);
+    drawAir();
+    drawRule();
+    drawMarks();
+    drawGenerator();
+    drawSpeaker();
+    drawMic();
+    bx.fillStyle = C.muted; bx.font = '12px system-ui, sans-serif'; bx.textAlign = 'right'; bx.textBaseline = 'top';
+    bx.fillText(`slowed ${SLOW}×`, bg.W - 10, 8);
+  }
+
+  // ---- Dragging the microphone (1 mm steps) ----
+  const snapMm = v => Math.round(v * 10) / 10;
+  const clampX = v => Math.max(X_MIN, Math.min(X_MAX, v));
+  let dragging = false, grabOffset = 0;
+  const benchLocal = e => { const r = bench.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
+  const onMic = (x, y) => x > PX(micCm) - 14 && x < PX(micCm) + 44 && y > bg.cy - 20 && y < bg.ruleY + 50;
+  bench.addEventListener('pointerdown', e => {
+    const [x, y] = benchLocal(e);
+    if (!onMic(x, y)) return;
+    dragging = true; grabOffset = x - PX(micCm);
+    bench.setPointerCapture(e.pointerId); bench.style.cursor = 'grabbing';
+  });
+  bench.addEventListener('pointermove', e => {
+    const [x, y] = benchLocal(e);
+    if (dragging) { micCm = clampX(snapMm((x - grabOffset - bg.r0) / bg.pxcm)); update(); return; }
+    bench.style.cursor = onMic(x, y) ? 'grab' : '';
+  });
+  const endDrag = () => { dragging = false; bench.style.cursor = ''; };
+  bench.addEventListener('pointerup', endDrag);
+  bench.addEventListener('pointercancel', endDrag);
+  bench.addEventListener('keydown', e => {
+    const step = e.shiftKey ? 1 : 0.1;
+    if (e.key === 'ArrowRight') { e.preventDefault(); micCm = clampX(snapMm(micCm + step)); update(); }
+    if (e.key === 'ArrowLeft') { e.preventDefault(); micCm = clampX(snapMm(micCm - step)); update(); }
+  });
+
+  // ---- CRO screen: Y1 above the centre, Y2 below, triggered on Y1 ----
+  const TB = [0.05, 0.1, 0.2, 0.5, 1];        // ms/div
+  const DIV_X = 10, DIV_Y = 8;
+  const Y1_AT = 2, Y2_AT = -2, AMP = 1.5;     // centre lines and amplitude, in divisions
+  let tb = 0.1;
+  const screen = $('screen'), sx = screen.getContext('2d');
+  const sg = { W: 0, H: 0, x0: 0, y0: 0, d: 1 };
+  function resizeScreen() {
+    const r = sizeCanvas(screen, sx);
+    sg.W = r.width; sg.H = r.height;
+    // room on the left for the Y1 and Y2 labels
+    sg.d = Math.min((sg.W - 64) / DIV_X, (sg.H - 36) / DIV_Y);
+    sg.x0 = (sg.W - DIV_X * sg.d) / 2 + 12;
+    sg.y0 = sg.H / 2;
+  }
+  const X = div => sg.x0 + div * sg.d;
+  const Y = div => sg.y0 - div * sg.d;
+
+  function drawGraticule() {
+    const top = Y(DIV_Y / 2), bottom = Y(-DIV_Y / 2), left = X(0), right = X(DIV_X);
+    sx.strokeStyle = 'rgba(120, 220, 160, .22)'; sx.lineWidth = 1;
+    sx.beginPath();
+    for (let i = 0; i <= DIV_X; i++) { const x = Math.round(X(i)) + 0.5; sx.moveTo(x, top); sx.lineTo(x, bottom); }
+    for (let j = -DIV_Y / 2; j <= DIV_Y / 2; j++) { const y = Math.round(Y(j)) + 0.5; sx.moveTo(left, y); sx.lineTo(right, y); }
+    sx.stroke();
+    sx.strokeStyle = 'rgba(120, 220, 160, .45)';
+    sx.beginPath();
+    const cx = X(DIV_X / 2), cy = Y(0);
+    for (let k = 0; k <= DIV_X * 5; k++) { const x = Math.round(X(k / 5)) + 0.5; const h = k % 5 ? 3 : 0; sx.moveTo(x, cy - h); sx.lineTo(x, cy + h); }
+    for (let k = -DIV_Y * 5 / 2; k <= DIV_Y * 5 / 2; k++) { const y = Math.round(Y(k / 5)) + 0.5; const h = k % 5 ? 3 : 0; sx.moveTo(cx - h, y); sx.lineTo(cx + h, y); }
+    sx.stroke();
+    sx.strokeStyle = 'rgba(120, 220, 160, .4)';
+    sx.beginPath();
+    sx.moveTo(left, Math.round(cy) + 0.5); sx.lineTo(right, Math.round(cy) + 0.5);
+    sx.moveTo(Math.round(cx) + 0.5, top); sx.lineTo(Math.round(cx) + 0.5, bottom);
+    sx.stroke();
+  }
+
+  function trace(centre, lag, rgb, core) {
+    const left = X(0), right = X(DIV_X);
+    const n = Math.ceil((right - left) * 2);
+    const path = () => {
+      sx.beginPath();
+      for (let i = 0; i <= n; i++) {
+        const x = left + (right - left) * i / n;
+        const tMs = (x - left) / sg.d * tb;
+        const y = Y(centre + AMP * Math.sin(2 * Math.PI * (f * tMs / 1000 - lag)));
+        i ? sx.lineTo(x, y) : sx.moveTo(x, y);
+      }
+    };
+    sx.save();
+    sx.lineJoin = 'round'; sx.lineCap = 'round';
+    sx.strokeStyle = `rgba(${rgb}, .25)`; sx.lineWidth = 7;
+    sx.shadowColor = `rgba(${rgb}, .8)`; sx.shadowBlur = 10;
+    path(); sx.stroke();
+    sx.shadowBlur = 0;
+    sx.strokeStyle = core; sx.lineWidth = 2;
+    path(); sx.stroke();
+    sx.restore();
+  }
+
+  function drawScreen() {
+    sx.clearRect(0, 0, sg.W, sg.H);
+    drawGraticule();
+    sx.save();
+    sx.beginPath(); sx.rect(X(0), Y(DIV_Y / 2), DIV_X * sg.d, DIV_Y * sg.d); sx.clip();
+    trace(Y1_AT, 0, '110, 255, 150', '#a7ffbf');
+    trace(Y2_AT, lagCycles(), '250, 220, 80', '#fde68a');
+    sx.restore();
+    sx.font = '600 12px system-ui, sans-serif'; sx.textBaseline = 'middle'; sx.textAlign = 'right';
+    sx.fillStyle = C.y1; sx.fillText('Y1', X(0) - 4, Y(Y1_AT));
+    sx.fillStyle = C.y2; sx.fillText('Y2', X(0) - 4, Y(Y2_AT));
+  }
+
+  // ---- Time-base knob (as on 3.10) ----
+  function makeKnob(el, values, index, onChange) {
+    const A0 = -120, A1 = 120, R = 62;
+    const angleOf = i => A0 + (A1 - A0) * i / (values.length - 1);
+    const dial = document.createElement('div');
+    dial.className = 'dial'; dial.tabIndex = 0; dial.setAttribute('role', 'slider');
+    dial.setAttribute('aria-label', 'Time-base');
+    el.appendChild(dial);
+    const marksEls = values.map((v, i) => {
+      const b = document.createElement('button');
+      b.className = 'mark'; b.textContent = String(v);
+      const a = angleOf(i) * Math.PI / 180;
+      b.style.left = `calc(50% + ${R * Math.sin(a)}px)`;
+      b.style.top = `calc(58% - ${R * Math.cos(a)}px)`;
+      b.addEventListener('click', () => set(i));
+      el.appendChild(b);
+      return b;
+    });
+    function set(i, silent = false) {
+      index = Math.max(0, Math.min(values.length - 1, i));
+      dial.style.setProperty('--angle', `${angleOf(index)}deg`);
+      dial.setAttribute('aria-valuenow', values[index]);
+      marksEls.forEach((b, k) => b.setAttribute('aria-pressed', String(k === index)));
+      if (!silent) onChange(values[index]);
+    }
+    let turning = false;
+    const fromPointer = e => {
+      const r = dial.getBoundingClientRect();
+      const a = Math.atan2(e.clientX - (r.left + r.width / 2), -(e.clientY - (r.top + r.height / 2))) * 180 / Math.PI;
+      let best = 0, bd = 1e9;
+      values.forEach((_, k) => { const dd = Math.abs(angleOf(k) - a); if (dd < bd) { bd = dd; best = k; } });
+      if (best !== index) set(best);
+    };
+    dial.addEventListener('pointerdown', e => { turning = true; dial.setPointerCapture(e.pointerId); dial.style.cursor = 'grabbing'; });
+    dial.addEventListener('pointermove', e => { if (turning) fromPointer(e); });
+    dial.addEventListener('pointerup', () => { turning = false; dial.style.cursor = ''; });
+    dial.addEventListener('wheel', e => { e.preventDefault(); set(index + (e.deltaY < 0 ? 1 : -1)); }, { passive: false });
+    dial.addEventListener('keydown', e => {
+      if (e.key === 'ArrowRight' || e.key === 'ArrowUp') { e.preventDefault(); set(index + 1); }
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') { e.preventDefault(); set(index - 1); }
+    });
+    set(index, true);
+  }
+  makeKnob($('tb-knob'), TB, TB.indexOf(tb), v => { tb = v; update(); });
+
+  // ---- Controls ----
+  const fSlider = $('f');
+  fSlider.addEventListener('input', () => { f = Math.round(Number(fSlider.value) * 1000); marks = []; update(); });
+  function mark() {
+    if (marks.some(m => Math.abs(m - micCm) < 0.05) || marks.length >= 8) return;
+    marks.push(micCm); marks.sort((a, b) => a - b); update();
+  }
+  $('mark-btn').addEventListener('click', mark);
+  $('clear-btn').addEventListener('click', () => { marks = []; update(); });
+  function setPlaying(p) {
+    playing = p;
+    $('pause-btn').textContent = playing ? '⏸' : '▶';
+  }
+  $('pause-btn').addEventListener('click', () => setPlaying(!playing));
+  window.addEventListener('keydown', e => {
+    if (e.target.closest && e.target.closest('input, button, .dial')) return;
+    if (e.code === 'Space') { e.preventDefault(); setPlaying(!playing); }
+    if (e.key === 'm' || e.key === 'M') mark();
+  });
+
+  // ---- Working ----
+  const line = (lhs, ...rhs) => `<span>${lhs}</span><span>=</span><span>${rhs.join(' = ')}</span>`;
+  const frac = (p, q) => `<span class="frac"><span>${p}</span><span>${q}</span></span>`;
+  const head = text => `<span class="head">${text}</span>`;
+  const cm = v => v.toFixed(1);
+  function updateWorking() {
+    let rows = head('<span class="M">Marked positions</span>');
+    rows += line('x', marks.length ? marks.map((m, i) => `x<sub>${i + 1}</sub> = ${cm(m)} cm`).join(', &nbsp;') : '—');
+    if (marks.length >= 2) {
+      const n = marks.length, first = marks[0], last = marks[n - 1];
+      const lam = (last - first) / (n - 1);
+      rows += head('Wavelength and speed');
+      rows += line('λ', frac(`x<sub>${n}</sub> − x<sub>1</sub>`, String(n - 1)),
+        frac(`(${cm(last)} − ${cm(first)}) cm`, String(n - 1)), `<span class="M">${lam.toFixed(2)} cm</span>`);
+      rows += line('v', 'fλ', `${f} Hz × ${(lam / 100).toFixed(4)} m`, `<span class="M">${Math.round(f * lam / 100)} m/s</span>`);
+    }
+    $('derivation').innerHTML = rows;
+  }
+
+  function update() {
+    $('f-value').textContent = `${(f / 1000).toFixed(1)} kHz`;
+    $('tb-reading').textContent = `${tb} ms/div`;
+    $('clear-btn').disabled = marks.length === 0;
+    updateWorking();
+    drawBench();
+    drawScreen();
+  }
+
+  // ---- Animation: only the bench moves; the CRO is triggered, so its picture stays still ----
+  let lastFrame = null;
+  function frame(now) {
+    if (lastFrame !== null && playing) {
+      const dt = Math.min(0.1, (now - lastFrame) / 1000);
+      phaseT = (phaseT + f / SLOW * dt) % 1;
+      drawBench();
+    }
+    lastFrame = now;
+    requestAnimationFrame(frame);
+  }
+
+  const simulation = $('simulation'), screenToggle = $('screen-toggle');
+  function resizeAll() { resizeBench(); resizeScreen(); drawBench(); drawScreen(); }
+  function syncFullscreen() {
+    const expanded = document.fullscreenElement === simulation || document.body.classList.contains('page-fullscreen');
+    simulation.classList.toggle('expanded', expanded);
+    screenToggle.setAttribute('aria-pressed', String(expanded));
+    screenToggle.title = expanded ? 'Exit full screen' : 'Enter full screen';
+    resizeAll();
+  }
+  screenToggle.addEventListener('click', async () => {
+    if (document.fullscreenElement === simulation) {
+      await document.exitFullscreen();
+    } else if (document.body.classList.contains('page-fullscreen')) {
+      document.body.classList.remove('page-fullscreen');
+      syncFullscreen();
+    } else {
+      try {
+        await simulation.requestFullscreen();
+      } catch {
+        // Embedded pages and mobile browsers can restrict native fullscreen.
+        document.body.classList.add('page-fullscreen');
+        syncFullscreen();
+      }
+    }
+  });
+  document.addEventListener('fullscreenchange', syncFullscreen);
+  window.addEventListener('keydown', ev => {
+    if (ev.key === 'Escape' && document.body.classList.contains('page-fullscreen')) screenToggle.click();
+  });
+  window.addEventListener('resize', resizeAll);
+  resizeBench(); resizeScreen();
+  update();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

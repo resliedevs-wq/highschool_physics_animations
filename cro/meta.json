@@ -1,5 +1,9 @@
 {
   "chapter": "wave",
   "title": "3.10 Reading a CRO",
-  "order": 10
+  "order": 10,
+  "syllabus": [
+    "Cambridge",
+    "Edexcel International"
+  ]
 }

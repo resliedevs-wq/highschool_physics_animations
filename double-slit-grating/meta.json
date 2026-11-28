@@ -1,5 +1,9 @@
 {
   "chapter": "wave",
   "title": "3.9 Double slit and diffraction grating",
-  "order": 9
+  "order": 9,
+  "syllabus": [
+    "Cambridge",
+    "Edexcel International"
+  ]
 }

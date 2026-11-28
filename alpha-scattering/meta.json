@@ -1,5 +1,9 @@
 {
   "chapter": "nuclear",
   "title": "4.1 Alpha scattering",
-  "order": 1
+  "order": 1,
+  "syllabus": [
+    "Cambridge",
+    "Edexcel International"
+  ]
 }

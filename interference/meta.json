@@ -1,5 +1,9 @@
 {
   "chapter": "wave",
   "title": "3.2 Interference of two sources",
-  "order": 2
+  "order": 2,
+  "syllabus": [
+    "Cambridge",
+    "Edexcel International"
+  ]
 }

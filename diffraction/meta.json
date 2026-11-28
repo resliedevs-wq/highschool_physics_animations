@@ -1,5 +1,9 @@
 {
   "chapter": "wave",
   "title": "3.8 Diffraction at a gap",
-  "order": 8
+  "order": 8,
+  "syllabus": [
+    "Cambridge",
+    "Edexcel International"
+  ]
 }

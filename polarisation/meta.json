@@ -1,5 +1,9 @@
 {
   "chapter": "wave",
   "title": "3.5 Plane polarisation",
-  "order": 5
+  "order": 5,
+  "syllabus": [
+    "Cambridge",
+    "Edexcel International"
+  ]
 }

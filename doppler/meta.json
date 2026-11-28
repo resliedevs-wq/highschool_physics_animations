@@ -1,5 +1,9 @@
 {
   "chapter": "wave",
   "title": "3.7 Doppler effect",
-  "order": 7
+  "order": 7,
+  "syllabus": [
+    "Cambridge",
+    "Edexcel International"
+  ]
 }

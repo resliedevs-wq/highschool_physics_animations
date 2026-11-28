@@ -1,5 +1,9 @@
 {
   "chapter": "mechanics",
   "title": "1.1 Projectile motion",
-  "order": 1
+  "order": 1,
+  "syllabus": [
+    "Cambridge",
+    "Edexcel International"
+  ]
 }

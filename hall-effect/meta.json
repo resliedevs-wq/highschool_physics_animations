@@ -1,5 +1,8 @@
 {
   "chapter": "A2-Level",
   "title": "5.1 Hall effect",
-  "order": 1
+  "order": 1,
+  "syllabus": [
+    "Cambridge"
+  ]
 }
