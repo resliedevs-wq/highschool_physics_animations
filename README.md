@@ -30,7 +30,8 @@ Each animation is a single self-contained HTML file. Open it directly in a brows
 - 3.8 [Diffraction at a gap](diffraction/index.html): ripple tank with adjustable λ and a fixed 4 cm gap; maximum diffraction at λ = a, "Full diffraction" for λ > a with less energy getting through
 - 3.9 [Double slit and diffraction grating](double-slit-grating/index.html): x = λD/a and d sin θ = nλ; fringes on a screen with point P's path difference, grating orders at their true angles and white-light spectra
 - 3.10 [Reading a CRO](cro/index.html): T = divisions × time-base, f = 1/T, V = divisions × y-gain; time-base and y-gain knobs, snapping markers, sine/square/triangle input, time-base off, and a hidden input for practice
-- 3.11 [Speed of sound with a two-beam CRO](speed-of-sound/index.html): v = fλ; drag the microphone along a metre rule until the Y1 (signal generator) and Y2 (microphone) traces come back into phase, mark each position, and the wavelength and speed are worked out from the marks
+- 3.11 [Speed of sound with a two-beam CRO](speed-of-sound/index.html): v = fλ; switch the speaker on and the sound travels down the bench, reaching the microphone after a short delay, and the CRO's spot, sweeping on the same slowed clock, starts the Y2 wave where it arrives; drag the microphone along a metre rule until the Y1 (signal generator) and Y2 (microphone) traces come back into phase, mark each position, and the wavelength and speed are worked out from the marks
+- 3.12 [Refraction and total internal reflection](refraction/index.html): n₁ sin θ₁ = n₂ sin θ₂, n = c/v, sin C = 1/n; drag the ray box onto a rectangular or semicircular block of glass, water or diamond, with the reflected and refracted shares of the light; optional wavefronts slow down in the block, and zooming in on them shows broad wavefronts bending at the surface
 
 ### 4 Nuclear physics
 

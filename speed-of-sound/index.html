@@ -98,6 +98,7 @@
     cursor: pointer;
   }
   button:hover { background: #f3f4f6; }
+  .toggle[aria-pressed="true"] { background: var(--ink); color: #fff; border-color: var(--ink); }
   button:disabled { color: #9ca3af; cursor: default; background: #fff; }
 
   .derivation {
@@ -182,6 +183,7 @@
           </div>
         </div>
         <div class="row">
+          <button id="speaker-btn" class="toggle" aria-pressed="false">Speaker</button>
           <div class="slider">
             <label for="f"><span>Frequency f</span><span id="f-value"></span></label>
             <input type="range" id="f" min="1" max="5" step="0.1" value="2">
@@ -216,7 +218,7 @@
 
   // ---- Physics ----
   const V_SOUND = 340;                  // m/s
-  const SPEAKER_CM = -6;                // the speaker cone sits 6 cm before the rule's zero
+  const SPEAKER_CM = 0;                 // the speaker cone is at the rule's zero
   const X_MIN = 0, X_MAX = 100;         // the microphone can be read anywhere on the rule (cm)
   const SLOW = 2000;                    // the bench is shown 2000× slower than real
   let f = 2000;                         // Hz
@@ -224,6 +226,27 @@
   let marks = [];                       // marked microphone positions (cm)
   let playing = true;
   let phaseT = 0;                       // cycles of the source on the slowed bench clock
+  let benchT = 0;                       // the slowed bench clock (s)
+  // times the speaker was switched on and off; the sound at a distance d left the speaker d / v earlier
+  let spells = [];                      // [{ on, off }] with off = null while it is still on
+  const speakerOn = () => spells.length > 0 && spells[spells.length - 1].off === null;
+  const V_BENCH = V_SOUND * 100 / SLOW;  // cm per second on the bench
+  // How loud the speaker was at bench time te (0 … 1): like a real speaker it takes about a cycle and
+  // a half to build up after switching on, and as long to die away after switching off.
+  const RISE_CYCLES = 1.5;
+  const smooth = u => u <= 0 ? 0 : u >= 1 ? 1 : u * u * (3 - 2 * u);
+  function envelope(te) {
+    const R = RISE_CYCLES * SLOW / f;
+    let a = 0;
+    for (const sp of spells) {
+      const up = smooth((te - sp.on) / R);
+      const down = sp.off === null ? 1 : 1 - smooth((te - sp.off) / R);
+      a = Math.max(a, up * down);
+    }
+    return a;
+  }
+  // the sound at a distance d left the speaker d / v earlier
+  const loudnessAt = dCm => envelope(benchT - dCm / V_BENCH);
   const lambdaCm = () => V_SOUND / f * 100;
   // cycles by which the sound at the microphone lags the signal generator
   const lagCycles = () => (micCm - SPEAKER_CM) / lambdaCm();
@@ -263,7 +286,8 @@
     const x0 = PX(SPEAKER_CM), x1 = bg.W - 8, top = bg.cy - bg.band / 2;
     const lamPx = lambdaCm() * bg.pxcm;
     for (let x = Math.floor(x0); x < x1; x += 2) {
-      const p = Math.cos(2 * Math.PI * (phaseT - (x - x0) / lamPx));
+      // still air (no sound yet, or none any more) is drawn at the average shade
+      const p = loudnessAt((x - x0) / bg.pxcm) * Math.cos(2 * Math.PI * (phaseT - (x - x0) / lamPx));
       const a = 0.08 + 0.26 * (p + 1) / 2;
       bx.fillStyle = `rgba(51, 65, 85, ${a.toFixed(3)})`;
       bx.fillRect(x, top, 2, bg.band);
@@ -278,7 +302,7 @@
     bx.fillStyle = '#374151';
     roundRect(bx, face - 34, cy - h / 2 - 6, 26, h + 12, 4); bx.fill();
     // cone: the diaphragm moves with the signal
-    const push = 2.5 * Math.cos(2 * Math.PI * phaseT);
+    const push = 2.5 * envelope(benchT) * Math.cos(2 * Math.PI * phaseT);
     bx.fillStyle = '#9ca3af';
     bx.beginPath();
     bx.moveTo(face - 10, cy - 12); bx.lineTo(face + push, cy - h / 2); bx.lineTo(face + push, cy + h / 2); bx.lineTo(face - 10, cy + 12);
@@ -449,19 +473,65 @@
     sx.stroke();
   }
 
-  function trace(centre, lag, rgb, core) {
-    const left = X(0), right = X(DIV_X);
-    const n = Math.ceil((right - left) * 2);
+  // Usually the picture is static: the triggered traces for the sound as it is now.
+  // After the speaker is switched on or off the CRO runs live on the same slowed clock as the bench:
+  // after each trigger (Y1 rising through zero) the spot crosses the screen in 10 × time-base × SLOW
+  // seconds, writing both traces as it goes, with the last sweep left dimmer until it is written over.
+  // Once a sweep ends after the sound at the microphone has settled, the picture is static again.
+  const NS = 500;                              // samples across the screen
+  const y1s = new Float32Array(NS + 1), y2s = new Float32Array(NS + 1);
+  let live = false, lastToggle = 0;
+  let sweeping = false, sweepStart = 0, sweepCol = NS;
+  // when the change last made at the speaker has reached the microphone and built up or died away
+  const settledAt = () => lastToggle + (micCm - SPEAKER_CM) / V_BENCH + RISE_CYCLES * SLOW / f;
+  function fillStatic() {
+    const lag = lagCycles(), L = loudnessAt(micCm - SPEAKER_CM);
+    for (let i = 0; i <= NS; i++) {
+      const cyc = i / NS * DIV_X * tb * f / 1000;
+      y1s[i] = Math.sin(2 * Math.PI * cyc);
+      y2s[i] = L * Math.sin(2 * Math.PI * (cyc - lag));
+    }
+  }
+  const sweepBench = () => DIV_X * tb / 1000 * SLOW;          // bench seconds for one sweep
+  function fill(i0, i1) {
+    const W = sweepBench(), lag = lagCycles(), dMic = micCm - SPEAKER_CM;
+    for (let i = Math.max(0, i0); i <= Math.min(NS, i1); i++) {
+      const tau = i / NS * W;                                  // bench seconds since the trigger
+      const cyc = f * tau / SLOW;
+      y1s[i] = Math.sin(2 * Math.PI * cyc);
+      y2s[i] = envelope(sweepStart + tau - dMic / V_BENCH) * Math.sin(2 * Math.PI * (cyc - lag));
+    }
+  }
+  function advanceSweep() {
+    if (!sweeping) return;
+    const W = sweepBench(), tau = benchT - sweepStart;
+    const col = Math.min(NS, Math.floor(tau / W * NS));
+    if (col > sweepCol) { fill(sweepCol + 1, col); sweepCol = col; }
+    if (tau >= W) {
+      sweeping = false;
+      if (benchT >= settledAt()) live = false;
+    }
+  }
+  function trigger() {                                         // Y1 has just risen through zero
+    sweepStart = benchT - phaseT * SLOW / f;
+    sweeping = true; sweepCol = -1;
+    advanceSweep();
+  }
+  // a change of setting waits for the next trigger; the old picture stays until it is written over
+  const retrigger = () => { if (sweeping) { sweeping = false; sweepCol = NS; } };
+
+  function tracePart(samples, centre, i0, i1, rgb, core, dim) {
+    if (i1 < i0) return;
+    const left = X(0), span = DIV_X * sg.d;
     const path = () => {
       sx.beginPath();
-      for (let i = 0; i <= n; i++) {
-        const x = left + (right - left) * i / n;
-        const tMs = (x - left) / sg.d * tb;
-        const y = Y(centre + AMP * Math.sin(2 * Math.PI * (f * tMs / 1000 - lag)));
-        i ? sx.lineTo(x, y) : sx.moveTo(x, y);
+      for (let i = i0; i <= i1; i++) {
+        const x = left + span * i / NS, y = Y(centre + AMP * samples[i]);
+        i === i0 ? sx.moveTo(x, y) : sx.lineTo(x, y);
       }
     };
     sx.save();
+    sx.globalAlpha = dim ? 0.45 : 1;
     sx.lineJoin = 'round'; sx.lineCap = 'round';
     sx.strokeStyle = `rgba(${rgb}, .25)`; sx.lineWidth = 7;
     sx.shadowColor = `rgba(${rgb}, .8)`; sx.shadowBlur = 10;
@@ -471,14 +541,25 @@
     path(); sx.stroke();
     sx.restore();
   }
+  function trace(samples, centre, rgb, core) {
+    const head = sweeping ? sweepCol : NS;
+    tracePart(samples, centre, 0, head, rgb, core, false);
+    tracePart(samples, centre, head + 1, NS, rgb, core, true);
+    if (sweeping && head >= 0) {
+      sx.save();
+      sx.fillStyle = '#f8fffa'; sx.shadowColor = `rgb(${rgb})`; sx.shadowBlur = 14;
+      sx.beginPath(); sx.arc(X(0) + DIV_X * sg.d * head / NS, Y(centre + AMP * samples[head]), 3.5, 0, 2 * Math.PI); sx.fill();
+      sx.restore();
+    }
+  }
 
   function drawScreen() {
     sx.clearRect(0, 0, sg.W, sg.H);
     drawGraticule();
     sx.save();
     sx.beginPath(); sx.rect(X(0), Y(DIV_Y / 2), DIV_X * sg.d, DIV_Y * sg.d); sx.clip();
-    trace(Y1_AT, 0, '110, 255, 150', '#a7ffbf');
-    trace(Y2_AT, lagCycles(), '250, 220, 80', '#fde68a');
+    trace(y1s, Y1_AT, '110, 255, 150', '#a7ffbf');
+    trace(y2s, Y2_AT, '250, 220, 80', '#fde68a');
     sx.restore();
     sx.font = '600 12px system-ui, sans-serif'; sx.textBaseline = 'middle'; sx.textAlign = 'right';
     sx.fillStyle = C.y1; sx.fillText('Y1', X(0) - 4, Y(Y1_AT));
@@ -528,11 +609,11 @@
     });
     set(index, true);
   }
-  makeKnob($('tb-knob'), TB, TB.indexOf(tb), v => { tb = v; update(); });
+  makeKnob($('tb-knob'), TB, TB.indexOf(tb), v => { tb = v; retrigger(); update(); });
 
   // ---- Controls ----
   const fSlider = $('f');
-  fSlider.addEventListener('input', () => { f = Math.round(Number(fSlider.value) * 1000); marks = []; update(); });
+  fSlider.addEventListener('input', () => { f = Math.round(Number(fSlider.value) * 1000); marks = []; retrigger(); update(); });
   function mark() {
     if (marks.some(m => Math.abs(m - micCm) < 0.05) || marks.length >= 8) return;
     marks.push(micCm); marks.sort((a, b) => a - b); update();
@@ -544,6 +625,16 @@
     $('pause-btn').textContent = playing ? '⏸' : '▶';
   }
   $('pause-btn').addEventListener('click', () => setPlaying(!playing));
+  $('speaker-btn').addEventListener('click', () => {
+    if (speakerOn()) spells[spells.length - 1].off = benchT;
+    else spells.push({ on: benchT, off: null });
+    // forget sound that has already left the bench
+    spells = spells.filter(sp => sp.off === null || benchT - sp.off < 120 / V_BENCH);
+    $('speaker-btn').setAttribute('aria-pressed', String(speakerOn()));
+    live = true; lastToggle = benchT;
+    if (!playing) setPlaying(true);
+    update();
+  });
   window.addEventListener('keydown', e => {
     if (e.target.closest && e.target.closest('input, button, .dial')) return;
     if (e.code === 'Space') { e.preventDefault(); setPlaying(!playing); }
@@ -573,6 +664,7 @@
     $('f-value').textContent = `${(f / 1000).toFixed(1)} kHz`;
     $('tb-reading').textContent = `${tb} ms/div`;
     $('clear-btn').disabled = marks.length === 0;
+    if (!live) fillStatic();
     updateWorking();
     drawBench();
     drawScreen();
@@ -583,8 +675,16 @@
   function frame(now) {
     if (lastFrame !== null && playing) {
       const dt = Math.min(0.1, (now - lastFrame) / 1000);
-      phaseT = (phaseT + f / SLOW * dt) % 1;
+      phaseT += f / SLOW * dt;
+      benchT += dt;
+      const risen = phaseT >= 1;
+      phaseT %= 1;
+      if (live) {
+        advanceSweep();
+        if (risen && !sweeping && live) trigger();
+      } else fillStatic();
       drawBench();
+      drawScreen();
     }
     lastFrame = now;
     requestAnimationFrame(frame);

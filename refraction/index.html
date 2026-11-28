@@ -1,0 +1,702 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>3.12 Refraction and total internal reflection</title>
+<style>
+  :root {
+    --bg: #f7f7f5;
+    --panel: #ffffff;
+    --ink: #1f2328;
+    --muted: #6b7280;
+    --grid: #e5e7eb;
+    --axis: #9ca3af;
+    --ray: #dc2626;
+    --normal: #64748b;
+    --angle1: #2563eb;
+    --angle2: #d97706;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+  }
+  main { max-width: 1100px; margin: 0 auto; padding: 20px; }
+  .card {
+    background: var(--panel);
+    border-radius: 10px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.08);
+    padding: 14px 18px;
+    margin-bottom: 14px;
+  }
+  .frac {
+    display: inline-flex; flex-direction: column;
+    vertical-align: middle; text-align: center;
+    font-size: .85em; line-height: 1.15; margin: 0 2px;
+  }
+  .frac > span { padding: 0 3px; }
+  .frac > span:first-child { border-bottom: 1.5px solid currentColor; }
+  .intro h1 { font-size: 1.25rem; margin: 0 0 8px; }
+  .intro .formulas {
+    display: flex; gap: 3em; justify-content: center; flex-wrap: wrap;
+    font-family: "Cambria Math", "Times New Roman", serif;
+    font-size: 1.4rem; line-height: 2.4; margin: 0 0 6px;
+  }
+  .intro dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; margin: 0; }
+  .intro dt { font-family: "Cambria Math", "Times New Roman", serif; font-size: 1.1rem; text-align: center; }
+  .intro dd { margin: 0; }
+  canvas { display: block; width: 100%; }
+  #scene { height: 440px; touch-action: none; border-radius: 6px; }
+  .row { display: flex; gap: 12px 18px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
+  .row .right { margin-left: auto; display: flex; gap: 10px; }
+  .slider { flex: 1 1 160px; max-width: 500px; min-width: 0; }
+  .slider label { display: flex; justify-content: space-between; margin-bottom: 4px; font-variant-numeric: tabular-nums; }
+  .slider input { display: block; width: 100%; margin-inline: 0; accent-color: var(--ink); }
+  button {
+    font: inherit;
+    height: 2.4em; min-width: 2.4em; padding: 0 10px;
+    border-radius: 6px;
+    border: 1px solid #d1d5db;
+    background: #fff;
+    cursor: pointer;
+  }
+  button:hover { background: #f3f4f6; }
+  .switch { display: inline-flex; border: 1px solid #d1d5db; border-radius: 6px; overflow: hidden; }
+  .switch button { border: 0; border-radius: 0; }
+  .switch button + button { border-left: 1px solid #d1d5db; }
+  .switch button[aria-pressed="true"] { background: var(--ink); color: #fff; }
+  .toggle[aria-pressed="true"] { background: var(--ink); color: #fff; border-color: var(--ink); }
+  .derivation {
+    display: grid;
+    grid-template-columns: auto auto 1fr;
+    column-gap: .4em;
+    align-items: center;
+    font-family: "Cambria Math", "Times New Roman", serif;
+    font-size: 1.3rem;
+    line-height: 2.4;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    overflow-x: auto;
+  }
+  .derivation .head {
+    grid-column: 1 / -1;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-size: 1rem; font-weight: 600; line-height: 1.6; margin-top: .3em;
+  }
+  .derivation .note {
+    grid-column: 1 / -1;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-size: 1rem; line-height: 1.8;
+  }
+  .A1 { color: var(--angle1); }
+  .A2 { color: var(--angle2); }
+  .R { color: var(--ray); }
+  .screen-tools { display: flex; justify-content: flex-end; margin-top: 8px; }
+  #screen-toggle { display: inline-grid; place-items: center; }
+  #screen-toggle svg { width: 18px; height: 18px; }
+  #screen-toggle .exit, #screen-toggle[aria-pressed="true"] .enter { display: none; }
+  #screen-toggle[aria-pressed="true"] .exit { display: block; }
+  .sim-panel { min-width: 0; }
+  .sim-panel + .sim-panel { margin-top: 12px; }
+  #simulation.expanded {
+    width: 100%; height: 100%; margin: 0; border-radius: 0;
+    display: grid; justify-content: center;
+    grid-template-columns: minmax(0, 1600px);
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+  .expanded .sim-content { display: flex; flex-direction: column; min-height: 0; overflow: auto; }
+  .expanded .sim-panel { flex: none; }
+  /* Give the scene one sixth of the unused height above it, up to 120px. */
+  .expanded .sim-content::before { content: ""; flex: 1 0 0; max-height: 120px; }
+  .expanded .sim-content::after { content: ""; flex: 5 0 0; order: 1; }
+  .expanded input[type="range"] { max-width: 100%; margin-inline: 0; }
+  body.page-fullscreen { overflow: hidden; }
+  body.page-fullscreen main > :not(#simulation) { display: none; }
+  body.page-fullscreen #simulation { position: fixed; inset: 0; z-index: 10; }
+  #simulation.expanded #scene { height: clamp(300px, 70vh, 820px); }
+</style>
+</head>
+<body>
+<main>
+  <section class="card intro">
+    <h1>3.12 Refraction and total internal reflection</h1>
+    <div class="formulas">
+      <span>n<sub>1</sub> sin θ<sub>1</sub> = n<sub>2</sub> sin θ<sub>2</sub></span>
+      <span>n = <span class="frac"><span>c</span><span>v</span></span></span>
+      <span>sin C = <span class="frac"><span>1</span><span>n</span></span></span>
+    </div>
+    <dl>
+      <dt>n<sub>1</sub>, n<sub>2</sub></dt><dd>refractive indices of the material the light is in and the material it goes into</dd>
+      <dt>θ<sub>1</sub></dt><dd>angle of incidence, measured from the normal</dd>
+      <dt>θ<sub>2</sub></dt><dd>angle of refraction, measured from the normal</dd>
+      <dt>c</dt><dd>speed of light in a vacuum, 3.00 × 10<sup>8</sup> m s<sup>−1</sup></dd>
+      <dt>v</dt><dd>speed of light in the material</dd>
+      <dt>C</dt><dd>critical angle: the angle of incidence inside the material for which the angle of refraction into air is 90°</dd>
+    </dl>
+  </section>
+
+  <section class="card" id="simulation" aria-label="3.12 Refraction simulation">
+    <div class="sim-content">
+      <div class="sim-panel">
+        <canvas id="scene" aria-label="Ray box and block"></canvas>
+        <div class="row">
+          <div class="switch" role="group" aria-label="Block">
+            <button data-block="rect" aria-pressed="true">Rectangular block</button>
+            <button data-block="semi" aria-pressed="false">Semicircular block</button>
+          </div>
+          <div class="switch" role="group" aria-label="Material">
+            <button data-mat="glass" aria-pressed="true">Glass</button>
+            <button data-mat="water" aria-pressed="false">Water</button>
+            <button data-mat="diamond" aria-pressed="false">Diamond</button>
+          </div>
+          <button id="waves-btn" class="toggle" aria-pressed="false">Wavefronts</button>
+        </div>
+        <div class="row">
+          <div class="slider">
+            <label for="theta"><span>Angle of incidence θ<sub>1</sub></span><span id="theta-value"></span></label>
+            <input type="range" id="theta" min="0" max="89.9" step="0.1" value="30">
+          </div>
+          <div class="right">
+            <button id="pause-btn" title="Play / pause (Space)">⏸</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="screen-tools">
+      <button id="screen-toggle" aria-label="Full screen" aria-pressed="false" title="Enter full screen">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <path class="enter" d="M9 4H4v5m11-5h5v5M4 15v5h5m11-5v5h-5"/>
+          <path class="exit" d="M4 9h5V4m6 0v5h5M9 20v-5H4m11 5v-5h5"/>
+        </svg>
+      </button>
+    </div>
+  </section>
+
+  <div class="card derivation" id="derivation"></div>
+</main>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const css = getComputedStyle(document.documentElement);
+  const color = name => css.getPropertyValue(name).trim();
+  const C = {
+    ink: color('--ink'), muted: color('--muted'), ray: color('--ray'), normal: color('--normal'),
+    a1: color('--angle1'), a2: color('--angle2'),
+  };
+  const RAD = Math.PI / 180;
+
+  // ---- Physics ----
+  const MATERIALS = {
+    glass:   { n: 1.50, name: 'glass',   fill: 'rgba(147, 197, 253, .28)', edge: '#60a5fa' },
+    water:   { n: 1.33, name: 'water',   fill: 'rgba(56, 189, 248, .22)',  edge: '#0ea5e9' },
+    diamond: { n: 2.42, name: 'diamond', fill: 'rgba(203, 213, 225, .45)', edge: '#94a3b8' },
+  };
+  let block = 'rect', mat = 'glass', theta = 30, waves = false, playing = true;
+  let zoomSetting = 5;                              // used only while the wavefronts are shown; 5× each time they are turned on
+  const zoom = () => waves ? zoomSetting : 1;
+  const nOf = () => MATERIALS[mat].n;
+
+  // refraction angle (degrees), or null beyond the critical angle
+  function refract(n1, n2, th1) {
+    const s = n1 * Math.sin(th1 * RAD) / n2;
+    return s > 1 ? null : Math.asin(s) / RAD;
+  }
+  // fraction of the light reflected (unpolarised: mean of the s and p Fresnel coefficients)
+  function reflectance(n1, n2, th1) {
+    const th2 = refract(n1, n2, th1);
+    if (th2 === null) return 1;
+    const ci = Math.cos(th1 * RAD), ct = Math.cos(th2 * RAD);
+    const rs = (n1 * ci - n2 * ct) / (n1 * ci + n2 * ct);
+    const rp = (n1 * ct - n2 * ci) / (n1 * ct + n2 * ci);
+    return (rs * rs + rp * rp) / 2;
+  }
+
+  // ---- Scene ----
+  const scene = $('scene'), ctx = scene.getContext('2d');
+  const g = { W: 0, H: 0 };
+  function resize() {
+    const dpr = window.devicePixelRatio || 1;
+    const r = scene.getBoundingClientRect();
+    g.W = r.width; g.H = r.height;
+    scene.width = Math.round(r.width * dpr); scene.height = Math.round(r.height * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  // rectangular block: the light enters the top face at P
+  const rectGeo = () => {
+    const top = Math.round(g.H * 0.44), h = Math.round(g.H * 0.3);
+    const x0 = Math.round(g.W * 0.2), x1 = Math.round(g.W * 0.86);
+    const P = { x: Math.round(g.W * 0.4), y: top };
+    return { top, h, x0, x1, P, arm: Math.min(g.H * 0.36, g.W * 0.3) };
+  };
+  // semicircular block: flat face on top, centre O; the light comes in through the curved face towards O
+  const semiGeo = () => {
+    // leave room below the curve for the ray box, even with the light coming straight up
+    const O = { x: Math.round(g.W * 0.5), y: Math.round(g.H * 0.3) };
+    const R = Math.round(Math.min(g.H - O.y - 100, g.W * 0.3));
+    return { O, R, arm: R + 46 };
+  };
+
+  // Zooming scales the scene about the point of incidence, which stays where it is on the canvas.
+  const pivotOf = () => block === 'rect' ? rectGeo().P : semiGeo().O;
+  const toScreen = w => { const p = pivotOf(), z = zoom(); return { x: p.x + (w.x - p.x) * z, y: p.y + (w.y - p.y) * z }; };
+  const toWorld = q => { const p = pivotOf(), z = zoom(); return { x: p.x + (q.x - p.x) / z, y: p.y + (q.y - p.y) / z }; };
+
+  // The light as straight segments: each has a start, a direction, a length, the index it travels in,
+  // its intensity (fraction of the incident light) and the optical path from the ray box to its start.
+  function buildRays() {
+    const n = nOf(), segs = [];
+    const far = g.W + g.H;
+    const lenToEdge = (p, d) => {
+      let t = far;
+      if (d.x > 1e-9) t = Math.min(t, (g.W - p.x) / d.x); else if (d.x < -1e-9) t = Math.min(t, -p.x / d.x);
+      if (d.y > 1e-9) t = Math.min(t, (g.H - p.y) / d.y); else if (d.y < -1e-9) t = Math.min(t, -p.y / d.y);
+      return Math.max(0, t);
+    };
+    const s1 = Math.sin(theta * RAD), c1 = Math.cos(theta * RAD);
+    const out = { segs, R: 0, T: 0, th2: null };
+    if (block === 'rect') {
+      const G = rectGeo(), P = G.P;
+      const src = { x: P.x - G.arm * s1, y: P.y - G.arm * c1 };
+      const dIn = { x: s1, y: c1 };
+      segs.push({ a: src, d: dIn, len: G.arm, n: 1, I: 1, opl: 0, kind: 'incident', toS: true });
+      const R = reflectance(1, n, theta), th2 = refract(1, n, theta);
+      out.R = R; out.T = 1 - R; out.th2 = th2; out.src = src; out.pivot = P;
+      const dRef = { x: s1, y: -c1 };
+      segs.push({ a: P, d: dRef, len: lenToEdge(P, dRef), n: 1, I: R, opl: G.arm, kind: 'reflected', fromS: true });
+      const s2 = Math.sin(th2 * RAD), c2 = Math.cos(th2 * RAD);
+      const dGl = { x: s2, y: c2 };
+      const inLen = G.h / c2;
+      const Q = { x: P.x + dGl.x * inLen, y: P.y + G.h };
+      segs.push({ a: P, d: dGl, len: inLen, n, I: 1 - R, opl: G.arm, kind: 'refracted', fromS: true, toS: true });
+      const R2 = reflectance(n, 1, th2);
+      segs.push({ a: Q, d: dIn, len: lenToEdge(Q, dIn), n: 1, I: (1 - R) * (1 - R2), opl: G.arm + n * inLen, kind: 'emergent', fromS: true });
+      out.Q = Q;
+    } else {
+      const G = semiGeo(), O = G.O;
+      // inside the glass the light travels towards O, so it crosses the curved face along a radius
+      const dIn = { x: s1, y: -c1 };
+      const entry = { x: O.x - G.R * s1, y: O.y + G.R * c1 };
+      const src = { x: O.x - G.arm * s1, y: O.y + G.arm * c1 };
+      segs.push({ a: src, d: dIn, len: G.arm - G.R, n: 1, I: 1, opl: 0, kind: 'incident', toS: true });
+      segs.push({ a: entry, d: dIn, len: G.R, n, I: 1, opl: G.arm - G.R, kind: 'incident', fromS: true, toS: true });
+      const oplO = G.arm - G.R + n * G.R;
+      const R = reflectance(n, 1, theta), th2 = refract(n, 1, theta);
+      out.R = R; out.T = 1 - R; out.th2 = th2; out.src = src; out.pivot = O;
+      const dRef = { x: s1, y: c1 };
+      segs.push({ a: O, d: dRef, len: G.R, n, I: R, opl: oplO, kind: 'reflected', fromS: true, toS: true });
+      const exit = { x: O.x + G.R * s1, y: O.y + G.R * c1 };
+      segs.push({ a: exit, d: dRef, len: lenToEdge(exit, dRef), n: 1, I: R, opl: oplO + n * G.R, kind: 'reflected', fromS: true });
+      if (th2 !== null) {
+        const dOut = { x: Math.sin(th2 * RAD), y: -Math.cos(th2 * RAD) };
+        segs.push({ a: O, d: dOut, len: lenToEdge(O, dOut), n: 1, I: 1 - R, opl: oplO, kind: 'refracted', fromS: true });
+      }
+    }
+    return out;
+  }
+
+  function blockPath() {
+    ctx.beginPath();
+    if (block === 'rect') {
+      const G = rectGeo();
+      ctx.rect(G.x0, G.top, G.x1 - G.x0, G.h);
+    } else {
+      const G = semiGeo();
+      ctx.moveTo(G.O.x - G.R, G.O.y);
+      ctx.arc(G.O.x, G.O.y, G.R, Math.PI, 0, true);
+      ctx.closePath();
+    }
+  }
+  function drawBlock(z) {
+    const M = MATERIALS[mat];
+    blockPath();
+    ctx.fillStyle = M.fill; ctx.fill();
+    ctx.strokeStyle = M.edge; ctx.lineWidth = 1.5 / z; ctx.stroke();
+  }
+  // labels keep their size when zoomed, and are pulled back onto the canvas
+  function drawLabels() {
+    const M = MATERIALS[mat];
+    const put = (w, text, align) => {
+      const sp = toScreen(w);
+      ctx.font = '13px system-ui, sans-serif'; ctx.textBaseline = 'alphabetic'; ctx.textAlign = align;
+      const tw = ctx.measureText(text).width;
+      const x = align === 'right' ? Math.min(Math.max(sp.x, tw + 8), g.W - 8) : Math.max(8, Math.min(sp.x, g.W - 8 - tw));
+      const y = Math.max(16, Math.min(sp.y, g.H - 8));
+      ctx.fillStyle = C.muted; ctx.fillText(text, x, y);
+    };
+    if (block === 'rect') {
+      const G = rectGeo();
+      put({ x: G.x1 - 10, y: G.top + G.h - 10 }, `${M.name}  n = ${M.n.toFixed(2)}`, 'right');
+      put({ x: G.x1 - 10, y: G.top - 12 }, 'air', 'right');
+    } else {
+      const G = semiGeo();
+      // outside the block, where the rays only reach at grazing angles
+      put({ x: G.O.x + G.R + 10, y: G.O.y + 22 }, `${M.name}  n = ${M.n.toFixed(2)}`, 'left');
+      put({ x: G.O.x - G.R, y: G.O.y - 12 }, 'air', 'left');
+    }
+  }
+
+  // a light protractor around the point of incidence: 0° along the normal, 90° along the surface
+  function drawProtractor(p, r) {
+    ctx.save();
+    ctx.strokeStyle = 'rgba(100, 116, 139, .35)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, 2 * Math.PI); ctx.stroke();
+    ctx.beginPath();
+    for (let a = 0; a < 360; a += 5) {
+      const len = a % 10 ? 4 : 8;
+      const ang = a * RAD;
+      ctx.moveTo(p.x + r * Math.sin(ang), p.y - r * Math.cos(ang));
+      ctx.lineTo(p.x + (r - len) * Math.sin(ang), p.y - (r - len) * Math.cos(ang));
+    }
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(100, 116, 139, .7)'; ctx.font = '10px system-ui, sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    for (let a = 0; a < 360; a += 30) {
+      const fromNormal = a <= 90 ? a : a <= 180 ? 180 - a : a <= 270 ? a - 180 : 360 - a;
+      const ang = a * RAD;
+      ctx.fillText(String(fromNormal), p.x + (r + 11) * Math.sin(ang), p.y - (r + 11) * Math.cos(ang));
+    }
+    ctx.restore();
+  }
+
+  function drawNormal(p, len) {
+    ctx.save();
+    ctx.strokeStyle = C.normal; ctx.lineWidth = 1.2; ctx.setLineDash([6, 5]);
+    ctx.beginPath(); ctx.moveTo(p.x, p.y - len); ctx.lineTo(p.x, p.y + len); ctx.stroke();
+    ctx.restore();
+  }
+
+  // angle between the normal (pointing up or down) and a ray leaving p in direction d
+  function drawAngle(p, upNormal, d, r, col, label) {
+    const nAng = upNormal ? -Math.PI / 2 : Math.PI / 2;
+    const rAng = Math.atan2(d.y, d.x);
+    let a0 = nAng, a1 = rAng;
+    let diff = a1 - a0;
+    while (diff > Math.PI) diff -= 2 * Math.PI;
+    while (diff < -Math.PI) diff += 2 * Math.PI;
+    ctx.save();
+    ctx.strokeStyle = col; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(p.x, p.y, r, a0, a0 + diff, diff < 0); ctx.stroke();
+    // the label sits just past the ray, on the side away from the normal, reading outwards
+    const la = rAng + (diff < 0 ? -1 : 1) * 0.2;
+    const lx = p.x + (r + 4) * Math.cos(la), ly = p.y + (r + 4) * Math.sin(la);
+    ctx.font = '600 13px system-ui, sans-serif';
+    ctx.textAlign = Math.cos(la) < 0 ? 'right' : 'left'; ctx.textBaseline = 'middle';
+    const tw = ctx.measureText(label).width;
+    const bx = ctx.textAlign === 'right' ? lx - tw - 3 : lx - 3;
+    ctx.fillStyle = 'rgba(255,255,255,.85)'; ctx.fillRect(bx, ly - 9, tw + 6, 18);
+    ctx.fillStyle = col; ctx.fillText(label, lx, ly);
+    ctx.restore();
+  }
+
+  const alphaOf = I => I <= 1e-4 ? 0 : 0.18 + 0.82 * Math.sqrt(I);
+  function drawRayLines(segs) {
+    const z = zoom();
+    ctx.save();
+    ctx.lineCap = 'round';
+    for (const s of segs) {
+      const a = alphaOf(s.I);
+      if (!a) continue;
+      ctx.strokeStyle = `rgba(220, 38, 38, ${a.toFixed(3)})`; ctx.lineWidth = 2.5 / z;
+      ctx.beginPath(); ctx.moveTo(s.a.x, s.a.y); ctx.lineTo(s.a.x + s.d.x * s.len, s.a.y + s.d.y * s.len); ctx.stroke();
+      // an arrowhead halfway along
+      if (s.len * z > 60) {
+        const mx = s.a.x + s.d.x * s.len * 0.55, my = s.a.y + s.d.y * s.len * 0.55;
+        const ang = Math.atan2(s.d.y, s.d.x);
+        ctx.fillStyle = ctx.strokeStyle;
+        ctx.beginPath();
+        const h = 7 / z;
+        ctx.moveTo(mx + h * Math.cos(ang), my + h * Math.sin(ang));
+        ctx.lineTo(mx + h * Math.cos(ang + 2.5), my + h * Math.sin(ang + 2.5));
+        ctx.lineTo(mx + h * Math.cos(ang - 2.5), my + h * Math.sin(ang - 2.5));
+        ctx.closePath(); ctx.fill();
+      }
+    }
+    ctx.restore();
+  }
+
+  // ---- Wavefronts: crests across a beam, spaced λ in air and λ/n in the block, moving at c/n ----
+  // Zoomed in, the beam gets wider and the wavelength shorter (both ∝ √zoom on the canvas compared with
+  // plain scaling), so many broad wavefronts can be seen crossing the surface.
+  const LAMBDA = 22;          // px, in air, at 1×
+  const HALF = 16;            // px, half the beam's width, at 1×
+  const C_SCREEN = 30;        // px per second in air on the canvas at 1×
+  let cycles = 0;             // how many wavelengths a crest has moved, so zooming doesn't make it jump
+  const lam = () => LAMBDA / Math.sqrt(zoom());
+  function drawWavefronts(segs) {
+    const z = zoom(), half = HALF * Math.sqrt(z), L = lam();
+    for (const s of segs) {
+      if (s.I <= 1e-4) continue;
+      const inBlock = s.n > 1;
+      ctx.save();
+      // keep each segment's crests on its own side of the surface
+      ctx.beginPath();
+      if (inBlock) { blockPath(); ctx.clip(); }
+      else {
+        ctx.rect(0, 0, g.W, g.H);
+        if (block === 'rect') { const G = rectGeo(); ctx.rect(G.x0, G.top, G.x1 - G.x0, G.h); }
+        else { const G = semiGeo(); ctx.moveTo(G.O.x - G.R, G.O.y); ctx.arc(G.O.x, G.O.y, G.R, Math.PI, 0, true); ctx.closePath(); }
+        ctx.clip('evenodd');
+      }
+      // the beam
+      const px = -s.d.y, py = s.d.x;
+      // a beam meeting a surface at an angle reaches it beyond its centre line on one side,
+      // so run it on past the surface and let the clip trim it
+      const ext = 3 * half + L;
+      const b0 = s.fromS ? -ext : 0, b1 = s.len + (s.toS ? ext : 0);
+      const A = { x: s.a.x + s.d.x * b0, y: s.a.y + s.d.y * b0 }, B = { x: s.a.x + s.d.x * b1, y: s.a.y + s.d.y * b1 };
+      ctx.fillStyle = `rgba(220, 38, 38, ${(0.08 * alphaOf(s.I)).toFixed(3)})`;
+      ctx.beginPath();
+      ctx.moveTo(A.x + px * half, A.y + py * half);
+      ctx.lineTo(B.x + px * half, B.y + py * half);
+      ctx.lineTo(B.x - px * half, B.y - py * half);
+      ctx.lineTo(A.x - px * half, A.y - py * half);
+      ctx.closePath(); ctx.fill();
+      // crests where (optical path − c t) is a whole number of wavelengths
+      // crests fade with the share of the light, so a weak reflection stays in the background
+      ctx.strokeStyle = `rgba(220, 38, 38, ${(0.9 * Math.max(0.12, Math.sqrt(s.I) * (z > 1 ? s.I ** 0.5 : 1))).toFixed(3)})`;
+      ctx.lineWidth = 2 / z;
+      ctx.beginPath();
+      const ct = (cycles % 1) * L;
+      const k0 = Math.floor((s.opl + s.n * b0 - ct) / L), k1 = Math.ceil((s.opl + s.n * b1 - ct) / L);
+      for (let k = k0; k <= k1; k++) {
+        const along = (k * L + ct - s.opl) / s.n;
+        if (along < b0 || along > b1) continue;
+        const cx = s.a.x + s.d.x * along, cy = s.a.y + s.d.y * along;
+        ctx.moveTo(cx + px * half, cy + py * half); ctx.lineTo(cx - px * half, cy - py * half);
+      }
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  function drawRayBox(src, d) {
+    const ang = Math.atan2(d.y, d.x);
+    ctx.save();
+    ctx.translate(src.x, src.y); ctx.rotate(ang);
+    ctx.fillStyle = '#374151';
+    ctx.beginPath(); ctx.roundRect ? ctx.roundRect(-46, -13, 46, 26, 4) : ctx.rect(-46, -13, 46, 26); ctx.fill();
+    ctx.fillStyle = '#111827'; ctx.fillRect(-3, -4, 4, 8);
+    ctx.restore();
+  }
+
+  function pctLabel(p, d, dist, text, I) {
+    if (d.y < 0) dist = Math.min(dist, (p.y - 14) / -d.y);      // stay on the canvas
+    const x = p.x + d.x * dist, y = p.y + d.y * dist;
+    ctx.save();
+    ctx.font = '600 12px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    const tw = ctx.measureText(text).width;
+    // sit beside the ray, on the side away from the normal
+    const side = d.x >= 0 ? 1 : -1;
+    const ox = x + side * (tw / 2 + 10);
+    ctx.fillStyle = 'rgba(255,255,255,.85)'; ctx.fillRect(ox - tw / 2 - 4, y - 9, tw + 8, 18);
+    ctx.fillStyle = `rgba(185, 28, 28, ${Math.max(0.55, alphaOf(I)).toFixed(3)})`;
+    ctx.fillText(text, ox, y);
+    ctx.restore();
+  }
+  const pct = I => I >= 0.995 ? '100%' : I < 0.0005 ? '0%' : `${(I * 100).toFixed(I < 0.1 ? 1 : 0)}%`;
+
+  let lastRays = null;
+  function draw() {
+    ctx.clearRect(0, 0, g.W, g.H);
+    const rays = buildRays();
+    lastRays = rays;
+    const n = nOf();
+    const p = rays.pivot;
+    const protR = Math.min(118, g.H * 0.27, block === 'semi' ? p.y - 22 : Infinity);
+    const z = zoom();
+    ctx.save();
+    ctx.translate(p.x, p.y); ctx.scale(z, z); ctx.translate(-p.x, -p.y);
+    drawBlock(z);
+    if (waves) drawWavefronts(rays.segs);
+    drawRayLines(rays.segs);
+    drawRayBox(rays.src, rays.segs[0].d);
+    ctx.restore();
+    drawLabels();
+    if (z === 1) drawProtractor(p, protR);
+    drawNormal(p, protR + 18);
+    if (block === 'rect') { const q = toScreen(rays.Q); if (q.y < g.H) drawNormal(q, 50); }
+
+    // angles at the point of incidence
+    const inc = rays.segs.find(s => s.kind === 'incident' && (block === 'rect' || s.n > 1));
+    const back = { x: -inc.d.x, y: -inc.d.y };
+    const rIn = 44, rOut = 58;
+    if (block === 'rect') {
+      if (theta > 0.05) drawAngle(p, true, back, rIn, C.a1, `θ₁ = ${theta.toFixed(1)}°`);
+      const refr = rays.segs.find(s => s.kind === 'refracted');
+      if (rays.th2 > 0.05) drawAngle(p, false, refr.d, rOut, C.a2, `θ₂ = ${rays.th2.toFixed(1)}°`);
+      const refl = rays.segs.find(s => s.kind === 'reflected');
+      pctLabel(p, refl.d, protR + 34, pct(rays.R), rays.R);
+      pctLabel(p, refr.d, refr.len * 0.8, pct(rays.T), rays.T);
+    } else {
+      if (theta > 0.05) drawAngle(p, false, back, rIn, C.a1, `θ₁ = ${theta.toFixed(1)}°`);
+      const refr = rays.segs.find(s => s.kind === 'refracted');
+      if (refr && rays.th2 > 0.05) drawAngle(p, true, refr.d, rOut, C.a2, `θ₂ = ${rays.th2.toFixed(1)}°`);
+      const refl = rays.segs.find(s => s.kind === 'reflected');
+      pctLabel(p, refl.d, protR + 34, pct(rays.R), rays.R);
+      if (refr) pctLabel(p, refr.d, protR + 34, pct(rays.T), rays.T);
+    }
+    if (waves) {
+      ctx.fillStyle = C.muted; ctx.font = '12px system-ui, sans-serif'; ctx.textAlign = 'right'; ctx.textBaseline = 'top';
+      ctx.fillText(z > 1 ? `wavefronts slowed and enlarged · ${z.toFixed(1)}×` : 'wavefronts slowed and enlarged', g.W - 10, 8);
+    }
+  }
+
+  // ---- Dragging the ray box round the point of incidence ----
+  let dragging = false;
+  const local = e => { const r = scene.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
+  function nearIncident(sx, sy) {
+    if (!lastRays) return false;
+    const { x, y } = toWorld({ x: sx, y: sy }), z = zoom();
+    const s = lastRays.segs[0], src = lastRays.src;
+    if (Math.hypot(x - (src.x - s.d.x * 23), y - (src.y - s.d.y * 23)) < 34) return true;   // the box scales with the scene
+    const end = lastRays.pivot;
+    const vx = end.x - src.x, vy = end.y - src.y, L2 = vx * vx + vy * vy;
+    const t = Math.max(0, Math.min(1, ((x - src.x) * vx + (y - src.y) * vy) / L2));
+    return Math.hypot(x - (src.x + t * vx), y - (src.y + t * vy)) < 14 / z;
+  }
+  function angleFrom(x, y) {
+    const p = lastRays.pivot;
+    let a = block === 'rect' ? Math.atan2(p.x - x, p.y - y) : Math.atan2(p.x - x, y - p.y);
+    a /= RAD;
+    return Math.max(0, Math.min(89.9, Math.round(a * 10) / 10));
+  }
+  scene.addEventListener('pointerdown', e => {
+    const [x, y] = local(e);
+    if (!nearIncident(x, y)) return;
+    dragging = true; scene.setPointerCapture(e.pointerId); scene.style.cursor = 'grabbing';
+  });
+  scene.addEventListener('pointermove', e => {
+    const [x, y] = local(e);
+    if (dragging) { setTheta(angleFrom(x, y)); return; }
+    scene.style.cursor = nearIncident(x, y) ? 'grab' : '';
+  });
+  const endDrag = () => { dragging = false; scene.style.cursor = ''; };
+  scene.addEventListener('pointerup', endDrag);
+  scene.addEventListener('pointercancel', endDrag);
+
+  // ---- Controls ----
+  const thetaSlider = $('theta');
+  function setTheta(v) { theta = v; thetaSlider.value = v; update(); }
+  thetaSlider.addEventListener('input', () => { theta = Number(thetaSlider.value); update(); });
+  document.querySelectorAll('[data-block]').forEach(b => b.addEventListener('click', () => {
+    block = b.dataset.block;
+    document.querySelectorAll('[data-block]').forEach(o => o.setAttribute('aria-pressed', String(o === b)));
+    update();
+  }));
+  document.querySelectorAll('[data-mat]').forEach(b => b.addEventListener('click', () => {
+    mat = b.dataset.mat;
+    document.querySelectorAll('[data-mat]').forEach(o => o.setAttribute('aria-pressed', String(o === b)));
+    update();
+  }));
+  $('waves-btn').addEventListener('click', () => {
+    waves = !waves;
+    $('waves-btn').setAttribute('aria-pressed', String(waves));
+    if (waves) zoomSetting = 5;
+    update();
+  });
+  function setZoom(v) { zoomSetting = Math.max(1, Math.min(8, Math.round(v * 10) / 10)); update(); }
+  scene.addEventListener('wheel', e => {
+    if (!waves) return;
+    e.preventDefault();
+    setZoom(zoomSetting * Math.exp(-e.deltaY * 0.0015));
+  }, { passive: false });
+  function setPlaying(p) { playing = p; $('pause-btn').textContent = playing ? '⏸' : '▶'; }
+  $('pause-btn').addEventListener('click', () => setPlaying(!playing));
+  window.addEventListener('keydown', e => {
+    if (e.code === 'Space' && e.target === document.body) { e.preventDefault(); setPlaying(!playing); }
+  });
+
+  // ---- Working ----
+  const line = (lhs, ...rhs) => `<span>${lhs}</span><span>=</span><span>${rhs.join(' = ')}</span>`;
+  const frac = (p, q) => `<span class="frac"><span>${p}</span><span>${q}</span></span>`;
+  const head = text => `<span class="head">${text}</span>`;
+  const note = text => `<span class="note">${text}</span>`;
+  const deg = v => `${v.toFixed(1)}°`;
+  const sn = v => v.toFixed(3);
+  function updateWorking() {
+    const n = nOf(), M = MATERIALS[mat], r = lastRays;
+    const nS = n.toFixed(2);
+    let rows = '';
+    const t1 = `<span class="A1">${deg(theta)}</span>`;
+    if (block === 'rect') {
+      rows += head(`At the top face: air into ${M.name}`);
+      rows += line('n<sub>1</sub> sin θ<sub>1</sub>', 'n<sub>2</sub> sin θ<sub>2</sub>');
+      rows += line('sin θ<sub>2</sub>', frac(`1.00 × sin ${t1}`, nS), sn(Math.sin(theta * RAD) / n));
+      rows += line('θ<sub>2</sub>', `<span class="A2">${deg(r.th2)}</span>`);
+    } else {
+      const crit = Math.asin(1 / n) / RAD;
+      rows += head(`At the flat face: ${M.name} into air`);
+      rows += line('sin C', frac(1, 'n'), frac(1, nS), sn(1 / n));
+      rows += line('C', deg(crit));
+      if (r.th2 !== null) {
+        rows += line('n<sub>1</sub> sin θ<sub>1</sub>', 'n<sub>2</sub> sin θ<sub>2</sub>');
+        rows += line('sin θ<sub>2</sub>', frac(`${nS} × sin ${t1}`, '1.00'), sn(n * Math.sin(theta * RAD)));
+        rows += line('θ<sub>2</sub>', `<span class="A2">${deg(r.th2)}</span>`);
+      } else {
+        rows += line('n<sub>1</sub> sin θ<sub>1</sub>', `${nS} × sin ${t1}`, `${sn(n * Math.sin(theta * RAD))} &gt; 1`);
+        rows += note(`θ<sub>1</sub> &gt; C: total internal reflection; all the light is reflected.`);
+      }
+    }
+    rows += head(`Speed of light in ${M.name}`);
+    rows += line('v', frac('c', 'n'), frac('3.00 × 10<sup>8</sup> m s<sup>−1</sup>', nS), `${(3 / n).toFixed(2)} × 10<sup>8</sup> m s<sup>−1</sup>`);
+    $('derivation').innerHTML = rows;
+  }
+
+  function update() {
+    $('theta-value').textContent = `${theta.toFixed(1)}°`;
+    draw();
+    updateWorking();
+  }
+
+  let lastFrame = null;
+  function frame(now) {
+    if (lastFrame !== null && playing && waves) {
+      // on the canvas a crest moves at C_SCREEN × zoom^¼ in air
+      const z = zoom();
+      cycles += C_SCREEN * Math.pow(z, 0.25) / (lam() * z) * Math.min(0.1, (now - lastFrame) / 1000);
+      draw();
+    }
+    lastFrame = now;
+    requestAnimationFrame(frame);
+  }
+
+  const simulation = $('simulation'), screenToggle = $('screen-toggle');
+  function syncFullscreen() {
+    const expanded = document.fullscreenElement === simulation || document.body.classList.contains('page-fullscreen');
+    simulation.classList.toggle('expanded', expanded);
+    screenToggle.setAttribute('aria-pressed', String(expanded));
+    screenToggle.title = expanded ? 'Exit full screen' : 'Enter full screen';
+    resize(); draw();
+  }
+  screenToggle.addEventListener('click', async () => {
+    if (document.fullscreenElement === simulation) {
+      await document.exitFullscreen();
+    } else if (document.body.classList.contains('page-fullscreen')) {
+      document.body.classList.remove('page-fullscreen');
+      syncFullscreen();
+    } else {
+      try {
+        await simulation.requestFullscreen();
+      } catch {
+        // Embedded pages and mobile browsers can restrict native fullscreen.
+        document.body.classList.add('page-fullscreen');
+        syncFullscreen();
+      }
+    }
+  });
+  document.addEventListener('fullscreenchange', syncFullscreen);
+  window.addEventListener('keydown', ev => {
+    if (ev.key === 'Escape' && document.body.classList.contains('page-fullscreen')) screenToggle.click();
+  });
+  window.addEventListener('resize', () => { resize(); draw(); });
+  resize();
+  update();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
