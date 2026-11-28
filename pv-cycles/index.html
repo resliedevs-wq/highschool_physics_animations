@@ -227,14 +227,15 @@
     return { p, V, T: p * V / (N_MOL * R), W, dU, q: dU - W, type, a, b };
   }
 
-  // ---- Time: a pause at each state, then the stage; a longer pause with the whole loop at the end ----
-  const PAUSE = 0.9, MOVE = 3.2, END = 3.5;
+  // ---- Time: a pause at each state, then the stage; the animation stops once the cycle is complete ----
+  const PAUSE = 0.9, MOVE = 3.2;
   const ease = s => s < 0.5 ? 2 * s * s : 1 - 2 * (1 - s) ** 2;
-  const total = () => cyc().stages.length * (PAUSE + MOVE) + END;
+  const total = () => cyc().stages.length * (PAUSE + MOVE);
   let clock = 0, playing = true;
   function phase() {
     let t = clock;
     const n = cyc().stages.length;
+    if (t >= total()) return { k: n - 1, s: 1, moving: false, done: true };
     for (let k = 0; k < n; k++) {
       if (t < PAUSE) return { k, s: 0, moving: false, done: false };
       t -= PAUSE;
@@ -534,10 +535,12 @@
     if (lastFrame !== null && playing) {
       const dt = Math.min(0.1, (now - lastFrame) / 1000);
       clock += dt;
-      if (clock > total()) { clock = 0; initMolecules(cyc().states.A[1]); }
+      const finished = clock >= total();
+      if (finished) clock = total();
       const { st } = current();
       moveMolecules(dt, st.V, st.T);
       draw();
+      if (finished) setPlaying(false);
     }
     lastFrame = now;
     requestAnimationFrame(frame);
@@ -549,10 +552,14 @@
     restart();
   }));
   function setPlaying(p) { playing = p; $('pause-btn').textContent = playing ? '⏸' : '▶'; }
-  $('pause-btn').addEventListener('click', () => setPlaying(!playing));
+  function togglePlaying() {
+    if (!playing && clock >= total()) restart();
+    setPlaying(!playing);
+  }
+  $('pause-btn').addEventListener('click', togglePlaying);
   $('restart-btn').addEventListener('click', () => { restart(); setPlaying(true); });
   window.addEventListener('keydown', e => {
-    if (e.code === 'Space' && e.target === document.body) { e.preventDefault(); setPlaying(!playing); }
+    if (e.code === 'Space' && e.target === document.body) { e.preventDefault(); togglePlaying(); }
   });
 
   const simulation = $('simulation'), screenToggle = $('screen-toggle');

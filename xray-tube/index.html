@@ -49,7 +49,8 @@
   .intro dd { margin: 0; }
   canvas { display: block; width: 100%; }
   #tube { height: 320px; }
-  #plot { height: 270px; margin-top: 6px; }
+  #plot { height: 270px; }
+  .sim-plot { margin-top: 18px; border-top: 2px solid #94a3b8; padding-top: clamp(18px, 3vh, 48px); }
   @media (max-width: 720px) { #tube { height: 250px; } #plot { height: 250px; } }
   .row { display: flex; gap: 12px 18px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
   .row .right { margin-left: auto; display: flex; gap: 10px; }
@@ -104,6 +105,7 @@
   body.page-fullscreen #simulation { position: fixed; inset: 0; z-index: 10; }
   #simulation.expanded #tube { height: clamp(260px, 40vh, 500px); }
   #simulation.expanded #plot { height: clamp(220px, 32vh, 420px); }
+  #simulation.expanded .sim-plot { margin-top: clamp(24px, 5vh, 64px); }
 </style>
 </head>
 <body>
@@ -130,7 +132,6 @@
     <div class="sim-content">
       <div class="sim-panel">
         <canvas id="tube" aria-label="X-ray tube"></canvas>
-        <canvas id="plot" aria-label="X-ray spectrum: intensity against wavelength"></canvas>
         <div class="row">
           <div class="slider">
             <label for="V"><span>Accelerating p.d. V</span><span id="V-value"></span></label>
@@ -143,6 +144,9 @@
           <div class="right">
             <button id="pause-btn" title="Play / pause (Space)">⏸</button>
           </div>
+        </div>
+        <div class="sim-plot">
+          <canvas id="plot" aria-label="X-ray spectrum: intensity against wavelength"></canvas>
         </div>
       </div>
     </div>
