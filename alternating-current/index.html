@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>5.7 Alternating current: r.m.s., rectification and smoothing</title>
+<style>
+  :root {
+    --bg: #f7f7f5;
+    --panel: #ffffff;
+    --ink: #1f2328;
+    --muted: #6b7280;
+    --grid: #e5e7eb;
+    --axis: #9ca3af;
+    --current: #b45309;
+    --power: #c2410c;
+    --volt: #0f766e;
+    --cool: #2563eb;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+  }
+  main { max-width: 1100px; margin: 0 auto; padding: 20px; }
+  .card {
+    background: var(--panel);
+    border-radius: 10px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.08);
+    padding: 14px 18px;
+    margin-bottom: 14px;
+  }
+  .frac {
+    display: inline-flex; flex-direction: column;
+    vertical-align: middle; text-align: center;
+    font-size: .85em; line-height: 1.15; margin: 0 2px;
+  }
+  .frac > span { padding: 0 3px; }
+  .frac > span:first-child { border-bottom: 1.5px solid currentColor; }
+  .intro h1 { font-size: 1.25rem; margin: 0 0 8px; }
+  .intro .formulas {
+    display: flex; gap: 0 3em; justify-content: center; flex-wrap: wrap;
+    font-family: "Cambria Math", "Times New Roman", serif;
+    font-size: 1.4rem; line-height: 2.4; margin: 0 0 6px;
+  }
+  .intro dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; margin: 0; }
+  .intro dt { font-family: "Cambria Math", "Times New Roman", serif; font-size: 1.1rem; text-align: center; }
+  .intro dd { margin: 0; }
+  canvas { display: block; width: 100%; }
+  #scene { height: 270px; }
+  #plot { height: 320px; margin-top: 6px; }
+  .short { display: none; }
+  @media (max-width: 720px) {
+    #scene { height: 250px; }
+    #plot { height: 380px; }
+    .short { display: inline; }
+    .full { display: none; }
+  }
+  .row { display: flex; gap: 12px 18px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
+  .row .right { margin-left: auto; display: flex; gap: 10px; }
+  .slider { flex: 1 1 160px; max-width: 300px; min-width: 0; }
+  .slider label { display: flex; justify-content: space-between; margin-bottom: 4px; font-variant-numeric: tabular-nums; }
+  .slider input { display: block; width: 100%; margin-inline: 0; accent-color: var(--ink); }
+  .slider input:disabled { opacity: .4; }
+  button {
+    font: inherit;
+    height: 2.4em; min-width: 2.4em; padding: 0 10px;
+    border-radius: 6px;
+    border: 1px solid #d1d5db;
+    background: #fff;
+    cursor: pointer;
+  }
+  button:hover { background: #f3f4f6; }
+  button:disabled { opacity: .4; cursor: default; }
+  .switch { display: inline-flex; border: 1px solid #d1d5db; border-radius: 6px; overflow: hidden; }
+  .switch button { border: 0; border-radius: 0; }
+  .switch button + button { border-left: 1px solid #d1d5db; }
+  .switch button[aria-pressed="true"] { background: var(--ink); color: #fff; }
+  .toggle[aria-pressed="true"] { background: var(--ink); color: #fff; border-color: var(--ink); }
+  [hidden] { display: none !important; }
+  .derivation {
+    display: grid;
+    grid-template-columns: auto auto 1fr;
+    column-gap: .4em;
+    align-items: center;
+    font-family: "Cambria Math", "Times New Roman", serif;
+    font-size: 1.3rem;
+    line-height: 2.4;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    overflow-x: auto;
+  }
+  .derivation .head {
+    grid-column: 1 / -1;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-size: 1rem; font-weight: 600; line-height: 1.6; margin-top: .3em;
+  }
+  .screen-tools { display: flex; justify-content: flex-end; margin-top: 8px; }
+  #screen-toggle { display: inline-grid; place-items: center; }
+  #screen-toggle svg { width: 18px; height: 18px; }
+  #screen-toggle .exit, #screen-toggle[aria-pressed="true"] .enter { display: none; }
+  #screen-toggle[aria-pressed="true"] .exit { display: block; }
+  .sim-panel { min-width: 0; }
+  #simulation.expanded {
+    width: 100%; height: 100%; margin: 0; border-radius: 0;
+    display: grid; justify-content: center;
+    grid-template-columns: minmax(0, 1600px);
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+  .expanded .sim-content { display: flex; flex-direction: column; min-height: 0; overflow: auto; }
+  .expanded .sim-panel { flex: none; }
+  .expanded .sim-content::before { content: ""; flex: 1 0 0; max-height: 120px; }
+  .expanded .sim-content::after { content: ""; flex: 5 0 0; order: 1; }
+  .expanded input[type="range"] { max-width: 100%; margin-inline: 0; }
+  body.page-fullscreen { overflow: hidden; }
+  body.page-fullscreen main > :not(#simulation) { display: none; }
+  body.page-fullscreen #simulation { position: fixed; inset: 0; z-index: 10; }
+  #simulation.expanded #scene { height: clamp(220px, 34vh, 420px); }
+  #simulation.expanded #plot { height: clamp(260px, 38vh, 460px); }
+</style>
+</head>
+<body>
+<main>
+  <section class="card intro">
+    <h1>5.7 Alternating current: r.m.s., rectification and smoothing</h1>
+    <div class="formulas">
+      <span>I = I<sub>0</sub> sin ωt</span>
+      <span>I<sub>r.m.s.</sub> = <span class="frac"><span>I<sub>0</sub></span><span>√2</span></span></span>
+      <span>V<sub>r.m.s.</sub> = <span class="frac"><span>V<sub>0</sub></span><span>√2</span></span></span>
+      <span>⟨P⟩ = ½P<sub>0</sub></span>
+      <span>τ = RC</span>
+    </div>
+    <dl>
+      <dt>I<sub>0</sub>, V<sub>0</sub></dt><dd>peak current and peak voltage</dd>
+      <dt>ω</dt><dd>angular frequency, 2πf</dd>
+      <dt>I<sub>r.m.s.</sub></dt><dd>root-mean-square current: the steady current that gives the same mean power in a resistor</dd>
+      <dt>⟨P⟩</dt><dd>mean power in a resistive load; P<sub>0</sub> is the peak power, I<sub>0</sub><sup>2</sup>R</dd>
+      <dt>R</dt><dd>resistance of the load</dd>
+      <dt>C</dt><dd>capacitance of the smoothing capacitor</dd>
+      <dt>τ</dt><dd>time constant of the capacitor discharging through the load</dd>
+    </dl>
+  </section>
+
+  <section class="card" id="simulation" aria-label="5.7 Alternating current simulation">
+    <div class="sim-content">
+      <div class="sim-panel">
+        <canvas id="scene" aria-label="Circuit"></canvas>
+        <canvas id="plot" aria-label="Graphs against time"></canvas>
+        <div class="row">
+          <div class="switch" role="group" aria-label="View">
+            <button data-view="rms" aria-pressed="true">r.m.s.<span class="full"> value</span></button>
+            <button data-view="rect" aria-pressed="false"><span class="full">Rectification and smoothing</span><span class="short">Rectifying</span></button>
+          </div>
+          <div class="switch" role="group" aria-label="Waveform">
+            <button data-wave="sine" aria-pressed="true">Sine</button>
+            <button data-wave="square" aria-pressed="false">Square</button>
+          </div>
+          <div class="right">
+            <button id="pause-btn" title="Play / pause (Space)">⏸</button>
+          </div>
+        </div>
+        <div class="row" id="rect-row" hidden>
+          <div class="switch" role="group" aria-label="Rectifier">
+            <button data-rect="none" aria-pressed="false">No<span class="full"> rectifier</span></button>
+            <button data-rect="half" aria-pressed="true">Half-wave</button>
+            <button data-rect="full" aria-pressed="false">Full-wave</button>
+          </div>
+          <button id="cap-btn" class="toggle" aria-pressed="false"><span class="full">Smoothing capacitor</span><span class="short">Capacitor</span></button>
+        </div>
+        <div class="row" id="rc-row" hidden>
+          <div class="slider">
+            <label for="C"><span>C</span><span id="C-value"></span></label>
+            <input type="range" id="C" min="0" max="5" step="1" value="3">
+          </div>
+          <div class="slider">
+            <label for="R"><span>R</span><span id="R-value"></span></label>
+            <input type="range" id="R" min="0" max="5" step="1" value="3">
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="screen-tools">
+      <button id="screen-toggle" aria-label="Full screen" aria-pressed="false" title="Enter full screen">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <path class="enter" d="M9 4H4v5m11-5h5v5M4 15v5h5m11-5v5h-5"/>
+          <path class="exit" d="M4 9h5V4m6 0v5h5M9 20v-5H4m11 5v-5h5"/>
+        </svg>
+      </button>
+    </div>
+  </section>
+
+  <div class="card derivation" id="derivation"></div>
+</main>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const css = getComputedStyle(document.documentElement);
+  const color = name => css.getPropertyValue(name).trim();
+  const C = {
+    ink: color('--ink'), muted: color('--muted'), grid: color('--grid'), axis: color('--axis'),
+    current: color('--current'), power: color('--power'), volt: color('--volt'), cool: color('--cool'),
+  };
+
+  // ---- Settings ----
+  const F = 50, T = 1 / F, SLOW = 100;              // 50 Hz, shown 100× slower
+  const I0 = 2.0, R_LAMP = 10, P0 = I0 * I0 * R_LAMP;
+  const V0 = 10;
+  const C_VALUES = [10e-6, 22e-6, 47e-6, 100e-6, 220e-6, 470e-6];
+  const R_VALUES = [100, 220, 470, 1000, 2200, 4700];
+  let view = 'rms', wave = 'sine', rect = 'half', smoothing = false, Cap = 100e-6, Rload = 1000;
+  let clock = 0, playing = true;                    // clock: seconds on screen
+
+  const shape = t => wave === 'sine' ? Math.sin(2 * Math.PI * F * t) : (((t * F) % 1 + 1) % 1 < 0.5 ? 1 : -1);
+  const tNow = windowLen => ((clock / SLOW) % windowLen + windowLen) % windowLen;
+
+  // ---- Canvases ----
+  const scene = $('scene'), sc = scene.getContext('2d');
+  const plot = $('plot'), pc = plot.getContext('2d');
+  const sz = { sW: 0, sH: 0, pW: 0, pH: 0 };
+  function sizeCanvas(cv, c) {
+    const dpr = window.devicePixelRatio || 1;
+    const r = cv.getBoundingClientRect();
+    cv.width = Math.round(r.width * dpr); cv.height = Math.round(r.height * dpr);
+    c.setTransform(dpr, 0, 0, dpr, 0, 0);
+    return r;
+  }
+  function resize() {
+    const a = sizeCanvas(scene, sc), b = sizeCanvas(plot, pc);
+    sz.sW = a.width; sz.sH = a.height; sz.pW = b.width; sz.pH = b.height;
+  }
+
+  function arrow(c, x0, y0, x1, y1, col, w = 2, head = 9) {
+    const a = Math.atan2(y1 - y0, x1 - x0);
+    c.strokeStyle = c.fillStyle = col; c.lineWidth = w;
+    c.beginPath(); c.moveTo(x0, y0); c.lineTo(x1 - head * 0.7 * Math.cos(a), y1 - head * 0.7 * Math.sin(a)); c.stroke();
+    c.beginPath(); c.moveTo(x1, y1);
+    c.lineTo(x1 - head * Math.cos(a - 0.42), y1 - head * Math.sin(a - 0.42));
+    c.lineTo(x1 - head * Math.cos(a + 0.42), y1 - head * Math.sin(a + 0.42));
+    c.closePath(); c.fill();
+  }
+  function text(c, s, x, y, col = C.muted, align = 'center', base = 'middle', font = '13px system-ui, sans-serif') {
+    c.font = font; c.fillStyle = col; c.textAlign = align; c.textBaseline = base; c.fillText(s, x, y);
+  }
+
+  // ---- Graph frame shared by both views ----
+  function frame(c, box, t1, yMin, yMax, yTicks, yFmt, yName, tStep) {
+    const { x, y, w, h } = box;
+    const X = t => x + t / t1 * w, Y = v => y + h - (v - yMin) / (yMax - yMin) * h;
+    c.strokeStyle = C.grid; c.lineWidth = 1; c.beginPath();
+    for (let t = tStep; t < t1 + 1e-9; t += tStep) { const xx = Math.round(X(t)) + 0.5; c.moveTo(xx, y); c.lineTo(xx, y + h); }
+    for (const v of yTicks) { const yy = Math.round(Y(v)) + 0.5; c.moveTo(x, yy); c.lineTo(x + w, yy); }
+    c.stroke();
+    c.strokeStyle = C.axis; c.beginPath();
+    c.moveTo(x + 0.5, y); c.lineTo(x + 0.5, y + h);
+    const y0 = Math.round(Y(Math.max(yMin, Math.min(yMax, 0)))) + 0.5;
+    c.moveTo(x, y0); c.lineTo(x + w, y0); c.stroke();
+    for (const v of yTicks) text(c, yFmt(v), x - 6, Y(v), C.muted, 'right', 'middle', '11px system-ui, sans-serif');
+    text(c, yName, x + 6, y + 2, C.muted, 'left', 'top', '12px system-ui, sans-serif');
+    return { X, Y };
+  }
+  function timeAxis(c, box, t1, tStep) {
+    const { x, y, w, h } = box;
+    for (let t = 0; t < t1 + 1e-9; t += tStep) text(c, `${Math.round(t * 1e3)}`, x + t / t1 * w, y + h + 4, C.muted, 'center', 'top', '11px system-ui, sans-serif');
+    text(c, 't / ms', x + w, y + h + 18, C.muted, 'right', 'top', '12px system-ui, sans-serif');
+  }
+  function cursor(c, X, box, t) {
+    c.strokeStyle = 'rgba(31,35,40,.35)'; c.lineWidth = 1; c.setLineDash([3, 3]);
+    c.beginPath(); c.moveTo(X(t), box.y); c.lineTo(X(t), box.y + box.h); c.stroke(); c.setLineDash([]);
+  }
+  function curve(c, X, Y, f, t1, col, w = 2.2, dash = null) {
+    c.save(); c.strokeStyle = col; c.lineWidth = w; if (dash) c.setLineDash(dash);
+    c.beginPath();
+    const n = 600;
+    for (let i = 0; i <= n; i++) { const t = t1 * i / n; const v = f(t); i ? c.lineTo(X(t), Y(v)) : c.moveTo(X(t), Y(v)); }
+    c.stroke(); c.restore();
+  }
+
+  // =============== View 1: r.m.s. ===============
+  const Irms = () => wave === 'sine' ? I0 / Math.SQRT2 : I0;
+  const meanP = () => Irms() ** 2 * R_LAMP;
+  function drawLamp(c, x, y, r, b, label1, label2, label3) {
+    // glow
+    if (b > 0.005) {
+      const g = c.createRadialGradient(x, y, r * 0.2, x, y, r * (1.2 + 1.6 * b));
+      g.addColorStop(0, `rgba(253, 224, 71, ${0.95 * b})`);
+      g.addColorStop(0.45, `rgba(251, 191, 36, ${0.55 * b})`);
+      g.addColorStop(1, 'rgba(251, 191, 36, 0)');
+      c.fillStyle = g; c.beginPath(); c.arc(x, y, r * (1.2 + 1.6 * b), 0, 2 * Math.PI); c.fill();
+    }
+    // bulb and cap
+    c.fillStyle = `rgba(255, 251, 235, ${0.6 + 0.4 * b})`; c.strokeStyle = '#6b7280'; c.lineWidth = 1.5;
+    c.beginPath(); c.arc(x, y, r, 0, 2 * Math.PI); c.fill(); c.stroke();
+    c.fillStyle = '#9ca3af'; c.fillRect(x - r * 0.42, y + r * 0.92, r * 0.84, r * 0.5);
+    c.strokeStyle = '#6b7280'; c.strokeRect(x - r * 0.42, y + r * 0.92, r * 0.84, r * 0.5);
+    // filament
+    c.strokeStyle = b > 0.05 ? `rgb(${200 + 55 * b}, ${120 + 100 * b}, 40)` : '#78716c'; c.lineWidth = 1.6;
+    c.beginPath(); c.moveTo(x - r * 0.3, y + r * 0.92); c.lineTo(x - r * 0.3, y);
+    for (let i = 0; i <= 6; i++) c.lineTo(x - r * 0.3 + r * 0.6 * i / 6, y - (i % 2 ? r * 0.18 : 0));
+    c.lineTo(x + r * 0.3, y + r * 0.92); c.stroke();
+    text(c, label1, x, y - r - 30, C.ink, 'center', 'middle', '600 14px system-ui, sans-serif');
+    text(c, label2, x, y + r * 1.42 + 18, C.current, 'center', 'middle', '13px system-ui, sans-serif');
+    text(c, label3, x, y + r * 1.42 + 36, C.power, 'center', 'middle', '13px system-ui, sans-serif');
+  }
+  function drawRmsScene() {
+    const W = sz.sW, H = sz.sH;
+    sc.clearRect(0, 0, W, H);
+    const t = tNow(2 * T);
+    const I = I0 * shape(t), P = I * I * R_LAMP;
+    const r = Math.min(46, H * 0.16), y = H * 0.46;
+    // brightness follows the power; the steady lamp shows the mean
+    drawLamp(sc, W * 0.3, y, r, P / P0, 'a.c.', `I = ${I.toFixed(2).replace('-', '−')} A`, `P = ${P.toFixed(0)} W`);
+    drawLamp(sc, W * 0.7, y, r, meanP() / P0, `d.c., I = I r.m.s.`, `I = ${Irms().toFixed(2)} A`, `P = ${meanP().toFixed(0)} W`);
+    text(sc, `slowed ${SLOW}×`, 12, 10, C.muted, 'left', 'top');
+    text(sc, `R = ${R_LAMP} Ω each`, W - 12, 10, C.muted, 'right', 'top');
+  }
+  function drawRmsPlot() {
+    const W = sz.pW, H = sz.pH;
+    pc.clearRect(0, 0, W, H);
+    const t1 = 2 * T, t = tNow(t1);
+    const L = 54, Rm = 14, gap = 34;
+    const h = (H - 26 - gap - 34) / 2;
+    const top = { x: L, y: 10, w: W - L - Rm, h };
+    const bot = { x: L, y: 10 + h + gap, w: W - L - Rm, h };
+    // current
+    const a = frame(pc, top, t1, -2.5, 2.5, [-2, -1, 0, 1, 2], v => v.toFixed(0), 'I / A', 0.005);
+    const ir = Irms();
+    pc.save(); pc.setLineDash([6, 4]); pc.strokeStyle = C.current; pc.globalAlpha = 0.6; pc.lineWidth = 1.5;
+    for (const s of [1, -1]) { pc.beginPath(); pc.moveTo(top.x, a.Y(s * ir)); pc.lineTo(top.x + top.w, a.Y(s * ir)); pc.stroke(); }
+    pc.restore();
+    text(pc, `I r.m.s. = ${ir.toFixed(2)} A`, top.x + top.w - 4, a.Y(ir) - 3, C.current, 'right', 'bottom', '12px system-ui, sans-serif');
+    curve(pc, a.X, a.Y, tt => I0 * shape(tt), t1, C.current);
+    // power, with the parts above the mean shaded one colour and the parts below another
+    const b = frame(pc, bot, t1, 0, 45, [0, 10, 20, 30, 40], v => v.toFixed(0), 'P / W', 0.005);
+    const mp = meanP(), Pf = tt => (I0 * shape(tt)) ** 2 * R_LAMP;
+    if (wave === 'sine') {
+      const path = () => {
+        pc.beginPath(); pc.moveTo(b.X(0), b.Y(mp));
+        for (let i = 0; i <= 600; i++) { const tt = t1 * i / 600; pc.lineTo(b.X(tt), b.Y(Pf(tt))); }
+        pc.lineTo(b.X(t1), b.Y(mp)); pc.closePath();
+      };
+      pc.save(); pc.beginPath(); pc.rect(bot.x, bot.y, bot.w, b.Y(mp) - bot.y); pc.clip();
+      path(); pc.fillStyle = 'rgba(194, 65, 12, .22)'; pc.fill(); pc.restore();
+      pc.save(); pc.beginPath(); pc.rect(bot.x, b.Y(mp), bot.w, bot.y + bot.h - b.Y(mp)); pc.clip();
+      path(); pc.fillStyle = 'rgba(37, 99, 235, .18)'; pc.fill(); pc.restore();
+    }
+    pc.save(); pc.setLineDash([6, 4]); pc.strokeStyle = C.ink; pc.lineWidth = 1.5;
+    pc.beginPath(); pc.moveTo(bot.x, b.Y(mp)); pc.lineTo(bot.x + bot.w, b.Y(mp)); pc.stroke(); pc.restore();
+    curve(pc, b.X, b.Y, Pf, t1, C.power);
+    const lbl = wave === 'sine' ? `mean power = ½P₀ = ${mp.toFixed(0)} W` : `mean power = P₀ = ${mp.toFixed(0)} W`;
+    const ly = wave === 'sine' ? b.Y(mp) + 3 : b.Y(mp) + 4;
+    pc.font = '600 12px system-ui, sans-serif';
+    const tw = pc.measureText(lbl).width;
+    pc.fillStyle = 'rgba(255,255,255,.85)'; pc.fillRect(bot.x + bot.w - tw - 10, ly, tw + 8, 17);
+    text(pc, lbl, bot.x + bot.w - 6, ly + 1, C.ink, 'right', 'top', '600 12px system-ui, sans-serif');
+    timeAxis(pc, bot, t1, 0.005);
+    for (const [box, g, f, col] of [[top, a, tt => I0 * shape(tt), C.current], [bot, b, Pf, C.power]]) {
+      cursor(pc, g.X, box, t);
+      pc.fillStyle = col; pc.beginPath(); pc.arc(g.X(t), g.Y(f(t)), 4.5, 0, 2 * Math.PI); pc.fill();
+    }
+  }
+
+  // =============== View 2: rectification and smoothing ===============
+  // V across the load over three cycles, worked out once per setting. Ideal diodes; with a capacitor the
+  // output is whichever is higher: the rectified supply or the capacitor discharging through R.
+  const N_S = 1200;
+  let sim = null;
+  const rectified = v => rect === 'none' ? v : rect === 'half' ? Math.max(v, 0) : Math.abs(v);
+  function simulate() {
+    const t1 = 3 * T, dt = t1 / N_S, RC = Rload * Cap, cap = smoothing && rect !== 'none';
+    let V = 0;
+    // one cycle beforehand: with ideal diodes the capacitor is fully charged by the first peak
+    for (let i = -400; i < 0; i++) { const r = rectified(V0 * shape((i / 400) * T)); V = cap ? Math.max(r, V * Math.exp(-(T / 400) / RC)) : r; }
+    const vin = new Float64Array(N_S + 1), vout = new Float64Array(N_S + 1), on = new Uint8Array(N_S + 1);
+    for (let i = 0; i <= N_S; i++) {
+      const t = i * dt, v = V0 * shape(t), r = rectified(v);
+      if (i > 0) V = cap ? Math.max(r, V * Math.exp(-dt / RC)) : r;
+      if (!cap) V = r;
+      vin[i] = v; vout[i] = V;
+      // the supply is driving current when the output is following the rectified supply
+      on[i] = rect === 'none' ? (Math.abs(v) > 1e-6 ? 1 : 0) : (Math.abs(V - r) < 1e-9 && r > 1e-6 ? 1 : 0);
+    }
+    // ripple: drop from the peak to the lowest point once settled
+    let lo = Infinity, hi = -Infinity;
+    for (let i = N_S / 3; i <= N_S; i++) { lo = Math.min(lo, vout[i]); hi = Math.max(hi, vout[i]); }
+    sim = { vin, vout, on, t1, dt, RC, cap, ripple: hi - lo };
+  }
+  const sample = t => Math.min(N_S, Math.max(0, Math.round(t / sim.dt)));
+
+  // circuit layout
+  function geom() {
+    const W = sz.sW, H = sz.sH;
+    const ym = H * 0.5, d = Math.min(H * 0.22, W * 0.09);
+    const yT = ym - d - 28, yB = ym + d + 28;
+    const xs = Math.max(46, W * 0.08), xc = W * 0.36, xR = W * 0.64, xC = W * 0.82;
+    return { W, H, ym, d, yT, yB, xs, xc, xR, xC, sr: 20,
+      A: [xc, ym - d], Cn: [xc, ym + d], P: [xc + d, ym], N: [xc - d, ym], xP2: xc + d + 26, xN2: xc - d - 24, xD: (xs + xR) / 2 };
+  }
+  // the routes current takes, as polylines: out from the supply to the top of the load, back from the bottom
+  function routes(g, positive) {
+    const top = [g.xs, g.ym - g.sr], bot = [g.xs, g.ym + g.sr];
+    if (rect !== 'full') return { out: [top, [g.xs, g.yT], [g.xR, g.yT]], back: [[g.xR, g.yB], [g.xs, g.yB], bot] };
+    const tail = [g.P, [g.xP2, g.ym], [g.xP2, g.yT], [g.xR, g.yT]];
+    const head = [[g.xR, g.yB], [g.xN2, g.yB], [g.xN2, g.ym], g.N];
+    if (positive) return { out: [top, [g.xs, g.A[1]], g.A, ...tail], back: [...head, g.Cn, [g.xs, g.Cn[1]], bot] };
+    return { out: [bot, [g.xs, g.Cn[1]], g.Cn, ...tail], back: [...head, g.A, [g.xs, g.A[1]], top] };
+  }
+  const phases = { out: 0, back: 0, load: 0, cap: 0 };
+  function dots(c, pts, phase, col) {
+    let L = 0; const seg = [];
+    for (let i = 1; i < pts.length; i++) { const l = Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]); seg.push(l); L += l; }
+    c.fillStyle = col;
+    for (let s = ((phase % 24) + 24) % 24; s < L; s += 24) {
+      let d = s, k = 0;
+      while (k < seg.length - 1 && d > seg[k]) { d -= seg[k]; k++; }
+      const u = seg[k] ? d / seg[k] : 0;
+      const x = pts[k][0] + (pts[k + 1][0] - pts[k][0]) * u, y = pts[k][1] + (pts[k + 1][1] - pts[k][1]) * u;
+      c.beginPath(); c.arc(x, y, 3, 0, 2 * Math.PI); c.fill();
+    }
+  }
+  function line(c, pts) { c.beginPath(); pts.forEach(([x, y], i) => i ? c.lineTo(x, y) : c.moveTo(x, y)); c.stroke(); }
+  // a diode along a wire from (x0, y0) (anode) to (x1, y1) (cathode), drawn at the middle
+  function diode(c, x0, y0, x1, y1, on) {
+    const mx = (x0 + x1) / 2, my = (y0 + y1) / 2, a = Math.atan2(y1 - y0, x1 - x0), s = 10;
+    c.save(); c.translate(mx, my); c.rotate(a);
+    c.fillStyle = on ? '#f59e0b' : '#fff'; c.strokeStyle = C.ink; c.lineWidth = 1.8;
+    c.beginPath(); c.moveTo(-s * 0.7, -s); c.lineTo(s * 0.7, 0); c.lineTo(-s * 0.7, s); c.closePath(); c.fill(); c.stroke();
+    c.beginPath(); c.moveTo(s * 0.7, -s); c.lineTo(s * 0.7, s); c.stroke();
+    c.restore();
+  }
+  function drawRectScene(dtScreen) {
+    const g = geom(), c = sc;
+    c.clearRect(0, 0, g.W, g.H);
+    const t = tNow(sim.t1), i = sample(t);
+    const vin = sim.vin[i], vout = sim.vout[i], on = sim.on[i];
+    const positive = vin >= 0;
+    const dV = (sim.vout[Math.min(N_S, i + 1)] - sim.vout[Math.max(0, i - 1)]) / (2 * sim.dt);
+    // currents scaled to the load current at the peak, V0 / R
+    const iLoad = vout / V0;
+    const iCap = sim.cap ? Math.max(-3, Math.min(3, sim.RC * dV / V0)) : 0;
+    const iSup = rect === 'none' ? iLoad : on ? Math.max(0, Math.min(3, iLoad + iCap)) : 0;
+    const k = 60 * dtScreen;
+    phases.out += iSup * k;
+    phases.back += iSup * k;
+    phases.load += iLoad * k;
+    phases.cap += iCap * k;
+    const rt = routes(g, rect === 'full' ? positive : true);
+    // wires
+    c.strokeStyle = '#6b7280'; c.lineWidth = 2; c.lineJoin = 'round';
+    const top = [g.xs, g.ym - g.sr], bot = [g.xs, g.ym + g.sr];
+    if (rect !== 'full') {
+      line(c, [top, [g.xs, g.yT], [g.xR, g.yT]]);
+      line(c, [[g.xR, g.yB], [g.xs, g.yB], bot]);
+    } else {
+      line(c, [top, [g.xs, g.A[1]], g.A]);
+      line(c, [bot, [g.xs, g.Cn[1]], g.Cn]);
+      line(c, [g.A, g.P, g.Cn, g.N, g.A]);
+      line(c, [g.P, [g.xP2, g.ym], [g.xP2, g.yT], [g.xR, g.yT]]);
+      // from the − corner down to the bottom rail, hopping over the supply's lower wire
+      const hy = g.Cn[1], r = 6;
+      c.beginPath(); c.moveTo(g.N[0], g.ym); c.lineTo(g.xN2, g.ym); c.lineTo(g.xN2, hy - r);
+      c.arc(g.xN2, hy, r, -Math.PI / 2, Math.PI / 2, true); c.lineTo(g.xN2, g.yB); c.lineTo(g.xR, g.yB); c.stroke();
+    }
+    // load and capacitor branches
+    line(c, [[g.xR, g.yT], [g.xR, g.yB]]);
+    if (sim.cap) { line(c, [[g.xR, g.yT], [g.xC, g.yT], [g.xC, g.ym - 5]]); line(c, [[g.xC, g.ym + 5], [g.xC, g.yB], [g.xR, g.yB]]); }
+    // current
+    const dotCol = 'rgba(180, 83, 9, .9)';
+    if (Math.abs(iSup) > 0.01) { dots(c, rt.out, phases.out, dotCol); dots(c, rt.back, phases.back, dotCol); }
+    if (Math.abs(iLoad) > 0.01) dots(c, [[g.xR, g.yT], [g.xR, g.yB]], phases.load, dotCol);
+    if (sim.cap && Math.abs(iCap) > 0.01) {
+      dots(c, [[g.xR, g.yT], [g.xC, g.yT], [g.xC, g.ym - 5]], phases.cap, dotCol);
+      dots(c, [[g.xC, g.ym + 5], [g.xC, g.yB], [g.xR, g.yB]], phases.cap, dotCol);
+    }
+    // supply
+    c.fillStyle = '#fff'; c.strokeStyle = C.ink; c.lineWidth = 2;
+    c.beginPath(); c.arc(g.xs, g.ym, g.sr, 0, 2 * Math.PI); c.fill(); c.stroke();
+    c.beginPath();
+    if (wave === 'sine') for (let j = 0; j <= 20; j++) { const x = g.xs - 11 + 22 * j / 20, y = g.ym - 6 * Math.sin(2 * Math.PI * j / 20); j ? c.lineTo(x, y) : c.moveTo(x, y); }
+    else { c.moveTo(g.xs - 11, g.ym); c.lineTo(g.xs - 11, g.ym - 6); c.lineTo(g.xs, g.ym - 6); c.lineTo(g.xs, g.ym + 6); c.lineTo(g.xs + 11, g.ym + 6); c.lineTo(g.xs + 11, g.ym); }
+    c.stroke();
+    text(c, positive ? '+' : '−', g.xs - 13, g.ym - g.sr - 8, C.ink, 'right', 'middle', '600 14px system-ui, sans-serif');
+    text(c, positive ? '−' : '+', g.xs - 13, g.ym + g.sr + 8, C.ink, 'right', 'middle', '600 14px system-ui, sans-serif');
+    // diodes
+    if (rect === 'half') diode(c, g.xD - 20, g.yT, g.xD + 20, g.yT, on);
+    if (rect === 'full') {
+      diode(c, ...g.A, ...g.P, on && positive);
+      diode(c, ...g.Cn, ...g.P, on && !positive);
+      diode(c, ...g.N, ...g.A, on && !positive);
+      diode(c, ...g.N, ...g.Cn, on && positive);
+      for (const p of [g.A, g.P, g.Cn, g.N]) { c.fillStyle = C.ink; c.beginPath(); c.arc(p[0], p[1], 3, 0, 2 * Math.PI); c.fill(); }
+    }
+    // load resistor and capacitor
+    const rh = Math.min(56, (g.yB - g.yT) * 0.45);
+    c.fillStyle = '#fff'; c.strokeStyle = C.ink; c.lineWidth = 2;
+    c.fillRect(g.xR - 9, g.ym - rh / 2, 18, rh); c.strokeRect(g.xR - 9, g.ym - rh / 2, 18, rh);
+    text(c, 'R', g.xR + 16, g.ym, C.ink, 'left', 'middle', '600 14px system-ui, sans-serif');
+    if (sim.cap) {
+      c.fillStyle = '#fff'; c.fillRect(g.xC - 16, g.ym - 5, 32, 10);
+      c.beginPath(); c.moveTo(g.xC - 16, g.ym - 5); c.lineTo(g.xC + 16, g.ym - 5); c.moveTo(g.xC - 16, g.ym + 5); c.lineTo(g.xC + 16, g.ym + 5); c.stroke();
+      text(c, 'C', g.xC + 22, g.ym, C.ink, 'left', 'middle', '600 14px system-ui, sans-serif');
+    }
+    // p.d. across the load: + at the top
+    text(c, `V = ${vout.toFixed(1).replace('-', '−')} V`, (sim.cap ? (g.xR + g.xC) / 2 : g.xR + 40), g.yB + 18, C.volt, 'center', 'middle', '600 13px system-ui, sans-serif');
+    text(c, `slowed ${SLOW}×`, 12, 10, C.muted, 'left', 'top');
+  }
+  function drawRectPlot() {
+    const W = sz.pW, H = sz.pH;
+    pc.clearRect(0, 0, W, H);
+    const t1 = sim.t1, t = tNow(t1);
+    const box = { x: 46, y: 30, w: W - 46 - 14, h: H - 30 - 40 };
+    const g = frame(pc, box, t1, -12, 12, [-10, -5, 0, 5, 10], v => v.toFixed(0), 'V / V', 0.01);
+    const vAt = (arr, tt) => arr[sample(tt)];
+    curve(pc, g.X, g.Y, tt => vAt(sim.vin, tt), t1, 'rgba(107,114,128,.8)', 1.6, [5, 4]);
+    curve(pc, g.X, g.Y, tt => vAt(sim.vout, tt), t1, C.volt, 2.6);
+    timeAxis(pc, box, t1, 0.01);
+    cursor(pc, g.X, box, t);
+    pc.fillStyle = C.volt; pc.beginPath(); pc.arc(g.X(t), g.Y(vAt(sim.vout, t)), 4.5, 0, 2 * Math.PI); pc.fill();
+    // key, above the graph
+    const ky = 12;
+    pc.font = '600 12px system-ui, sans-serif';
+    const w1 = pc.measureText('p.d. across R').width;
+    pc.font = '12px system-ui, sans-serif';
+    const w2 = pc.measureText('supply').width;
+    let kx = box.x + box.w;
+    text(pc, 'supply', kx, ky, C.muted, 'right', 'middle', '12px system-ui, sans-serif');
+    kx -= w2 + 6;
+    pc.save(); pc.setLineDash([5, 4]); pc.lineWidth = 1.6; pc.strokeStyle = 'rgba(107,114,128,.8)';
+    pc.beginPath(); pc.moveTo(kx - 22, ky); pc.lineTo(kx, ky); pc.stroke(); pc.restore();
+    kx -= 22 + 16;
+    text(pc, 'p.d. across R', kx, ky, C.volt, 'right', 'middle', '600 12px system-ui, sans-serif');
+    kx -= w1 + 6;
+    pc.strokeStyle = C.volt; pc.lineWidth = 2.6;
+    pc.beginPath(); pc.moveTo(kx - 22, ky); pc.lineTo(kx, ky); pc.stroke();
+  }
+
+  // ---- Working ----
+  const row = (lhs, ...rhs) => `<span>${lhs}</span><span>=</span><span>${rhs.join(' = ')}</span>`;
+  const frac = (p, q) => `<span class="frac"><span>${p}</span><span>${q}</span></span>`;
+  const head = s => `<span class="head">${s}</span>`;
+  const fmtR = r => r >= 1000 ? `${(r / 1000).toFixed(1)} kΩ` : `${r} Ω`;
+  const fmtC = c => `${Math.round(c * 1e6)} µF`;
+  function updateWorking() {
+    let h = '';
+    if (view === 'rms') {
+      if (wave === 'sine') {
+        h += head(`Sine: peak current I<sub>0</sub> = ${I0.toFixed(1)} A through R = ${R_LAMP} Ω`);
+        h += row('P<sub>0</sub>', 'I<sub>0</sub><sup>2</sup>R', `(${I0.toFixed(1)} A)<sup>2</sup> × ${R_LAMP} Ω`, `${P0.toFixed(0)} W`);
+        h += row('⟨P⟩', '½P<sub>0</sub>', `${meanP().toFixed(0)} W`);
+        h += head('The steady current giving the same mean power');
+        h += row('I<sub>r.m.s.</sub><sup>2</sup>R', '⟨P⟩', `${meanP().toFixed(0)} W`);
+        h += row('I<sub>r.m.s.</sub>', `√${frac('⟨P⟩', 'R')}`, `√${frac(`${meanP().toFixed(0)} W`, `${R_LAMP} Ω`)}`, `${Irms().toFixed(2)} A`, frac('I<sub>0</sub>', '√2'));
+      } else {
+        h += head(`Square: the current is ±${I0.toFixed(1)} A all the time, through R = ${R_LAMP} Ω`);
+        h += row('P', 'I<sub>0</sub><sup>2</sup>R', `(${I0.toFixed(1)} A)<sup>2</sup> × ${R_LAMP} Ω`, `${P0.toFixed(0)} W at every instant`);
+        h += row('⟨P⟩', 'P<sub>0</sub>', `${meanP().toFixed(0)} W`);
+        h += row('I<sub>r.m.s.</sub>', `√${frac('⟨P⟩', 'R')}`, `√${frac(`${meanP().toFixed(0)} W`, `${R_LAMP} Ω`)}`, `${Irms().toFixed(2)} A`, 'I<sub>0</sub>');
+      }
+    } else {
+      h += head(`Supply: ${wave === 'sine' ? 'sine' : 'square'} wave, peak V<sub>0</sub> = ${V0} V, f = ${F} Hz`);
+      h += row('T', frac('1', 'f'), `${(T * 1e3).toFixed(0)} ms`);
+      if (wave === 'sine') h += row('V<sub>r.m.s.</sub>', frac('V<sub>0</sub>', '√2'), `${(V0 / Math.SQRT2).toFixed(2)} V`);
+      if (sim.cap) {
+        h += head(`Smoothing: the capacitor is recharged once every ${rect === 'half' ? `cycle (${(T * 1e3).toFixed(0)} ms)` : `half-cycle (${(T * 500).toFixed(0)} ms)`}`);
+        h += row('τ', 'RC', `${fmtR(Rload)} × ${fmtC(Cap)}`, `${(sim.RC >= 1 ? sim.RC.toFixed(2) : sim.RC.toFixed(3))} s`);
+        h += row('ripple', `${sim.ripple.toFixed(2)} V`);
+      }
+    }
+    $('derivation').innerHTML = h;
+  }
+
+  // ---- Loop and controls ----
+  function draw(dtScreen = 0) {
+    if (view === 'rms') { drawRmsScene(); drawRmsPlot(); }
+    else { drawRectScene(dtScreen); drawRectPlot(); }
+  }
+  let lastFrame = null;
+  function tick(now) {
+    const dt = lastFrame === null ? 0 : Math.min(0.1, (now - lastFrame) / 1000);
+    lastFrame = now;
+    if (playing) { clock += dt; draw(dt); }
+    requestAnimationFrame(tick);
+  }
+  function refresh() {
+    $('rect-row').hidden = view !== 'rect';
+    $('rc-row').hidden = view !== 'rect';
+    const capOK = rect !== 'none';
+    $('cap-btn').disabled = !capOK;
+    $('C').disabled = $('R').disabled = !(capOK && smoothing);
+    $('C-value').textContent = fmtC(Cap);
+    $('R-value').textContent = fmtR(Rload);
+    simulate();
+    updateWorking();
+    draw();
+  }
+  const group = (attr, set) => document.querySelectorAll(`[data-${attr}]`).forEach(b => b.addEventListener('click', () => {
+    set(b.dataset[attr]);
+    document.querySelectorAll(`[data-${attr}]`).forEach(o => o.setAttribute('aria-pressed', String(o === b)));
+    refresh();
+  }));
+  group('view', v => { view = v; });
+  group('wave', v => { wave = v; });
+  group('rect', v => { rect = v; });
+  $('cap-btn').addEventListener('click', () => {
+    smoothing = !smoothing; $('cap-btn').setAttribute('aria-pressed', String(smoothing)); refresh();
+  });
+  $('C').addEventListener('input', () => { Cap = C_VALUES[Number($('C').value)]; refresh(); });
+  $('R').addEventListener('input', () => { Rload = R_VALUES[Number($('R').value)]; refresh(); });
+  function setPlaying(p) { playing = p; $('pause-btn').textContent = playing ? '⏸' : '▶'; }
+  $('pause-btn').addEventListener('click', () => setPlaying(!playing));
+  window.addEventListener('keydown', e => {
+    if (e.code === 'Space' && e.target === document.body) { e.preventDefault(); setPlaying(!playing); }
+  });
+
+  const simulation = $('simulation'), screenToggle = $('screen-toggle');
+  function syncFullscreen() {
+    const expanded = document.fullscreenElement === simulation || document.body.classList.contains('page-fullscreen');
+    simulation.classList.toggle('expanded', expanded);
+    screenToggle.setAttribute('aria-pressed', String(expanded));
+    screenToggle.title = expanded ? 'Exit full screen' : 'Enter full screen';
+    resize(); draw();
+  }
+  screenToggle.addEventListener('click', async () => {
+    if (document.fullscreenElement === simulation) {
+      await document.exitFullscreen();
+    } else if (document.body.classList.contains('page-fullscreen')) {
+      document.body.classList.remove('page-fullscreen');
+      syncFullscreen();
+    } else {
+      try {
+        await simulation.requestFullscreen();
+      } catch {
+        // Embedded pages and mobile browsers can restrict native fullscreen.
+        document.body.classList.add('page-fullscreen');
+        syncFullscreen();
+      }
+    }
+  });
+  document.addEventListener('fullscreenchange', syncFullscreen);
+  window.addEventListener('keydown', ev => {
+    if (ev.key === 'Escape' && document.body.classList.contains('page-fullscreen')) screenToggle.click();
+  });
+  window.addEventListener('resize', () => { resize(); draw(); });
+  resize();
+  refresh();
+  requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>
