@@ -1,0 +1,712 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>5.6 Hand rules</title>
+<style>
+  :root {
+    --bg: #f7f7f5;
+    --panel: #ffffff;
+    --ink: #1f2328;
+    --muted: #6b7280;
+    --grid: #e5e7eb;
+    --axis: #9ca3af;
+    --wire: #b45309;
+    --force: #dc2626;
+    --motion: #0f766e;
+    --field: #2563eb;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+  }
+  main { max-width: 1100px; margin: 0 auto; padding: 20px; }
+  .card {
+    background: var(--panel);
+    border-radius: 10px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.08);
+    padding: 14px 18px;
+    margin-bottom: 14px;
+  }
+  .intro h1 { font-size: 1.25rem; margin: 0 0 8px; }
+  .intro .formulas {
+    display: flex; gap: 0 3em; justify-content: center; flex-wrap: wrap;
+    font-family: "Cambria Math", "Times New Roman", serif;
+    font-size: 1.4rem; line-height: 2.4; margin: 0 0 6px;
+  }
+  .intro dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; margin: 0; }
+  .intro dt { font-family: "Cambria Math", "Times New Roman", serif; font-size: 1.1rem; text-align: center; }
+  .intro dd { margin: 0; }
+  canvas { display: block; width: 100%; touch-action: none; }
+  #scene { height: 520px; border-radius: 6px; }
+  .short { display: none; }
+  @media (max-width: 720px) {
+    #scene { height: 440px; }
+    .short { display: inline; }
+    .full { display: none; }
+  }
+  .row { display: flex; gap: 12px 18px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
+  .row .right { margin-left: auto; display: flex; gap: 10px; }
+  button {
+    font: inherit;
+    height: 2.4em; min-width: 2.4em; padding: 0 10px;
+    border-radius: 6px;
+    border: 1px solid #d1d5db;
+    background: #fff;
+    cursor: pointer;
+  }
+  button:hover { background: #f3f4f6; }
+  .switch { display: inline-flex; border: 1px solid #d1d5db; border-radius: 6px; overflow: hidden; }
+  .switch button { border: 0; border-radius: 0; }
+  .switch button + button { border-left: 1px solid #d1d5db; }
+  .switch button[aria-pressed="true"] { background: var(--ink); color: #fff; }
+  .toggle[aria-pressed="true"] { background: var(--ink); color: #fff; border-color: var(--ink); }
+  [hidden] { display: none !important; }
+  .screen-tools { display: flex; justify-content: flex-end; margin-top: 8px; }
+  #screen-toggle { display: inline-grid; place-items: center; }
+  #screen-toggle svg { width: 18px; height: 18px; }
+  #screen-toggle .exit, #screen-toggle[aria-pressed="true"] .enter { display: none; }
+  #screen-toggle[aria-pressed="true"] .exit { display: block; }
+  .sim-panel { min-width: 0; }
+  #simulation.expanded {
+    width: 100%; height: 100%; margin: 0; border-radius: 0;
+    display: grid; justify-content: center;
+    grid-template-columns: minmax(0, 1600px);
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+  .expanded .sim-content { display: flex; flex-direction: column; min-height: 0; overflow: auto; }
+  .expanded .sim-panel { flex: none; }
+  .expanded .sim-content::before { content: ""; flex: 1 0 0; max-height: 120px; }
+  .expanded .sim-content::after { content: ""; flex: 5 0 0; order: 1; }
+  body.page-fullscreen { overflow: hidden; }
+  body.page-fullscreen main > :not(#simulation) { display: none; }
+  body.page-fullscreen #simulation { position: fixed; inset: 0; z-index: 10; }
+  #simulation.expanded #scene { height: clamp(360px, 72vh, 900px); }
+</style>
+</head>
+<body>
+<main>
+  <section class="card intro">
+    <h1>5.6 Hand rules</h1>
+    <div class="formulas">
+      <span>F = BIL sin θ</span>
+      <span>E = BLv</span>
+    </div>
+    <dl>
+      <dt>F</dt><dd>force on a current-carrying wire in a magnetic field</dd>
+      <dt>B</dt><dd>magnetic flux density</dd>
+      <dt>I</dt><dd>current</dd>
+      <dt>L</dt><dd>length of wire in the field</dd>
+      <dt>θ</dt><dd>angle between the wire and the field</dd>
+      <dt>E</dt><dd>e.m.f. induced in a rod cutting the flux</dd>
+      <dt>v</dt><dd>speed of the rod</dd>
+    </dl>
+  </section>
+
+  <section class="card" id="simulation" aria-label="5.6 Hand rules simulation">
+    <div class="sim-content">
+      <div class="sim-panel">
+        <canvas id="scene" aria-label="Hand rule"></canvas>
+        <div class="row">
+          <div class="switch" role="group" aria-label="Rule">
+            <button data-rule="left" aria-pressed="true"><span class="full">Left-hand rule</span><span class="short">Left hand</span></button>
+            <button data-rule="right" aria-pressed="false"><span class="full">Right-hand rule</span><span class="short">Right hand</span></button>
+            <button data-rule="grip" aria-pressed="false"><span class="full">Right-hand grip rule</span><span class="short">Grip</span></button>
+          </div>
+          <div class="right">
+            <button id="hand-btn" class="toggle" aria-pressed="true">Show hand</button>
+          </div>
+        </div>
+        <div class="row">
+          <div class="switch" role="group" aria-label="Field" id="field-sw">
+            <button data-b="-1" aria-pressed="true">B into<span class="full"> the page</span></button>
+            <button data-b="1" aria-pressed="false">B out<span class="full"> of the page</span></button>
+          </div>
+          <div class="switch" role="group" aria-label="Conductor" id="grip-sw" hidden>
+            <button data-g="wire" aria-pressed="true">Straight wire</button>
+            <button data-g="coil" aria-pressed="false">Solenoid</button>
+          </div>
+          <button id="reverse-btn">Reverse current</button>
+        </div>
+      </div>
+    </div>
+    <div class="screen-tools">
+      <button id="screen-toggle" aria-label="Full screen" aria-pressed="false" title="Enter full screen">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <path class="enter" d="M9 4H4v5m11-5h5v5M4 15v5h5m11-5v5h-5"/>
+          <path class="exit" d="M4 9h5V4m6 0v5h5M9 20v-5H4m11 5v-5h5"/>
+        </svg>
+      </button>
+    </div>
+  </section>
+</main>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const css = getComputedStyle(document.documentElement);
+  const color = name => css.getPropertyValue(name).trim();
+  const C = {
+    ink: color('--ink'), muted: color('--muted'), wire: color('--wire'), force: color('--force'),
+    motion: color('--motion'), field: color('--field'),
+  };
+  const SKIN = '#f1c7a1', SKIN_EDGE = '#9a6a43', CREASE = 'rgba(154, 106, 67, .55)', NAIL = '#fbe7da', SLEEVE = '#64748b';
+
+  // ---- State ----
+  let rule = 'left', b = -1, showHand = true, grip = 'wire';
+  let alpha = Math.PI / 2;      // 'left': direction of the current in the wire, anticlockwise from +x (y up)
+  let gripUp = 1;               // 'grip': +1 current up the wire / up the front of each turn
+
+  const scene = $('scene'), ctx = scene.getContext('2d');
+  let W = 0, H = 0;
+  function resize() {
+    const dpr = window.devicePixelRatio || 1;
+    const r = scene.getBoundingClientRect();
+    scene.width = Math.round(r.width * dpr); scene.height = Math.round(r.height * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    W = r.width; H = r.height;
+  }
+
+  // ---- Drawing helpers ----
+  function arrow(x0, y0, x1, y1, col, w = 3, head = 12) {
+    const a = Math.atan2(y1 - y0, x1 - x0), len = Math.hypot(x1 - x0, y1 - y0);
+    if (len < 2) return;
+    ctx.strokeStyle = ctx.fillStyle = col; ctx.lineWidth = w; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1 - head * 0.7 * Math.cos(a), y1 - head * 0.7 * Math.sin(a)); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x1, y1);
+    ctx.lineTo(x1 - head * Math.cos(a - 0.42), y1 - head * Math.sin(a - 0.42));
+    ctx.lineTo(x1 - head * Math.cos(a + 0.42), y1 - head * Math.sin(a + 0.42));
+    ctx.closePath(); ctx.fill();
+    ctx.lineCap = 'butt';
+  }
+  function label(text, x, y, col, size = 16) {
+    ctx.font = `600 ${size}px system-ui, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(255,255,255,.9)'; ctx.strokeText(text, x, y);
+    ctx.fillStyle = col; ctx.fillText(text, x, y);
+  }
+  // B into (×) or out of (•) the page
+  function fieldMark(x, y, dir, r = 4, col = '#94a3b8') {
+    ctx.strokeStyle = ctx.fillStyle = col; ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    if (dir < 0) { ctx.moveTo(x - r, y - r); ctx.lineTo(x + r, y + r); ctx.moveTo(x + r, y - r); ctx.lineTo(x - r, y + r); ctx.stroke(); }
+    else { ctx.arc(x, y, r * 0.55, 0, 2 * Math.PI); ctx.fill(); }
+  }
+  function circledMark(x, y, dir, r, col) {
+    ctx.fillStyle = '#fff'; ctx.strokeStyle = col; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(x, y, r, 0, 2 * Math.PI); ctx.fill(); ctx.stroke();
+    ctx.beginPath();
+    if (dir < 0) { const d = r * 0.62; ctx.moveTo(x - d, y - d); ctx.lineTo(x + d, y + d); ctx.moveTo(x + d, y - d); ctx.lineTo(x - d, y + d); ctx.stroke(); }
+    else { ctx.fillStyle = col; ctx.arc(x, y, r * 0.3, 0, 2 * Math.PI); ctx.fill(); }
+  }
+  function rrect(c, x, y, w, h, r) { c.beginPath(); c.roundRect(x, y, w, h, r); }
+
+  // ---- A flat hand. Local frame: fingers along +x, thumb out along +y, unit s pixels.
+  // f and t are the screen directions of the fingers and thumb; the frame may be mirrored on screen,
+  // which is what turns a left hand into a right hand (or shows the back instead of the palm).
+  // The palm centre sits at local (0.2, 0).
+  function cuffLabel(x, y, text, s) {
+    ctx.font = `700 ${Math.max(11, Math.round(s * 0.32))}px system-ui, sans-serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = '#fff';
+    ctx.fillText(text, x, y);
+  }
+  function drawFlatHand(cx, cy, f, t, s, face, which) {
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.transform(f[0], f[1], t[0], t[1], 0, 0);
+    ctx.scale(s, s);
+    ctx.translate(-0.2, 0);
+    ctx.lineWidth = 1.4 / s; ctx.lineJoin = 'round';
+    const skin = () => { ctx.fillStyle = SKIN; ctx.fill(); ctx.strokeStyle = SKIN_EDGE; ctx.stroke(); };
+    // sleeve and forearm
+    ctx.beginPath(); ctx.moveTo(-1.25, -0.36); ctx.lineTo(-0.25, -0.42); ctx.lineTo(-0.25, 0.42); ctx.lineTo(-1.25, 0.38); ctx.closePath(); skin();
+    rrect(ctx, -1.75, -0.46, 0.55, 0.92, 0.08); ctx.fillStyle = SLEEVE; ctx.fill();
+    // thumb (out at right angles) with its ball
+    ctx.beginPath(); ctx.ellipse(0.05, 0.3, 0.34, 0.22, 0, 0, 2 * Math.PI); skin();
+    rrect(ctx, 0.02, 0.2, 0.27, 1.0, 0.135); skin();
+    // palm
+    rrect(ctx, -0.35, -0.46, 1.08, 0.92, 0.2); skin();
+    // fingers side by side, index next to the thumb
+    const fingers = [[0.335, 0.92], [0.113, 1.02], [-0.11, 0.96], [-0.33, 0.76]];
+    for (const [y, len] of fingers) { rrect(ctx, 0.55, y - 0.105, len, 0.21, 0.105); skin(); }
+    // the palm is lighter and has creases; the back has nails and knuckles
+    if (face === 'palm') {
+      ctx.strokeStyle = CREASE; ctx.lineWidth = 1.2 / s;
+      ctx.beginPath(); ctx.moveTo(0.6, -0.42); ctx.quadraticCurveTo(0.35, -0.05, 0.62, 0.3); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(-0.25, 0.15); ctx.quadraticCurveTo(0.15, 0.05, 0.3, 0.42); ctx.stroke();
+      for (const [y, len] of fingers) for (const k of [0.42, 0.72]) {
+        ctx.beginPath(); ctx.moveTo(0.55 + len * k, y - 0.09); ctx.lineTo(0.55 + len * k, y + 0.09); ctx.stroke();
+      }
+      ctx.beginPath(); ctx.moveTo(0.06, 0.75); ctx.lineTo(0.25, 0.75); ctx.stroke();
+    } else {
+      ctx.fillStyle = NAIL; ctx.strokeStyle = CREASE; ctx.lineWidth = 1 / s;
+      for (const [y, len] of fingers) { rrect(ctx, 0.55 + len - 0.24, y - 0.07, 0.2, 0.14, 0.06); ctx.fill(); ctx.stroke(); }
+      rrect(ctx, 0.085, 0.94, 0.15, 0.2, 0.06); ctx.fill(); ctx.stroke();
+      for (const [y] of fingers) { ctx.beginPath(); ctx.arc(0.6, y, 0.06, -Math.PI / 2, Math.PI / 2); ctx.stroke(); }
+    }
+    ctx.restore();
+    const cuff = flatPt(cx, cy, f, t, s, -1.475, 0);
+    cuffLabel(cuff[0], cuff[1], which, s);
+  }
+  // screen point of a local point of the flat hand
+  const flatPt = (cx, cy, f, t, s, lx, ly) => [cx + (f[0] * (lx - 0.2) + t[0] * ly) * s, cy + (f[1] * (lx - 0.2) + t[1] * ly) * s];
+
+  // screen point of a local point of a hand drawn at (cx, cy), turned by rot, unit s pixels
+  const fistPt = (cx, cy, rot, s, lx, ly) => [cx + (Math.cos(rot) * lx - Math.sin(rot) * ly) * s, cy + (Math.sin(rot) * lx + Math.cos(rot) * ly) * s];
+
+  // ---- Left-hand rule: a wire through a circular pole face ----
+  let time = 0;
+  function drawLeft() {
+    const cx = W / 2, cy = H / 2, R = Math.min(W, H) * 0.44;
+    // field region and marks
+    ctx.fillStyle = '#eef2f7'; ctx.beginPath(); ctx.arc(cx, cy, R, 0, 2 * Math.PI); ctx.fill();
+    ctx.strokeStyle = '#cbd5e1'; ctx.lineWidth = 1.5; ctx.stroke();
+    const step = 34;
+    for (let x = cx - R; x <= cx + R; x += step) for (let y = cy - R; y <= cy + R; y += step)
+      if (Math.hypot(x - cx, y - cy) < R - 8) fieldMark(x, y, b);
+    // the wire, with the current shown moving along it
+    const ux = Math.cos(alpha), uy = -Math.sin(alpha), L = Math.hypot(W, H);
+    ctx.strokeStyle = C.wire; ctx.lineWidth = 7; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(cx - ux * L, cy - uy * L); ctx.lineTo(cx + ux * L, cy + uy * L); ctx.stroke();
+    ctx.lineCap = 'butt';
+    chevrons(cx, cy, ux, uy, L, 40);
+    // force F = IL × B; on screen (y down) that is (−u_y·b, u_x·b): the current turned a quarter turn
+    // anticlockwise for B into the page
+    const fx = -uy * b, fy = ux * b;
+    const fLen = R * 0.62;
+    if (!showHand) arrow(cx, cy, cx + fx * fLen, cy + fy * fLen, C.force, 4, 16);
+    // labels
+    const iEnd = Math.min(R + 30, Math.min(W, H) * 0.47);
+    label('I', cx + ux * iEnd + fx * -18, cy + uy * iEnd + fy * -18, C.wire);
+    if (showHand) {
+      const s = Math.min(W, H) * 0.125;
+      const face = b < 0 ? 'palm' : 'back';
+      drawFlatHand(cx, cy, [ux, uy], [fx, fy], s, face, 'L');
+      // what each part stands for
+      arrow(cx + fx * 1.35 * s, cy + fy * 1.35 * s, cx + fx * Math.max(fLen, 2.4 * s), cy + fy * Math.max(fLen, 2.4 * s), C.force, 4, 16);
+      const ft = flatPt(cx, cy, [ux, uy], [fx, fy], s, 1.6, -0.75);
+      label('I', ft[0], ft[1], C.wire);
+      const pc = flatPt(cx, cy, [ux, uy], [fx, fy], s, 0.25, -0.05);
+      circledMark(pc[0], pc[1], b, 11, C.field);
+      label('B', pc[0], pc[1] + 24, C.field, 14);
+    }
+    label('F', cx + fx * (fLen + 18), cy + fy * (fLen + 18), C.force);
+    corner(b < 0 ? 'B into the page' : 'B out of the page');
+  }
+  // chevrons moving along a line through (cx, cy) in direction (ux, uy)
+  function chevrons(cx, cy, ux, uy, L, gap, col = 'rgba(255,255,255,.95)', size = 4) {
+    const off = (time * 60) % gap;
+    ctx.strokeStyle = col; ctx.lineWidth = 2;
+    for (let d = -L + off; d < L; d += gap) {
+      const x = cx + ux * d, y = cy + uy * d;
+      ctx.beginPath();
+      ctx.moveTo(x - ux * size - uy * size, y - uy * size + ux * size);
+      ctx.lineTo(x + ux * size * 0.6, y + uy * size * 0.6);
+      ctx.lineTo(x - ux * size + uy * size, y - uy * size - ux * size);
+      ctx.stroke();
+    }
+  }
+  function corner(text) {
+    ctx.fillStyle = C.muted; ctx.font = '13px system-ui, sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    ctx.fillText(text, 12, 10);
+  }
+
+  // ---- Right-hand rule: a rod pushed along rails, closed through a centre-zero meter ----
+  const rod = { x: 0.35, v: 0, vs: 0, dragging: false, leg: null, phase: 0, lastDir: 1, curSign: 1 };
+  const geomR = () => {
+    const yt = H * 0.27, yb = H * 0.73, xl = W * 0.09;
+    return { yt, yb, xl, xr0: W * 0.36, xr1: W * 0.86, fx0: W * 0.24, fx1: W * 0.97, fy0: H * 0.1, fy1: H * 0.9 };
+  };
+  function rodLegs(dt) {
+    // position as a fraction 0..1 of the rod's travel
+    if (rod.dragging) return;
+    if (!rod.leg) rod.leg = { from: rod.x, to: rod.x, dur: 0.6, t: 0 };
+    const lg = rod.leg;
+    lg.t += dt;
+    const u = Math.min(1, lg.t / lg.dur);
+    rod.x = lg.from + (lg.to - lg.from) * (1 - Math.cos(Math.PI * u)) / 2;
+    if (u >= 1) {
+      if (lg.from !== lg.to) rod.leg = { from: rod.x, to: rod.x, dur: 1.0, t: 0 };
+      else { const to = rod.x < 0.5 ? 1 : 0; rod.leg = { from: rod.x, to, dur: 0.6 + 2.2 * Math.abs(to - rod.x), t: 0 }; }
+    }
+  }
+  function drawRight(dt, xPrev) {
+    const g = geomR();
+    const X = f => g.xr0 + (g.xr1 - g.xr0) * f;
+    // speed of the rod on screen, smoothed
+    const vNow = dt > 0 ? (X(rod.x) - X(xPrev)) / dt : 0;
+    rod.vs += (vNow - rod.vs) * Math.min(1, dt * 10);
+    const vPeak = (g.xr1 - g.xr0) * Math.PI / 2 / 2.8;
+    const strength = Math.min(1, Math.abs(rod.vs) / (0.35 * vPeak));
+    if (Math.abs(rod.vs) > 2) rod.lastDir = Math.sign(rod.vs);
+    // induced current along the rod (screen up positive): I ∝ v × B, up for motion to the right with B into the page
+    const up = rod.lastDir * -b;
+    rod.curSign = up;
+    // field region and marks
+    ctx.fillStyle = '#eef2f7'; ctx.fillRect(g.fx0, g.fy0, g.fx1 - g.fx0, g.fy1 - g.fy0);
+    const step = 34;
+    for (let x = g.fx0 + 17; x < g.fx1; x += step) for (let y = g.fy0 + 17; y < g.fy1; y += step) fieldMark(x, y, b);
+    // rails and the end with the meter
+    const xr = X(rod.x), mx = g.xl, my = H / 2, mr = Math.min(26, H * 0.06);
+    ctx.strokeStyle = '#6b7280'; ctx.lineWidth = 5; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(g.xl, g.yt); ctx.lineTo(g.fx1 - 6, g.yt); ctx.moveTo(g.xl, g.yb); ctx.lineTo(g.fx1 - 6, g.yb); ctx.stroke();
+    ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(g.xl, g.yt); ctx.lineTo(g.xl, my - mr); ctx.moveTo(g.xl, my + mr); ctx.lineTo(g.xl, g.yb); ctx.stroke();
+    ctx.lineCap = 'butt';
+    // current going round the circuit
+    const I = up * strength;
+    const P = 2 * (xr - g.xl) + 2 * (g.yb - g.yt);
+    rod.phase += I * 90 * dt;
+    if (strength > 0.05) {
+      ctx.fillStyle = `rgba(180, 83, 9, ${0.35 + 0.6 * strength})`;
+      for (let k = 0; k < P; k += 30) {
+        let d = ((rod.phase + k) % P + P) % P, x, y;
+        const h = g.yb - g.yt, wTop = xr - g.xl;
+        if (d < h) { x = xr; y = g.yb - d; }
+        else if ((d -= h) < wTop) { x = xr - d; y = g.yt; }
+        else if ((d -= wTop) < h) { x = g.xl; y = g.yt + d; if (Math.abs(y - my) < mr) continue; }
+        else { d -= h; x = g.xl + d; y = g.yb; }
+        ctx.beginPath(); ctx.arc(x, y, 3, 0, 2 * Math.PI); ctx.fill();
+      }
+    }
+    // centre-zero meter
+    ctx.fillStyle = '#fff'; ctx.strokeStyle = '#374151'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(mx, my, mr, 0, 2 * Math.PI); ctx.fill(); ctx.stroke();
+    const na = -Math.PI / 2 + I * 0.9;
+    ctx.strokeStyle = C.force; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(mx, my + mr * 0.55); ctx.lineTo(mx + Math.cos(na) * mr * 0.95, my + mr * 0.55 + Math.sin(na) * mr * 1.25); ctx.stroke();
+    ctx.fillStyle = C.ink; ctx.font = '600 12px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('A', mx, my + mr * 0.25 + 4);
+    // the rod
+    ctx.fillStyle = '#9ca3af'; ctx.strokeStyle = '#4b5563'; ctx.lineWidth = 1.5;
+    rrect(ctx, xr - 6, g.yt - 16, 12, g.yb - g.yt + 32, 4); ctx.fill(); ctx.stroke();
+    // velocity of the rod, above the top rail
+    if (strength > 0.05) {
+      const len = 30 + 60 * strength;
+      arrow(xr, g.yt - 34, xr + rod.lastDir * len, g.yt - 34, C.motion, 4, 14);
+      label('v', xr + rod.lastDir * (len + 14), g.yt - 34, C.motion);
+    }
+    if (showHand && strength > 0.02) {
+      const s = Math.min(W, H) * 0.115;
+      const f = [0, -up], t = [rod.lastDir, 0];
+      ctx.save(); ctx.globalAlpha = Math.min(1, strength * 1.4);
+      drawFlatHand(xr, H / 2, f, t, s, b < 0 ? 'palm' : 'back', 'R');
+      const ft = flatPt(xr, H / 2, f, t, s, 1.6, -0.75);
+      label('I', ft[0], ft[1], C.wire);
+      const tt = flatPt(xr, H / 2, f, t, s, 0.15, 1.45);
+      label('v', tt[0], tt[1], C.motion);
+      const pc = flatPt(xr, H / 2, f, t, s, 0.25, -0.05);
+      circledMark(pc[0], pc[1], b, 11, C.field);
+      label('B', pc[0], pc[1] + 24, C.field, 14);
+      ctx.restore();
+    } else if (strength > 0.05) {
+      arrow(xr - 16, H / 2 + up * 30, xr - 16, H / 2 - up * 30, C.wire, 3, 11);
+      label('I', xr - 32, H / 2, C.wire);
+    }
+    corner(b < 0 ? 'B into the page' : 'B out of the page');
+  }
+
+  // ---- Right-hand grip rule ----
+  function ringArc(cx, cy, rx, ry, front, dash) {
+    ctx.save();
+    if (dash) ctx.setLineDash([5, 5]);
+    ctx.beginPath(); ctx.ellipse(cx, cy, rx, ry, 0, front ? 0 : Math.PI, front ? Math.PI : 2 * Math.PI); ctx.stroke();
+    ctx.restore();
+  }
+  // the grip-rule fist sits in a panel holding a short grey stand-in for the conductor: on the left,
+  // or across the top on narrow screens. 'cond' is the region left for the wire or solenoid.
+  function gripLayout() {
+    if (W < 600) {
+      const bh = H * 0.36;
+      return { box: { x: 0, y: 0, w: W, h: bh }, cond: { x: 0, y: bh, w: W, h: H - bh }, top: true };
+    }
+    const bw = W * 0.28;
+    return { box: { x: 0, y: 0, w: bw, h: H }, cond: { x: bw, y: 0, w: W - bw, h: H }, top: false };
+  }
+  function drawSideHand(coil) {
+    if (!showHand) return;
+    const { box, top } = gripLayout();
+    ctx.strokeStyle = '#e5e7eb'; ctx.lineWidth = 1;
+    ctx.beginPath();
+    if (top) { ctx.moveTo(16, box.h + 0.5); ctx.lineTo(W - 16, box.h + 0.5); }
+    else { ctx.moveTo(box.w + 0.5, 16); ctx.lineTo(box.w + 0.5, H - 16); }
+    ctx.stroke();
+    // wire: thumb along the current, fingers curl with B. Solenoid: fingers curl with the current, thumb to N
+    if (coil) drawThumbsUp(box, gripUp > 0 ? -Math.PI / 2 : Math.PI / 2, C.field, 'N', C.wire, 'I');
+    else drawThumbsUp(box, gripUp > 0 ? 0 : Math.PI, C.wire, 'I', C.field, 'B');
+  }
+
+  // ---- The grip-rule hand: a right-hand thumbs-up. Local frame: thumb up (−y), wrist off to the right
+  // (+x), fingers curled on the left with their tips at the front, where they point towards +x.
+  // Turned so the thumb lies along the wire or the solenoid's axis; only ever rotated, so it stays a right hand.
+  function drawThumbsUp(box, rot, thumbCol, thumbText, curlCol, curlText) {
+    // local extent with the thumb arrow and its label: x −0.95…2.35, y −2.6…1.1, about 3.3 × 3.7
+    const upright = Math.abs(Math.sin(rot)) < 0.5;
+    const s = upright ? Math.min(box.w / 3.6, box.h / 4.0) : Math.min(box.w / 4.0, box.h / 3.7);
+    const lc = [0.7, -0.75];
+    const c = Math.cos(rot), sn = Math.sin(rot);
+    const cx = box.x + box.w / 2 - (c * lc[0] - sn * lc[1]) * s;
+    const cy = box.y + box.h / 2 - (sn * lc[0] + c * lc[1]) * s;
+    const P = (lx, ly) => fistPt(cx, cy, rot, s, lx, ly);
+    ctx.save();
+    ctx.translate(cx, cy); ctx.rotate(rot); ctx.scale(s, s);
+    ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+    // outline: thumb, back of the hand to the wrist, then the four curled fingers back up to the thumb
+    ctx.beginPath();
+    ctx.moveTo(-0.32, -1.0);
+    ctx.bezierCurveTo(-0.36, -1.4, -0.36, -1.75, -0.3, -1.9);
+    ctx.bezierCurveTo(-0.24, -2.1, -0.02, -2.1, 0.03, -1.88);
+    ctx.bezierCurveTo(0.08, -1.55, 0.1, -1.25, 0.25, -1.05);
+    ctx.bezierCurveTo(0.4, -0.88, 0.6, -0.82, 0.9, -0.75);
+    ctx.bezierCurveTo(1.3, -0.66, 1.7, -0.58, 2.1, -0.52);
+    ctx.lineTo(2.1, 0.92);
+    ctx.bezierCurveTo(1.6, 0.95, 1.0, 1.02, 0.6, 1.05);
+    ctx.lineTo(-0.38, 1.06);
+    ctx.bezierCurveTo(-0.62, 1.06, -0.66, 0.78, -0.55, 0.72);
+    ctx.bezierCurveTo(-0.8, 0.7, -0.84, 0.36, -0.66, 0.33);
+    ctx.bezierCurveTo(-0.88, 0.3, -0.9, -0.1, -0.7, -0.13);
+    ctx.bezierCurveTo(-0.95, -0.2, -0.98, -0.75, -0.75, -0.92);
+    ctx.bezierCurveTo(-0.6, -1.04, -0.45, -1.03, -0.32, -1.0);
+    ctx.closePath();
+    ctx.fillStyle = SKIN; ctx.fill();
+    ctx.strokeStyle = SKIN_EDGE; ctx.lineWidth = 2 / s; ctx.stroke();
+    // creases between the fingers, the curled tip of the index finger, the base of the thumb
+    ctx.strokeStyle = SKIN_EDGE; ctx.lineWidth = 1.5 / s;
+    ctx.beginPath();
+    ctx.moveTo(-0.55, 0.72); ctx.quadraticCurveTo(-0.4, 0.76, -0.22, 0.74);
+    ctx.moveTo(-0.66, 0.33); ctx.quadraticCurveTo(-0.5, 0.37, -0.28, 0.36);
+    ctx.moveTo(-0.7, -0.13); ctx.quadraticCurveTo(-0.52, -0.08, -0.3, -0.1);
+    ctx.moveTo(0.05, -0.78); ctx.bezierCurveTo(-0.3, -0.82, -0.62, -0.72, -0.6, -0.45);
+    ctx.bezierCurveTo(-0.58, -0.25, -0.35, -0.22, -0.2, -0.3);
+    ctx.stroke();
+    ctx.strokeStyle = CREASE; ctx.lineWidth = 1.2 / s;
+    ctx.beginPath();
+    ctx.moveTo(0.25, -1.05); ctx.quadraticCurveTo(0.2, -0.85, 0.05, -0.78);
+    ctx.moveTo(0.75, -0.2); ctx.bezierCurveTo(0.95, 0.1, 0.95, 0.4, 0.8, 0.65);
+    ctx.stroke();
+    // sleeve over the wrist
+    rrect(ctx, 1.8, -0.66, 0.55, 1.72, 0.08); ctx.fillStyle = SLEEVE; ctx.fill();
+    ctx.restore();
+    // curling over the fingers, round to the front, where it runs towards the wrist
+    ctx.save();
+    ctx.translate(cx, cy); ctx.rotate(rot); ctx.scale(s, s);
+    ctx.strokeStyle = curlCol; ctx.lineWidth = 3.5 / s; ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(0.02, -0.92);
+    ctx.bezierCurveTo(-0.35, -0.98, -0.74, -0.86, -0.72, -0.6);
+    ctx.bezierCurveTo(-0.7, -0.42, -0.5, -0.4, -0.3, -0.44);
+    ctx.stroke();
+    ctx.restore();
+    const a0 = P(-0.36, -0.43), a1 = P(-0.12, -0.47);
+    arrow(a0[0], a0[1], a1[0], a1[1], curlCol, 3.5, 13);
+    const il = P(-0.42, -0.64);
+    label(curlText, il[0], il[1], curlCol);
+    // beside the thumb, the way it points
+    const t0 = P(-0.6, -1.15), t1 = P(-0.6, -2.3);
+    arrow(t0[0], t0[1], t1[0], t1[1], thumbCol, 3.5, 13);
+    const tl = P(-0.6, -2.6);
+    label(thumbText, tl[0], tl[1], thumbCol);
+    const cl = P(2.07, 0.2);
+    cuffLabel(cl[0], cl[1], 'R', s);
+  }
+  function drawGripWire() {
+    const { cond } = gripLayout(), cx = cond.x + cond.w / 2;
+    const rx = Math.min(cond.w * 0.4, 230), ry = rx * 0.24;
+    const rings = [0.17, 0.5, 0.83].map(f => cond.y + cond.h * f);
+    ctx.strokeStyle = C.field; ctx.lineWidth = 2;
+    // back halves behind the wire
+    for (const y of rings) { ctx.globalAlpha = 0.45; ringArc(cx, y, rx, ry, false, true); ctx.globalAlpha = 1; }
+    // the wire
+    ctx.strokeStyle = C.wire; ctx.lineWidth = 7;
+    ctx.beginPath(); ctx.moveTo(cx, cond.y - (cond.y ? 0 : 10)); ctx.lineTo(cx, H + 10); ctx.stroke();
+    ctx.save(); ctx.beginPath(); ctx.rect(cond.x, cond.y, cond.w, cond.h); ctx.clip();
+    chevrons(cx, H / 2, 0, -gripUp, H, 40);
+    ctx.restore();
+    // front halves, with the direction of B: to the right at the front when the current is upwards
+    for (const y of rings) {
+      ctx.strokeStyle = C.field; ctx.lineWidth = 2; ringArc(cx, y, rx, ry, true, false);
+      const fx = cx + 0.05 * rx * gripUp;
+      arrow(fx - 10 * gripUp, y + ry, fx + 8 * gripUp, y + ry, C.field, 2, 11);
+      arrow(cx - 0.05 * rx * gripUp + 10 * gripUp, y - ry, cx - 0.05 * rx * gripUp - 8 * gripUp, y - ry, 'rgba(37,99,235,.5)', 2, 10);
+      // into the page on one side, out on the other
+      circledMark(cx + rx, y, -gripUp, 8, C.field);
+      circledMark(cx - rx, y, gripUp, 8, C.field);
+    }
+    label('I', cx + 22, gripUp > 0 ? cond.y + 22 : H - 22, C.wire);
+    label('B', cx + rx + 22, rings[0] - 16, C.field);
+    drawSideHand(false);
+  }
+  function drawGripCoil() {
+    const { cond } = gripLayout(), WC = cond.w;
+    const yc = cond.y + cond.h * 0.5, R = Math.min(cond.h * 0.12, WC * 0.11);
+    const x0 = cond.x + WC * 0.22, x1 = cond.x + WC - WC * 0.22, N = 8, p = (x1 - x0) / N;
+    const poleGap = Math.min(38, WC * 0.09);
+    // current up the front of each turn puts N at the left
+    const nLeft = gripUp > 0;
+    const xN = nLeft ? x0 : x1, xS = nLeft ? x1 : x0, dirN = nLeft ? -1 : 1;
+    // field lines outside, from N round to S
+    ctx.strokeStyle = 'rgba(37,99,235,.75)'; ctx.lineWidth = 1.8;
+    for (const side of [-1, 1]) for (const k of [1, 2]) {
+      const y0 = yc + side * R * 0.55, h = R * (0.9 + 1.0 * k);
+      ctx.beginPath(); ctx.moveTo(xN, y0);
+      ctx.bezierCurveTo(xN + dirN * R * 1.6 * k, y0 + side * h * 1.5, xS - dirN * R * 1.6 * k, y0 + side * h * 1.5, xS, y0);
+      ctx.stroke();
+      const ym = y0 + side * h * 1.5 * 0.75, xm = (x0 + x1) / 2;
+      arrow(xm + dirN * 8, ym, xm - dirN * 8, ym, C.field, 1.8, 10);
+    }
+    // back halves of the turns
+    ctx.strokeStyle = 'rgba(180, 83, 9, .45)'; ctx.lineWidth = 3; ctx.setLineDash([5, 4]);
+    ctx.beginPath();
+    for (let i = 0; i < N; i++) { const xa = x0 + i * p + p / 2; ctx.moveTo(xa, yc - R); ctx.lineTo(xa + p / 2, yc + R); }
+    ctx.stroke(); ctx.setLineDash([]);
+    // field lines inside, towards N
+    ctx.strokeStyle = 'rgba(37,99,235,.8)'; ctx.lineWidth = 1.8;
+    for (const dy of [-0.45, 0, 0.45]) {
+      ctx.beginPath(); ctx.moveTo(x0 - 14, yc + dy * R); ctx.lineTo(x1 + 14, yc + dy * R); ctx.stroke();
+      const xm = x0 + (x1 - x0) * (nLeft ? 0.3 : 0.7);
+      arrow(xm - dirN * 8, yc + dy * R, xm + dirN * 8, yc + dy * R, C.field, 1.8, 10);
+    }
+    // front halves, with the current
+    ctx.strokeStyle = C.wire; ctx.lineWidth = 4; ctx.lineCap = 'round';
+    ctx.beginPath();
+    for (let i = 0; i < N; i++) { const xa = x0 + i * p; ctx.moveTo(xa, yc + R); ctx.lineTo(xa + p / 2, yc - R); }
+    ctx.stroke();
+    ctx.lineCap = 'butt';
+    for (let i = 0; i < N; i += 2) {
+      const xa = x0 + i * p + p * 0.375, ang = Math.atan2(-2 * R, p / 2) + (gripUp > 0 ? 0 : Math.PI);
+      const ex = Math.cos(ang) * 12, ey = Math.sin(ang) * 12;
+      arrow(xa - ex, yc - R * 0.5 - ey, xa + ex, yc - R * 0.5 + ey, '#7c2d12', 2.5, 11);
+    }
+    // poles
+    ctx.font = '700 20px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = C.force; ctx.fillText('N', xN + dirN * poleGap, yc);
+    ctx.fillStyle = C.field; ctx.fillText('S', xS - dirN * poleGap, yc);
+    drawSideHand(true);
+  }
+
+  // ---- Main loop ----
+  let lastFrame = null;
+  function draw(dt) {
+    ctx.clearRect(0, 0, W, H);
+    if (rule === 'left') drawLeft();
+    else if (rule === 'right') { const xp = rod.prevX ?? rod.x; rodLegs(dt); drawRight(dt, xp); rod.prevX = rod.x; }
+    else if (grip === 'wire') drawGripWire();
+    else drawGripCoil();
+  }
+  function frame(now) {
+    const dt = lastFrame === null ? 0 : Math.min(0.1, (now - lastFrame) / 1000);
+    lastFrame = now;
+    time += dt;
+    draw(dt);
+    requestAnimationFrame(frame);
+  }
+
+  // ---- Pointer: turn the wire (left-hand rule) or drag the rod (right-hand rule) ----
+  let dragging = false;
+  function pos(e) { const r = scene.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; }
+  scene.addEventListener('pointerdown', e => {
+    const [x, y] = pos(e);
+    if (rule === 'left') { dragging = true; scene.setPointerCapture(e.pointerId); turnWire(x, y); }
+    else if (rule === 'right') {
+      const g = geomR(), xr = g.xr0 + (g.xr1 - g.xr0) * rod.x;
+      if (Math.abs(x - xr) < 40 && y > g.yt - 30 && y < g.yb + 30) {
+        dragging = true; rod.dragging = true; rod.grabDx = x - xr; scene.setPointerCapture(e.pointerId);
+      }
+    }
+  });
+  scene.addEventListener('pointermove', e => {
+    const [x, y] = pos(e);
+    if (rule === 'right' && !dragging) {
+      const g = geomR(), xr = g.xr0 + (g.xr1 - g.xr0) * rod.x;
+      scene.style.cursor = Math.abs(x - xr) < 40 && y > g.yt - 30 && y < g.yb + 30 ? 'grab' : 'default';
+    } else if (rule === 'left') scene.style.cursor = 'grab';
+    if (!dragging) return;
+    if (rule === 'left') turnWire(x, y);
+    else if (rule === 'right') {
+      const g = geomR();
+      rod.x = Math.max(0, Math.min(1, (x - rod.grabDx - g.xr0) / (g.xr1 - g.xr0)));
+    }
+  });
+  const endDrag = () => {
+    if (!dragging) return;
+    dragging = false;
+    if (rule === 'right') { rod.dragging = false; rod.leg = { from: rod.x, to: rod.x, dur: 0.8, t: 0 }; }
+  };
+  scene.addEventListener('pointerup', endDrag);
+  scene.addEventListener('pointercancel', endDrag);
+  function turnWire(x, y) {
+    const a = Math.atan2(-(y - H / 2), x - W / 2);
+    // keep the current pointing the same way along the wire: take whichever end is nearer
+    const snap = v => Math.round(v / (Math.PI / 12)) * (Math.PI / 12);
+    const d = ((a - alpha) % (2 * Math.PI) + 3 * Math.PI) % (2 * Math.PI) - Math.PI;
+    alpha = snap(Math.abs(d) <= Math.PI / 2 ? a : a + Math.PI);
+  }
+
+  // ---- Controls ----
+  function syncControls() {
+    $('field-sw').hidden = rule === 'grip';
+    $('grip-sw').hidden = rule !== 'grip';
+    $('reverse-btn').hidden = rule === 'right';
+    scene.style.cursor = rule === 'left' ? 'grab' : 'default';
+  }
+  document.querySelectorAll('[data-rule]').forEach(btn => btn.addEventListener('click', () => {
+    rule = btn.dataset.rule;
+    document.querySelectorAll('[data-rule]').forEach(o => o.setAttribute('aria-pressed', String(o === btn)));
+    syncControls();
+  }));
+  document.querySelectorAll('[data-b]').forEach(btn => btn.addEventListener('click', () => {
+    b = Number(btn.dataset.b);
+    document.querySelectorAll('[data-b]').forEach(o => o.setAttribute('aria-pressed', String(o === btn)));
+  }));
+  document.querySelectorAll('[data-g]').forEach(btn => btn.addEventListener('click', () => {
+    grip = btn.dataset.g;
+    document.querySelectorAll('[data-g]').forEach(o => o.setAttribute('aria-pressed', String(o === btn)));
+  }));
+  $('reverse-btn').addEventListener('click', () => {
+    if (rule === 'left') alpha += Math.PI;
+    else gripUp = -gripUp;
+  });
+  $('hand-btn').addEventListener('click', () => {
+    showHand = !showHand;
+    $('hand-btn').setAttribute('aria-pressed', String(showHand));
+  });
+
+  const simulation = $('simulation'), screenToggle = $('screen-toggle');
+  function syncFullscreen() {
+    const expanded = document.fullscreenElement === simulation || document.body.classList.contains('page-fullscreen');
+    simulation.classList.toggle('expanded', expanded);
+    screenToggle.setAttribute('aria-pressed', String(expanded));
+    screenToggle.title = expanded ? 'Exit full screen' : 'Enter full screen';
+    resize();
+  }
+  screenToggle.addEventListener('click', async () => {
+    if (document.fullscreenElement === simulation) {
+      await document.exitFullscreen();
+    } else if (document.body.classList.contains('page-fullscreen')) {
+      document.body.classList.remove('page-fullscreen');
+      syncFullscreen();
+    } else {
+      try {
+        await simulation.requestFullscreen();
+      } catch {
+        // Embedded pages and mobile browsers can restrict native fullscreen.
+        document.body.classList.add('page-fullscreen');
+        syncFullscreen();
+      }
+    }
+  });
+  document.addEventListener('fullscreenchange', syncFullscreen);
+  window.addEventListener('keydown', ev => {
+    if (ev.key === 'Escape' && document.body.classList.contains('page-fullscreen')) screenToggle.click();
+  });
+  window.addEventListener('resize', resize);
+  resize();
+  syncControls();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

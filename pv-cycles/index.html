@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>5.5 p–V cycles and the first law</title>
+<style>
+  :root {
+    --bg: #f7f7f5;
+    --panel: #ffffff;
+    --ink: #1f2328;
+    --muted: #6b7280;
+    --grid: #e5e7eb;
+    --axis: #9ca3af;
+    --path: #1f2328;
+    --on: #c2410c;
+    --by: #0f766e;
+    --hot: #dc2626;
+    --cold: #2563eb;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+  }
+  main { max-width: 1100px; margin: 0 auto; padding: 20px; }
+  .card {
+    background: var(--panel);
+    border-radius: 10px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.08);
+    padding: 14px 18px;
+    margin-bottom: 14px;
+  }
+  .frac {
+    display: inline-flex; flex-direction: column;
+    vertical-align: middle; text-align: center;
+    font-size: .85em; line-height: 1.15; margin: 0 2px;
+  }
+  .frac > span { padding: 0 3px; }
+  .frac > span:first-child { border-bottom: 1.5px solid currentColor; }
+  .intro h1 { font-size: 1.25rem; margin: 0 0 8px; }
+  .intro .formulas {
+    display: flex; gap: 0 3em; justify-content: center; flex-wrap: wrap;
+    font-family: "Cambria Math", "Times New Roman", serif;
+    font-size: 1.4rem; line-height: 2.4; margin: 0 0 6px;
+  }
+  .intro dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; margin: 0; }
+  .intro dt { font-family: "Cambria Math", "Times New Roman", serif; font-size: 1.1rem; text-align: center; }
+  .intro dd { margin: 0; }
+  canvas { display: block; width: 100%; }
+  .views { display: grid; grid-template-columns: 2fr 3fr; gap: 12px; }
+  #cyl, #graph { height: 420px; }
+  @media (max-width: 720px) {
+    .views { grid-template-columns: 1fr; }
+    #cyl { height: 300px; }
+    #graph { height: 320px; }
+    th, td { padding: 6px 5px; font-size: .9rem; }
+    th:nth-child(2), tbody td:nth-child(2) { display: none; }
+  }
+  table {
+    width: 100%; border-collapse: collapse; margin-top: 12px;
+    font-variant-numeric: tabular-nums;
+  }
+  th, td { padding: 6px 10px; border-bottom: 1px solid var(--grid); text-align: right; white-space: nowrap; }
+  th:nth-child(-n+2), tbody td:nth-child(-n+2), tfoot td:first-child { text-align: left; }
+  tbody td:nth-child(2) { white-space: normal; }
+  th { font-weight: 600; color: var(--muted); }
+  tbody tr.now { background: #f3f4f6; }
+  tfoot td { font-weight: 600; border-bottom: 0; }
+  .table-wrap { overflow-x: auto; }
+  .row { display: flex; gap: 12px 18px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
+  .row .right { margin-left: auto; display: flex; gap: 10px; }
+  button {
+    font: inherit;
+    height: 2.4em; min-width: 2.4em; padding: 0 10px;
+    border-radius: 6px;
+    border: 1px solid #d1d5db;
+    background: #fff;
+    cursor: pointer;
+  }
+  button:hover { background: #f3f4f6; }
+  .switch { display: inline-flex; border: 1px solid #d1d5db; border-radius: 6px; overflow: hidden; }
+  .switch button { border: 0; border-radius: 0; }
+  .switch button + button { border-left: 1px solid #d1d5db; }
+  .switch button[aria-pressed="true"] { background: var(--ink); color: #fff; }
+  .derivation {
+    display: grid;
+    grid-template-columns: auto auto 1fr;
+    column-gap: .4em;
+    align-items: center;
+    font-family: "Cambria Math", "Times New Roman", serif;
+    font-size: 1.3rem;
+    line-height: 2.4;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    overflow-x: auto;
+  }
+  .derivation .head {
+    grid-column: 1 / -1;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-size: 1rem; font-weight: 600; line-height: 1.6; margin-top: .3em;
+  }
+  .screen-tools { display: flex; justify-content: flex-end; margin-top: 8px; }
+  #screen-toggle { display: inline-grid; place-items: center; }
+  #screen-toggle svg { width: 18px; height: 18px; }
+  #screen-toggle .exit, #screen-toggle[aria-pressed="true"] .enter { display: none; }
+  #screen-toggle[aria-pressed="true"] .exit { display: block; }
+  .sim-panel { min-width: 0; }
+  #simulation.expanded {
+    width: 100%; height: 100%; margin: 0; border-radius: 0;
+    display: grid; justify-content: center;
+    grid-template-columns: minmax(0, 1600px);
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+  .expanded .sim-content { display: flex; flex-direction: column; min-height: 0; overflow: auto; }
+  .expanded .sim-panel { flex: none; }
+  .expanded .sim-content::before { content: ""; flex: 1 0 0; max-height: 120px; }
+  .expanded .sim-content::after { content: ""; flex: 5 0 0; order: 1; }
+  body.page-fullscreen { overflow: hidden; }
+  body.page-fullscreen main > :not(#simulation) { display: none; }
+  body.page-fullscreen #simulation { position: fixed; inset: 0; z-index: 10; }
+  #simulation.expanded #cyl, #simulation.expanded #graph { height: clamp(320px, 58vh, 760px); }
+</style>
+</head>
+<body>
+<main>
+  <section class="card intro">
+    <h1>5.5 p–V cycles and the first law</h1>
+    <div class="formulas">
+      <span>ΔU = q + W</span>
+      <span>W = −pΔV</span>
+      <span>pV = nRT</span>
+      <span>U = <span class="frac"><span>3</span><span>2</span></span>nRT</span>
+    </div>
+    <dl>
+      <dt>ΔU</dt><dd>increase in internal energy of the gas</dd>
+      <dt>q</dt><dd>energy transferred to the gas by heating</dd>
+      <dt>W</dt><dd>work done on the gas</dd>
+      <dt>p</dt><dd>pressure of the gas</dd>
+      <dt>ΔV</dt><dd>change in volume of the gas</dd>
+      <dt>n</dt><dd>amount of gas, 0.080 mol</dd>
+      <dt>R</dt><dd>molar gas constant, 8.31 J K<sup>−1</sup> mol<sup>−1</sup></dd>
+      <dt>T</dt><dd>thermodynamic temperature of the gas</dd>
+      <dt>U</dt><dd>internal energy of a monatomic ideal gas, so ΔU = <span class="frac"><span>3</span><span>2</span></span>Δ(pV)</dd>
+    </dl>
+  </section>
+
+  <section class="card" id="simulation" aria-label="5.5 p–V cycles simulation">
+    <div class="sim-content">
+      <div class="sim-panel">
+        <div class="views">
+          <canvas id="cyl" aria-label="Gas in a cylinder with a piston"></canvas>
+          <canvas id="graph" aria-label="p–V graph"></canvas>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Stage</th><th>Process</th><th>W / J</th><th>q / J</th><th>ΔU / J</th></tr></thead>
+            <tbody id="tbody"></tbody>
+            <tfoot><tr><td colspan="2">Whole cycle</td><td id="tot-W"></td><td id="tot-q"></td><td id="tot-U"></td></tr></tfoot>
+          </table>
+        </div>
+        <div class="row">
+          <div class="switch" role="group" aria-label="Cycle">
+            <button data-cycle="iso" aria-pressed="true">Cycle with an isotherm</button>
+            <button data-cycle="rect" aria-pressed="false">Rectangle</button>
+          </div>
+          <div class="right">
+            <button id="pause-btn" title="Play / pause (Space)">⏸</button>
+            <button id="restart-btn" title="Start again">↺</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="screen-tools">
+      <button id="screen-toggle" aria-label="Full screen" aria-pressed="false" title="Enter full screen">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <path class="enter" d="M9 4H4v5m11-5h5v5M4 15v5h5m11-5v5h-5"/>
+          <path class="exit" d="M4 9h5V4m6 0v5h5M9 20v-5H4m11 5v-5h5"/>
+        </svg>
+      </button>
+    </div>
+  </section>
+
+  <div class="card derivation" id="derivation"></div>
+</main>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const css = getComputedStyle(document.documentElement);
+  const color = name => css.getPropertyValue(name).trim();
+  const C = {
+    ink: color('--ink'), muted: color('--muted'), grid: color('--grid'), axis: color('--axis'),
+    on: color('--on'), by: color('--by'), hot: color('--hot'), cold: color('--cold'),
+  };
+
+  // ---- Physics (SI): a monatomic ideal gas, U = 3/2 nRT = 3/2 pV ----
+  const R = 8.31, T_A = 300;
+  const P1 = 2.0e5, P2 = 1.0e5, V1 = 1.0e-3, V2 = 2.0e-3;
+  const N_MOL = P1 * V1 / (R * T_A);
+  const CYCLES = {
+    // p1,V1 → p2,V1 → p2,V2 → back to p1,V1 along the isotherm (p1V1 = p2V2)
+    iso: {
+      states: { A: [P1, V1], B: [P2, V1], C: [P2, V2] },
+      stages: [['A', 'B', 'V'], ['B', 'C', 'p'], ['C', 'A', 'T']],
+    },
+    rect: {
+      states: { A: [P1, V1], B: [P1, V2], C: [P2, V2], D: [P2, V1] },
+      stages: [['A', 'B', 'p'], ['B', 'C', 'V'], ['C', 'D', 'p'], ['D', 'A', 'V']],
+    },
+  };
+  const PROCESS = { V: 'constant volume', p: 'constant pressure', T: 'constant temperature (isothermal)' };
+  let cycleKey = 'iso';
+  const cyc = () => CYCLES[cycleKey];
+
+  // the gas part-way (s from 0 to 1) through a stage, with W, q and ΔU so far
+  function stageAt(k, s) {
+    const [a, b, type] = cyc().stages[k];
+    const [p0, v0] = cyc().states[a], [p1, v1] = cyc().states[b];
+    let p, V, W;
+    if (type === 'V') { V = v0; p = p0 + (p1 - p0) * s; W = 0; }
+    else if (type === 'p') { p = p0; V = v0 + (v1 - v0) * s; W = -p0 * (V - v0); }
+    else { V = v0 + (v1 - v0) * s; p = p0 * v0 / V; W = -p0 * v0 * Math.log(V / v0); }
+    const dU = 1.5 * (p * V - p0 * v0);
+    return { p, V, T: p * V / (N_MOL * R), W, dU, q: dU - W, type, a, b };
+  }
+
+  // ---- Time: a pause at each state, then the stage; a longer pause with the whole loop at the end ----
+  const PAUSE = 0.9, MOVE = 3.2, END = 3.5;
+  const ease = s => s < 0.5 ? 2 * s * s : 1 - 2 * (1 - s) ** 2;
+  const total = () => cyc().stages.length * (PAUSE + MOVE) + END;
+  let clock = 0, playing = true;
+  function phase() {
+    let t = clock;
+    const n = cyc().stages.length;
+    for (let k = 0; k < n; k++) {
+      if (t < PAUSE) return { k, s: 0, moving: false, done: false };
+      t -= PAUSE;
+      if (t < MOVE) return { k, s: ease(t / MOVE), moving: true, done: false };
+      t -= MOVE;
+    }
+    return { k: n - 1, s: 1, moving: false, done: true };
+  }
+
+  // ---- Canvases ----
+  const cyl = $('cyl'), cc = cyl.getContext('2d');
+  const graph = $('graph'), gc = graph.getContext('2d');
+  const size = { cW: 0, cH: 0, gW: 0, gH: 0 };
+  function sizeCanvas(cv, c) {
+    const dpr = window.devicePixelRatio || 1;
+    const r = cv.getBoundingClientRect();
+    cv.width = Math.round(r.width * dpr); cv.height = Math.round(r.height * dpr);
+    c.setTransform(dpr, 0, 0, dpr, 0, 0);
+    return r;
+  }
+  function resize() {
+    const a = sizeCanvas(cyl, cc), b = sizeCanvas(graph, gc);
+    size.cW = a.width; size.cH = a.height; size.gW = b.width; size.gH = b.height;
+  }
+
+  // ---- Molecules, in cylinder units: inner width 10, height 9 per litre ----
+  const IN_W = 10, PER_L = 9, IN_H = 21, MOL_R = 0.28;
+  const height = V => V * 1e3 * PER_L;
+  let mols = [];
+  function initMolecules(V) {
+    const h = height(V);
+    mols = Array.from({ length: 40 }, () => {
+      const a = Math.random() * 2 * Math.PI;
+      return { x: MOL_R + Math.random() * (IN_W - 2 * MOL_R), y: MOL_R + Math.random() * (h - 2 * MOL_R), dx: Math.cos(a), dy: Math.sin(a) };
+    });
+  }
+  // speed ∝ √T: 7 units a second at 300 K
+  function moveMolecules(dt, V, T) {
+    const h = height(V), v = 7 * Math.sqrt(T / 300);
+    for (const m of mols) {
+      m.x += m.dx * v * dt; m.y += m.dy * v * dt;
+      if (m.x < MOL_R) { m.x = MOL_R; m.dx = Math.abs(m.dx); }
+      if (m.x > IN_W - MOL_R) { m.x = IN_W - MOL_R; m.dx = -Math.abs(m.dx); }
+      if (m.y < MOL_R) { m.y = MOL_R; m.dy = Math.abs(m.dy); }
+      if (m.y > h - MOL_R) { m.y = h - MOL_R; m.dy = -Math.abs(m.dy); }
+    }
+  }
+
+  function arrow(c, x0, y0, x1, y1, col, w = 3) {
+    const a = Math.atan2(y1 - y0, x1 - x0), hl = 9;
+    c.strokeStyle = c.fillStyle = col; c.lineWidth = w;
+    c.beginPath(); c.moveTo(x0, y0); c.lineTo(x1 - hl * 0.6 * Math.cos(a), y1 - hl * 0.6 * Math.sin(a)); c.stroke();
+    c.beginPath(); c.moveTo(x1, y1);
+    c.lineTo(x1 - hl * Math.cos(a - 0.45), y1 - hl * Math.sin(a - 0.45));
+    c.lineTo(x1 - hl * Math.cos(a + 0.45), y1 - hl * Math.sin(a + 0.45));
+    c.closePath(); c.fill();
+  }
+
+  function drawCylinder(st, ph) {
+    const W = size.cW, H = size.cH;
+    cc.clearRect(0, 0, W, H);
+    const TOP = 70, BOT = 58;
+    const k = Math.min((H - TOP - BOT) / (IN_H + 1), (W - 150) / (IN_W + 2));
+    const wall = k, x0 = W * 0.5 - IN_W * k / 2, x1 = x0 + IN_W * k, yb = H - BOT;
+    const Y = y => yb - y * k;
+    const h = height(st.V);
+    // gas and molecules
+    cc.fillStyle = '#f8fafc'; cc.fillRect(x0, Y(h), x1 - x0, h * k);
+    cc.fillStyle = '#475569';
+    for (const m of mols) { cc.beginPath(); cc.arc(x0 + m.x * k, Y(m.y), Math.max(2, MOL_R * k), 0, 2 * Math.PI); cc.fill(); }
+    // cylinder walls and base
+    cc.fillStyle = '#9ca3af';
+    cc.fillRect(x0 - wall, Y(IN_H), wall, IN_H * k + wall);
+    cc.fillRect(x1, Y(IN_H), wall, IN_H * k + wall);
+    cc.fillRect(x0 - wall, yb, x1 - x0 + 2 * wall, wall);
+    // piston, with a short rod
+    const pt = 1.3 * k;
+    cc.fillStyle = '#6b7280';
+    cc.fillRect(x0 + 1, Y(h) - pt, x1 - x0 - 2, pt);
+    cc.fillRect((x0 + x1) / 2 - 0.4 * k, Y(h) - pt - 3 * k, 0.8 * k, 3 * k);
+    // at constant volume the piston is held by stops just above it
+    if (st.type === 'V' && !ph.done) {
+      cc.fillStyle = '#1f2328';
+      cc.fillRect(x0, Y(h) - pt - 0.7 * k, 1.1 * k, 0.7 * k);
+      cc.fillRect(x1 - 1.1 * k, Y(h) - pt - 0.7 * k, 1.1 * k, 0.7 * k);
+    }
+    // readouts
+    cc.fillStyle = C.ink; cc.font = '14px system-ui, sans-serif'; cc.textAlign = 'left'; cc.textBaseline = 'top';
+    cc.fillText(`p = ${(st.p / 1e5).toFixed(2)} × 10⁵ Pa`, 12, 10);
+    cc.fillText(`V = ${(st.V / 1e-3).toFixed(2)} × 10⁻³ m³`, 12, 29);
+    cc.fillText(`T = ${st.T.toFixed(0)} K`, 12, 48);
+    // what is happening in this stage, from the rates of W and q
+    if (ph.moving) {
+      const ds = 1e-3, s2 = Math.min(1, ph.s + ds), s1 = s2 - ds;
+      const A = stageAt(ph.k, s1), B2 = stageAt(ph.k, s2);
+      const dW = B2.W - A.W, dq = B2.q - A.q;
+      const sideX = x0 - wall - 14, py = Y(h) - pt / 2;
+      cc.font = '12px system-ui, sans-serif'; cc.textBaseline = 'middle'; cc.textAlign = 'right';
+      if (Math.abs(dW) > 1e-6) {
+        const col = dW > 0 ? C.on : C.by;
+        if (dW > 0) arrow(cc, sideX, py - 30, sideX, py, col); else arrow(cc, sideX, py, sideX, py - 30, col);
+        cc.fillStyle = col;
+        cc.fillText('work done', sideX - 10, py - 22);
+        cc.fillText(dW > 0 ? 'on the gas' : 'by the gas', sideX - 10, py - 7);
+      }
+      if (Math.abs(dq) > 1e-6) {
+        const col = dq > 0 ? C.hot : C.cold;
+        for (const f of [0.25, 0.5, 0.75]) {
+          const x = x0 + (x1 - x0) * f, ya = yb + wall + 6, yz = H - 6;
+          if (dq > 0) arrow(cc, x, yz, x, ya, col); else arrow(cc, x, ya, x, yz, col);
+        }
+        cc.fillStyle = col; cc.textAlign = 'left';
+        cc.fillText(dq > 0 ? 'heating' : 'cooling', x1 + wall + 10, (yb + wall + H) / 2);
+      }
+    }
+    // thermometer
+    const tx = Math.min(W - 34, x1 + wall + 52), tTop = Y(IN_H), tBot = yb, TMAX = 700;
+    cc.strokeStyle = C.axis; cc.lineWidth = 1; cc.fillStyle = '#fff';
+    cc.beginPath(); cc.roundRect(tx - 5, tTop, 10, tBot - tTop, 5); cc.fill(); cc.stroke();
+    const tf = tBot - (tBot - tTop) * st.T / TMAX;
+    cc.fillStyle = C.hot; cc.beginPath(); cc.roundRect(tx - 3, tf, 6, tBot - tf - 2, 3); cc.fill();
+    cc.fillStyle = C.muted; cc.font = '11px system-ui, sans-serif'; cc.textAlign = 'left'; cc.textBaseline = 'middle';
+    for (const t of [0, 300, 600]) {
+      const y = tBot - (tBot - tTop) * t / TMAX;
+      cc.strokeStyle = C.axis; cc.beginPath(); cc.moveTo(tx + 5, y); cc.lineTo(tx + 9, y); cc.stroke();
+      cc.fillText(`${t} K`, tx + 11, y);
+    }
+  }
+
+  // ---- p–V graph ----
+  const PMAX = 2.5e5, VMAX = 2.5e-3;
+  function drawGraph(ph) {
+    const W = size.gW, H = size.gH;
+    gc.clearRect(0, 0, W, H);
+    const L = 52, Rm = 18, T = 36, B = 44;
+    const X = V => L + V / VMAX * (W - L - Rm), Y = p => H - B - p / PMAX * (H - B - T);
+    // grid and axes
+    gc.strokeStyle = C.grid; gc.lineWidth = 1; gc.beginPath();
+    for (let i = 1; i <= 5; i++) {
+      const x = Math.round(X(i * 0.5e-3)) + 0.5, y = Math.round(Y(i * 0.5e5)) + 0.5;
+      gc.moveTo(x, Y(0)); gc.lineTo(x, Y(PMAX)); gc.moveTo(X(0), y); gc.lineTo(X(VMAX), y);
+    }
+    gc.stroke();
+    gc.strokeStyle = C.axis; gc.beginPath(); gc.moveTo(X(0) + 0.5, Y(PMAX)); gc.lineTo(X(0) + 0.5, Y(0) + 0.5); gc.lineTo(X(VMAX), Y(0) + 0.5); gc.stroke();
+    gc.fillStyle = C.muted; gc.font = '12px system-ui, sans-serif';
+    gc.textAlign = 'right'; gc.textBaseline = 'middle';
+    for (let i = 0; i <= 5; i++) gc.fillText((i * 0.5).toFixed(1), X(0) - 6, Y(i * 0.5e5));
+    gc.textAlign = 'center'; gc.textBaseline = 'top';
+    for (let i = 0; i <= 5; i++) gc.fillText((i * 0.5).toFixed(1), X(i * 0.5e-3), Y(0) + 6);
+    gc.textAlign = 'left'; gc.textBaseline = 'bottom'; gc.fillText('p / 10⁵ Pa', 8, T - 6);
+    gc.textAlign = 'right'; gc.fillText('V / 10⁻³ m³', X(VMAX), H - 2);
+    // the 300 K isotherm through A
+    gc.save(); gc.setLineDash([4, 4]); gc.strokeStyle = '#cbd5e1'; gc.lineWidth = 1.2; gc.beginPath();
+    const vlo = P1 * V1 / PMAX;
+    for (let i = 0; i <= 100; i++) { const V = vlo + (VMAX - vlo) * i / 100, p = P1 * V1 / V; i ? gc.lineTo(X(V), Y(p)) : gc.moveTo(X(V), Y(p)); }
+    gc.stroke(); gc.restore();
+    gc.fillStyle = '#94a3b8'; gc.textAlign = 'right'; gc.textBaseline = 'middle';
+    gc.fillText(`${T_A} K`, X(P1 * V1 / 2.3e5) - 8, Y(2.3e5));
+
+    const n = cyc().stages.length;
+    const pts = (k, s1) => { const out = []; for (let i = 0; i <= 60; i++) { const st = stageAt(k, s1 * i / 60); out.push([X(st.V), Y(st.p)]); } return out; };
+    // area for the work: the stage under way, or the inside of the loop once it is complete
+    if (ph.done) {
+      const loop = [];
+      for (let k = 0; k < n; k++) loop.push(...pts(k, 1));
+      let Wnet = 0; for (let k = 0; k < n; k++) Wnet += stageAt(k, 1).W;
+      const col = Wnet > 0 ? C.on : C.by;
+      gc.fillStyle = col + '30'; gc.beginPath(); loop.forEach(([x, y], i) => i ? gc.lineTo(x, y) : gc.moveTo(x, y)); gc.closePath(); gc.fill();
+      // label in the middle of the loop
+      const cx = loop.reduce((a, p) => a + p[0], 0) / loop.length, cy = loop.reduce((a, p) => a + p[1], 0) / loop.length;
+      gc.fillStyle = col; gc.font = '600 13px system-ui, sans-serif'; gc.textAlign = 'center'; gc.textBaseline = 'middle';
+      // the isotherm cycle is too thin to hold the label, so it goes just under B → C
+      const lx = cycleKey === 'iso' ? (X(V1) + X(V2)) / 2 : cx;
+      const ly = cycleKey === 'iso' ? Y(P2) + 30 : cy;
+      gc.fillText(`net work done ${Wnet > 0 ? 'on' : 'by'} the gas`, lx, ly - 9);
+      gc.fillText(`${Math.round(Math.abs(Wnet))} J`, lx, ly + 9);
+    } else if (ph.moving && cyc().stages[ph.k][2] !== 'V') {
+      const tr = pts(ph.k, ph.s), st = stageAt(ph.k, ph.s), col = st.W > 0 ? C.on : C.by;
+      gc.fillStyle = col + '30'; gc.beginPath(); gc.moveTo(tr[0][0], Y(0));
+      for (const [x, y] of tr) gc.lineTo(x, y);
+      gc.lineTo(tr[tr.length - 1][0], Y(0)); gc.closePath(); gc.fill();
+      if (Math.abs(st.W) > 1) {
+        gc.fillStyle = col; gc.font = '600 13px system-ui, sans-serif'; gc.textAlign = 'center'; gc.textBaseline = 'middle';
+        // low in the shaded strip, clear of the lines of the cycle above it
+        const mx = (tr[0][0] + tr[tr.length - 1][0]) / 2, my = Y(0.3e5);
+        gc.fillText(`work done ${st.W > 0 ? 'on' : 'by'} the gas`, mx, my - 9);
+        gc.fillText(`${Math.round(Math.abs(st.W))} J`, mx, my + 9);
+      }
+    }
+    // the whole path faintly with direction arrows, then the part travelled so far
+    for (let k = 0; k < n; k++) {
+      const all = pts(k, 1);
+      gc.strokeStyle = '#d1d5db'; gc.lineWidth = 2; gc.beginPath(); all.forEach(([x, y], i) => i ? gc.lineTo(x, y) : gc.moveTo(x, y)); gc.stroke();
+    }
+    const doneUpTo = ph.done ? n : ph.k;
+    gc.strokeStyle = C.ink; gc.lineWidth = 2.5; gc.lineJoin = 'round';
+    for (let k = 0; k <= Math.min(doneUpTo, n - 1); k++) {
+      const s1 = k < doneUpTo ? 1 : ph.s;
+      if (s1 <= 0) continue;
+      const tr = pts(k, s1);
+      gc.beginPath(); tr.forEach(([x, y], i) => i ? gc.lineTo(x, y) : gc.moveTo(x, y)); gc.stroke();
+    }
+    for (let k = 0; k < n; k++) {
+      const a = stageAt(k, 0.48), b = stageAt(k, 0.52);
+      const travelled = ph.done || k < ph.k || (k === ph.k && ph.s > 0.52);
+      const ang = Math.atan2(Y(b.p) - Y(a.p), X(b.V) - X(a.V)), hx = (X(a.V) + X(b.V)) / 2, hy = (Y(a.p) + Y(b.p)) / 2;
+      gc.fillStyle = travelled ? C.ink : '#d1d5db';
+      gc.beginPath(); gc.moveTo(hx + 7 * Math.cos(ang), hy + 7 * Math.sin(ang));
+      gc.lineTo(hx - 7 * Math.cos(ang - 0.5), hy - 7 * Math.sin(ang - 0.5));
+      gc.lineTo(hx - 7 * Math.cos(ang + 0.5), hy - 7 * Math.sin(ang + 0.5));
+      gc.closePath(); gc.fill();
+    }
+    // the states
+    gc.font = '600 14px system-ui, sans-serif'; gc.fillStyle = C.ink;
+    const sts = cyc().states;
+    for (const [name, [p, V]] of Object.entries(sts)) {
+      const x = X(V), y = Y(p);
+      gc.beginPath(); gc.arc(x, y, 3.5, 0, 2 * Math.PI); gc.fill();
+      gc.textAlign = V > V1 ? 'left' : 'right'; gc.textBaseline = p > P2 ? 'bottom' : 'top';
+      gc.fillText(name, x + (V > V1 ? 7 : -7), y + (p > P2 ? -4 : 4));
+    }
+    const st = stageAt(ph.k, ph.s);
+    gc.save(); gc.fillStyle = '#7c3aed'; gc.shadowColor = '#7c3aed'; gc.shadowBlur = 8;
+    gc.beginPath(); gc.arc(X(st.V), Y(st.p), 6, 0, 2 * Math.PI); gc.fill(); gc.restore();
+  }
+
+  // ---- Table and working ----
+  const fmtJ = v => { const r = Math.round(v); return r === 0 ? '0' : r > 0 ? `+${r}` : `−${-r}`; };
+  function buildTable() {
+    $('tbody').innerHTML = cyc().stages.map(([a, b, type], k) =>
+      `<tr id="r${k}"><td>${a} → ${b}</td><td>${PROCESS[type]}</td><td></td><td></td><td></td></tr>`).join('');
+  }
+  let shown = '';
+  function updateTable(ph) {
+    const n = cyc().stages.length;
+    for (let k = 0; k < n; k++) {
+      const row = $(`r${k}`), cells = row.children;
+      const state = ph.done || k < ph.k ? 1 : k === ph.k && ph.moving ? ph.s : null;
+      row.classList.toggle('now', !ph.done && k === ph.k);
+      if (state === null) { cells[2].textContent = cells[3].textContent = cells[4].textContent = ''; continue; }
+      const st = stageAt(k, state);
+      cells[2].textContent = fmtJ(st.W); cells[3].textContent = fmtJ(st.q); cells[4].textContent = fmtJ(st.dU);
+    }
+    let tW = 0, tq = 0, tU = 0;
+    for (let k = 0; k < n; k++) { const st = stageAt(k, 1); tW += Math.round(st.W); tq += Math.round(st.q); tU += Math.round(st.dU); }
+    $('tot-W').textContent = ph.done ? fmtJ(tW) : '';
+    $('tot-q').textContent = ph.done ? fmtJ(tq) : '';
+    $('tot-U').textContent = ph.done ? fmtJ(tU) : '';
+    const key = `${cycleKey}${ph.done ? 'done' : ph.k}`;
+    if (key !== shown) { shown = key; updateWorking(ph); }
+  }
+
+  const line = (lhs, ...rhs) => `<span>${lhs}</span><span>=</span><span>${rhs.join(' = ')}</span>`;
+  const head = text => `<span class="head">${text}</span>`;
+  const half3 = '<span class="frac"><span>3</span><span>2</span></span>';
+  const J = v => `${fmtJ(v)} J`;
+  function updateWorking(ph) {
+    const n = cyc().stages.length;
+    let rows = '';
+    if (ph.done) {
+      let tW = 0, tq = 0;
+      for (let k = 0; k < n; k++) { const st = stageAt(k, 1); tW += Math.round(st.W); tq += Math.round(st.q); }
+      rows += head('Whole cycle: back to A, so the internal energy is the same as at the start');
+      rows += line('ΔU', '0');
+      rows += line('W', `${tW > 0 ? '+' : '−'} area inside the loop`, J(tW));
+      rows += line('q', 'ΔU − W', `0 − (${J(tW)})`, J(tq));
+    } else {
+      const st = stageAt(ph.k, 1), [p0, v0] = cyc().states[st.a], [p1, v1] = cyc().states[st.b];
+      rows += head(`${st.a} → ${st.b}: ${PROCESS[st.type]}`);
+      if (st.type === 'V') rows += line('W', '−pΔV', '0&ensp;(ΔV = 0)');
+      else if (st.type === 'p') rows += line('W', '−pΔV', `−${(p0 / 1e5).toFixed(1)} × 10<sup>5</sup> Pa × (${fmtJ((v1 - v0) / 1e-3)}.0 × 10<sup>−3</sup> m<sup>3</sup>)`, J(st.W));
+      else rows += line('W', `${st.W > 0 ? '+' : '−'} area under the curve`, J(st.W));
+      if (st.type === 'T') rows += line('ΔU', `0&ensp;(T stays at ${st.T.toFixed(0)} K)`);
+      else rows += line('ΔU', `${half3}(p<sub>${st.b}</sub>V<sub>${st.b}</sub> − p<sub>${st.a}</sub>V<sub>${st.a}</sub>)`,
+        `${half3}(${(p1 * v1).toFixed(0)} J − ${(p0 * v0).toFixed(0)} J)`, J(st.dU));
+      rows += line('q', 'ΔU − W', `${J(st.dU)} − (${J(st.W)})`, J(st.q));
+    }
+    $('derivation').innerHTML = rows;
+  }
+
+  // ---- Loop ----
+  function current() { const ph = phase(); return { ph, st: stageAt(ph.k, ph.s) }; }
+  function draw() {
+    const { ph, st } = current();
+    drawCylinder(st, ph);
+    drawGraph(ph);
+    updateTable(ph);
+  }
+  function restart() {
+    clock = 0; shown = '';
+    buildTable();
+    initMolecules(cyc().states.A[1]);
+    draw();
+  }
+  let lastFrame = null;
+  function frame(now) {
+    if (lastFrame !== null && playing) {
+      const dt = Math.min(0.1, (now - lastFrame) / 1000);
+      clock += dt;
+      if (clock > total()) { clock = 0; initMolecules(cyc().states.A[1]); }
+      const { st } = current();
+      moveMolecules(dt, st.V, st.T);
+      draw();
+    }
+    lastFrame = now;
+    requestAnimationFrame(frame);
+  }
+
+  document.querySelectorAll('[data-cycle]').forEach(b => b.addEventListener('click', () => {
+    cycleKey = b.dataset.cycle;
+    document.querySelectorAll('[data-cycle]').forEach(o => o.setAttribute('aria-pressed', String(o === b)));
+    restart();
+  }));
+  function setPlaying(p) { playing = p; $('pause-btn').textContent = playing ? '⏸' : '▶'; }
+  $('pause-btn').addEventListener('click', () => setPlaying(!playing));
+  $('restart-btn').addEventListener('click', () => { restart(); setPlaying(true); });
+  window.addEventListener('keydown', e => {
+    if (e.code === 'Space' && e.target === document.body) { e.preventDefault(); setPlaying(!playing); }
+  });
+
+  const simulation = $('simulation'), screenToggle = $('screen-toggle');
+  function syncFullscreen() {
+    const expanded = document.fullscreenElement === simulation || document.body.classList.contains('page-fullscreen');
+    simulation.classList.toggle('expanded', expanded);
+    screenToggle.setAttribute('aria-pressed', String(expanded));
+    screenToggle.title = expanded ? 'Exit full screen' : 'Enter full screen';
+    resize(); draw();
+  }
+  screenToggle.addEventListener('click', async () => {
+    if (document.fullscreenElement === simulation) {
+      await document.exitFullscreen();
+    } else if (document.body.classList.contains('page-fullscreen')) {
+      document.body.classList.remove('page-fullscreen');
+      syncFullscreen();
+    } else {
+      try {
+        await simulation.requestFullscreen();
+      } catch {
+        // Embedded pages and mobile browsers can restrict native fullscreen.
+        document.body.classList.add('page-fullscreen');
+        syncFullscreen();
+      }
+    }
+  });
+  document.addEventListener('fullscreenchange', syncFullscreen);
+  window.addEventListener('keydown', ev => {
+    if (ev.key === 'Escape' && document.body.classList.contains('page-fullscreen')) screenToggle.click();
+  });
+  window.addEventListener('resize', () => { resize(); draw(); });
+  resize();
+  restart();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
