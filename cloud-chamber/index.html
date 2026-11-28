@@ -232,11 +232,8 @@
     events.push(ev);
     let first = null;
     if (kind === 'alpha') {
-      const n = 5;
-      for (let i = 0; i < n; i++) {
-        const tr = follow(PART.alpha, SOURCE.x + 0.4, SOURCE.y, rnd(-0.9, 0.9), rnd(4.6, 5.3), t0, ev);
-        first = first || tr;
-      }
+      // every α from americium-241 has the same energy, so every track is the same length
+      first = follow(PART.alpha, SOURCE.x + 0.4, SOURCE.y, rnd(-0.9, 0.9), 5.49, t0, ev);
     } else if (kind === 'beta-' || kind === 'beta+') {
       first = follow(kind === 'beta-' ? PART.em : PART.ep, SOURCE.x + 0.4, SOURCE.y, rnd(-0.6, 0.6), rnd(0.8, 1.8), t0, ev);
     } else if (kind === 'pair') {
