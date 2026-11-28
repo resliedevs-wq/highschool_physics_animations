@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>5.3 Cloud chamber</title>
+<style>
+  :root {
+    --bg: #f7f7f5;
+    --panel: #ffffff;
+    --ink: #1f2328;
+    --muted: #6b7280;
+    --grid: #e5e7eb;
+    --axis: #9ca3af;
+    --mark: #f59e0b;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+  }
+  main { max-width: 1100px; margin: 0 auto; padding: 20px; }
+  .card {
+    background: var(--panel);
+    border-radius: 10px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.08);
+    padding: 14px 18px;
+    margin-bottom: 14px;
+  }
+  .frac {
+    display: inline-flex; flex-direction: column;
+    vertical-align: middle; text-align: center;
+    font-size: .85em; line-height: 1.15; margin: 0 2px;
+  }
+  .frac > span { padding: 0 3px; }
+  .frac > span:first-child { border-bottom: 1.5px solid currentColor; }
+  .intro h1 { font-size: 1.25rem; margin: 0 0 8px; }
+  .intro .formulas {
+    display: flex; gap: 3em; justify-content: center; flex-wrap: wrap;
+    font-family: "Cambria Math", "Times New Roman", serif;
+    font-size: 1.4rem; line-height: 2.4; margin: 0 0 6px;
+  }
+  .intro dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; margin: 0; }
+  .intro dt { font-family: "Cambria Math", "Times New Roman", serif; font-size: 1.1rem; text-align: center; }
+  .intro dd { margin: 0; }
+  canvas { display: block; width: 100%; }
+  #scene { aspect-ratio: 3 / 2; max-height: 640px; touch-action: none; border-radius: 8px; background: #0b1220; }
+  .row { display: flex; gap: 12px 18px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
+  .row .right { margin-left: auto; display: flex; gap: 10px; }
+  .slider { flex: 1 1 160px; max-width: 320px; min-width: 0; }
+  .slider label { display: flex; justify-content: space-between; margin-bottom: 4px; font-variant-numeric: tabular-nums; }
+  .slider input { display: block; width: 100%; margin-inline: 0; accent-color: var(--ink); }
+  button {
+    font: inherit;
+    height: 2.4em; min-width: 2.4em; padding: 0 10px;
+    border-radius: 6px;
+    border: 1px solid #d1d5db;
+    background: #fff;
+    cursor: pointer;
+  }
+  button:hover { background: #f3f4f6; }
+  .switch { display: inline-flex; border: 1px solid #d1d5db; border-radius: 6px; overflow: hidden; }
+  .switch button { border: 0; border-radius: 0; }
+  .switch button + button { border-left: 1px solid #d1d5db; }
+  .switch button[aria-pressed="true"] { background: var(--ink); color: #fff; }
+  .toggle[aria-pressed="true"] { background: var(--ink); color: #fff; border-color: var(--ink); }
+  .derivation {
+    display: grid;
+    grid-template-columns: auto auto 1fr;
+    column-gap: .4em;
+    align-items: center;
+    font-family: "Cambria Math", "Times New Roman", serif;
+    font-size: 1.3rem;
+    line-height: 2.4;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    overflow-x: auto;
+  }
+  .derivation .head {
+    grid-column: 1 / -1;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-size: 1rem; font-weight: 600; line-height: 1.6; margin-top: .3em;
+  }
+  .derivation .lhs { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; font-size: 1rem; }
+  .screen-tools { display: flex; justify-content: flex-end; margin-top: 8px; }
+  #screen-toggle { display: inline-grid; place-items: center; }
+  #screen-toggle svg { width: 18px; height: 18px; }
+  #screen-toggle .exit, #screen-toggle[aria-pressed="true"] .enter { display: none; }
+  #screen-toggle[aria-pressed="true"] .exit { display: block; }
+  .sim-panel { min-width: 0; }
+  .sim-panel + .sim-panel { margin-top: 12px; }
+  #simulation.expanded {
+    width: 100%; height: 100%; margin: 0; border-radius: 0;
+    display: grid; justify-content: center;
+    grid-template-columns: minmax(0, 1600px);
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+  .expanded .sim-content { display: flex; flex-direction: column; min-height: 0; overflow: auto; }
+  .expanded .sim-panel { flex: none; }
+  /* Give the scene one sixth of the unused height above it, up to 120px. */
+  .expanded .sim-content::before { content: ""; flex: 1 0 0; max-height: 120px; }
+  .expanded .sim-content::after { content: ""; flex: 5 0 0; order: 1; }
+  .expanded input[type="range"] { max-width: 100%; margin-inline: 0; }
+  body.page-fullscreen { overflow: hidden; }
+  body.page-fullscreen main > :not(#simulation) { display: none; }
+  body.page-fullscreen #simulation { position: fixed; inset: 0; z-index: 10; }
+  #simulation.expanded #scene { max-height: none; height: clamp(320px, 70vh, 900px); width: auto; margin: 0 auto; max-width: 100%; }
+</style>
+</head>
+<body>
+<main>
+  <section class="card intro">
+    <h1>5.3 Cloud chamber</h1>
+    <div class="formulas">
+      <span>r = <span class="frac"><span>p</span><span>BQ</span></span></span>
+      <span>p = BQr</span>
+      <span>1 MeV/c = 5.34 × 10<sup>−22</sup> kg m s<sup>−1</sup></span>
+    </div>
+    <dl>
+      <dt>r</dt><dd>radius of curvature of a track</dd>
+      <dt>p</dt><dd>momentum of the particle</dd>
+      <dt>B</dt><dd>magnetic flux density across the chamber</dd>
+      <dt>Q</dt><dd>charge of the particle</dd>
+      <dt>e<sup>−</sup>, e<sup>+</sup></dt><dd>electron and positron (β<sup>−</sup> and β<sup>+</sup>)</dd>
+      <dt>Λ<sup>0</sup></dt><dd>lambda: a neutral baryon (uds) that decays into a proton and a π<sup>−</sup></dd>
+    </dl>
+  </section>
+
+  <section class="card" id="simulation" aria-label="5.3 Cloud chamber simulation">
+    <div class="sim-content">
+      <div class="sim-panel">
+        <canvas id="scene" aria-label="Cloud chamber"></canvas>
+        <div class="row">
+          <button data-ev="alpha">α source</button>
+          <button data-ev="beta-">β<sup>−</sup> source</button>
+          <button data-ev="beta+">β<sup>+</sup> source</button>
+          <button data-ev="pair">γ → e<sup>−</sup> + e<sup>+</sup></button>
+          <button data-ev="lambda">Λ<sup>0</sup> → p + π<sup>−</sup></button>
+        </div>
+        <div class="row">
+          <div class="switch" role="group" aria-label="Magnetic field">
+            <button data-b="0" aria-pressed="false">B off</button>
+            <button data-b="-1" aria-pressed="true">Into the page</button>
+            <button data-b="1" aria-pressed="false">Out of the page</button>
+          </div>
+          <div class="slider">
+            <label for="B"><span>B</span><span id="B-value"></span></label>
+            <input type="range" id="B" min="0.1" max="1" step="0.05" value="0.5">
+          </div>
+          <button id="neutral-btn" class="toggle" aria-pressed="false">Neutral paths</button>
+          <div class="right">
+            <button id="pause-btn" title="Play / pause (Space)">⏸</button>
+            <button id="clear-btn" title="Clear the chamber">↺</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="screen-tools">
+      <button id="screen-toggle" aria-label="Full screen" aria-pressed="false" title="Enter full screen">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <path class="enter" d="M9 4H4v5m11-5h5v5M4 15v5h5m11-5v5h-5"/>
+          <path class="exit" d="M4 9h5V4m6 0v5h5M9 20v-5H4m11 5v-5h5"/>
+        </svg>
+      </button>
+    </div>
+  </section>
+
+  <div class="card derivation" id="derivation"></div>
+</main>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const css = getComputedStyle(document.documentElement);
+  const C = { mark: css.getPropertyValue('--mark').trim() };
+
+  // ---- Units: lengths in cm, momentum in MeV/c, energy in MeV. r (cm) = p / (3 |Q| B), Q in e, B in T ----
+  const CW = 30, CH = 20;                        // the chamber, cm
+  const MEVC = 5.34e-22;                          // kg m/s per MeV/c
+  const PART = {
+    alpha:  { sym: 'α',  name: 'α particle', q: 2,  m: 3727.4, ion: 1.0,  width: 0.08, dens: 60 },
+    em:     { sym: 'e⁻', name: 'electron',   q: -1, m: 0.511,  ion: 0.18, width: 0.025, dens: 9 },
+    ep:     { sym: 'e⁺', name: 'positron',   q: 1,  m: 0.511,  ion: 0.18, width: 0.025, dens: 9 },
+    p:      { sym: 'p',  name: 'proton',     q: 1,  m: 938.3,  ion: 0.45, width: 0.05, dens: 26 },
+    pim:    { sym: 'π⁻', name: 'π⁻ meson',   q: -1, m: 139.6,  ion: 0.25, width: 0.03, dens: 12 },
+  };
+  // Energy lost per cm of track. The α value gives a range of about 4 cm in air; the electrons'
+  // losses are made much larger than in air so that their spirals tighten inside the chamber.
+  const lossPerCm = (pt, KE) => {
+    if (pt === PART.alpha) return 1.0 * Math.sqrt(5 / Math.max(KE, 0.3));
+    if (pt === PART.em || pt === PART.ep) return 0.05 + 0.025 * KE + 0.01 / Math.max(KE, 0.05);
+    return 0;
+  };
+  const momentum = (pt, KE) => Math.sqrt(KE * KE + 2 * KE * pt.m);
+
+  let Bdir = -1, Bmag = 0.5, showNeutral = false, playing = true;
+  const Bz = () => Bdir * Bmag;                  // + out of the page
+
+  // ---- Tracks: each charged particle is followed in small steps; its droplets are laid down as it goes ----
+  let tracks = [], neutrals = [], events = [], clock = 0, selected = null;
+  const SPEED = 30;                               // cm per second on screen
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  function follow(pt, x, y, ang, KE, t0, ev) {
+    const pts = [], drops = [];
+    const ds = 0.04, Bt = Bz();
+    let s = 0;
+    const p0 = momentum(pt, KE);
+    while (KE > 0.015 && s < 400 && x > -1 && x < CW + 1 && y > -1 && y < CH + 1) {
+      const p = momentum(pt, KE);
+      pts.push({ x, y, s });
+      // droplets: how many and how widely they scatter depend on how strongly the particle ionises
+      const n = pt.dens * ds;
+      let k = Math.floor(n) + (Math.random() < n - Math.floor(n) ? 1 : 0);
+      while (k--) drops.push({ x: x + rnd(-1, 1) * pt.width, y: y + rnd(-1, 1) * pt.width, s, r: rnd(0.6, 1.3) });
+      // turning: dθ/ds = −3 Q B_z / p (anticlockwise for a positive charge with B into the page)
+      ang += -3 * pt.q * Bt / p * ds;
+      x += Math.cos(ang) * ds; y += Math.sin(ang) * ds;
+      s += ds;
+      KE -= lossPerCm(pt, KE) * ds;
+    }
+    const tr = { pt, pts, drops, t0, len: s, p0, B: Bt, ev, start: pts[0], ang0: null };
+    tr.ang0 = pts.length > 1 ? Math.atan2(pts[1].y - pts[0].y, pts[1].x - pts[0].x) : 0;
+    tracks.push(tr);
+    return tr;
+  }
+  const SOURCE = { x: 1.2, y: CH / 2 };
+  function fire(kind) {
+    const t0 = clock;
+    const ev = { kind, t0 };
+    events.push(ev);
+    let first = null;
+    if (kind === 'alpha') {
+      const n = 5;
+      for (let i = 0; i < n; i++) {
+        const tr = follow(PART.alpha, SOURCE.x + 0.4, SOURCE.y, rnd(-0.9, 0.9), rnd(4.6, 5.3), t0, ev);
+        first = first || tr;
+      }
+    } else if (kind === 'beta-' || kind === 'beta+') {
+      first = follow(kind === 'beta-' ? PART.em : PART.ep, SOURCE.x + 0.4, SOURCE.y, rnd(-0.6, 0.6), rnd(0.8, 1.8), t0, ev);
+    } else if (kind === 'pair') {
+      // a γ-ray (no track) comes in from the left and converts at a point in the gas
+      const y0 = rnd(6, 14), xv = rnd(8, 13), Eg = rnd(10, 16);
+      const T = Eg - 2 * 0.511, u = rnd(0.3, 0.7), a = rnd(-0.15, 0.15);
+      neutrals.push({ x0: 0, y0, x1: xv, y1: y0, t0, sym: 'γ', ev });
+      const t1 = t0 + xv / SPEED;
+      ev.info = { Eg };
+      first = follow(PART.em, xv, y0, a + rnd(0.02, 0.06), u * T, t1, ev);
+      follow(PART.ep, xv, y0, a - rnd(0.02, 0.06), (1 - u) * T, t1, ev);
+    } else if (kind === 'lambda') {
+      // a Λ⁰ (no track) decays in flight: two-body decay worked out in its rest frame, then boosted
+      const mL = 1115.7, mp = PART.p.m, mpi = PART.pim.m, pL = rnd(350, 500);
+      const ps = Math.sqrt((mL * mL - (mp + mpi) ** 2) * (mL * mL - (mp - mpi) ** 2)) / (2 * mL);   // ≈ 101 MeV/c
+      const th = rnd(0.9, 2.2) * (Math.random() < 0.5 ? 1 : -1);
+      const EL = Math.hypot(pL, mL), g = EL / mL, bg = pL / mL;
+      const boost = (m, cx, cy) => { const E = Math.hypot(ps, m); return { px: g * cx + bg * E, py: cy }; };
+      const pp = boost(mp, ps * Math.cos(th), ps * Math.sin(th));
+      const pi = boost(mpi, -ps * Math.cos(th), -ps * Math.sin(th));
+      const y0 = rnd(7, 13), xv = rnd(7, 11), dir = rnd(-0.1, 0.1);
+      neutrals.push({ x0: 0, y0: y0 - Math.tan(dir) * xv, x1: xv, y1: y0, t0, sym: 'Λ⁰', ev });
+      const t1 = t0 + xv / SPEED;
+      const KEof = (m, v) => Math.hypot(Math.hypot(v.px, v.py), m) - m;
+      ev.info = { pL };
+      first = follow(PART.p, xv, y0, dir + Math.atan2(pp.py, pp.px), KEof(mp, pp), t1, ev);
+      follow(PART.pim, xv, y0, dir + Math.atan2(pi.py, pi.px), KEof(mpi, pi), t1, ev);
+    }
+    selected = first;
+    updateWorking();
+  }
+
+  // ---- Drawing ----
+  const scene = $('scene'), ctx = scene.getContext('2d');
+  const g = { W: 0, H: 0, s: 1, ox: 0, oy: 0 };
+  function resize() {
+    const dpr = window.devicePixelRatio || 1;
+    const r = scene.getBoundingClientRect();
+    g.W = r.width; g.H = r.height;
+    scene.width = Math.round(r.width * dpr); scene.height = Math.round(r.height * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    g.s = Math.min((g.W - 20) / CW, (g.H - 20) / CH);
+    g.ox = (g.W - CW * g.s) / 2; g.oy = (g.H - CH * g.s) / 2;
+  }
+  const X = x => g.ox + x * g.s, Y = y => g.oy + (CH - y) * g.s;      // y up in the chamber
+  const FADE = 9;                                 // s for a trail to fade away
+
+  function drawChamber() {
+    ctx.clearRect(0, 0, g.W, g.H);
+    const grd = ctx.createRadialGradient(g.W / 2, g.H / 2, 10, g.W / 2, g.H / 2, g.W * 0.7);
+    grd.addColorStop(0, '#16213a'); grd.addColorStop(1, '#070b14');
+    ctx.fillStyle = grd; ctx.fillRect(0, 0, g.W, g.H);
+    // field direction, in the corner
+    ctx.fillStyle = 'rgba(203, 213, 225, .8)'; ctx.font = '13px system-ui, sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    const label = Bdir === 0 ? 'B = 0' : `B = ${Bmag.toFixed(2)} T ${Bdir < 0 ? 'into' : 'out of'} the page`;
+    ctx.fillText(label, 14, 12);
+    if (Bdir !== 0) {
+      const sx = 14 + ctx.measureText(label).width + 16, sy = 20;
+      ctx.strokeStyle = 'rgba(203, 213, 225, .8)'; ctx.lineWidth = 1.3;
+      ctx.beginPath(); ctx.arc(sx, sy, 7, 0, 2 * Math.PI); ctx.stroke();
+      if (Bdir < 0) { ctx.beginPath(); ctx.moveTo(sx - 4, sy - 4); ctx.lineTo(sx + 4, sy + 4); ctx.moveTo(sx + 4, sy - 4); ctx.lineTo(sx - 4, sy + 4); ctx.stroke(); }
+      else { ctx.fillStyle = 'rgba(203, 213, 225, .9)'; ctx.beginPath(); ctx.arc(sx, sy, 2, 0, 2 * Math.PI); ctx.fill(); }
+    }
+    // source holder
+    ctx.fillStyle = '#475569';
+    ctx.fillRect(X(0) - 2, Y(SOURCE.y) - 6, X(SOURCE.x + 0.4) - X(0) + 2, 12);
+    ctx.fillStyle = '#94a3b8'; ctx.fillRect(X(SOURCE.x + 0.3), Y(SOURCE.y) - 4, 3, 8);
+    // scale bar
+    const sb = 5 * g.s, bx = g.W - 20 - sb, by = g.H - 18;
+    ctx.strokeStyle = 'rgba(203, 213, 225, .8)'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(bx + sb, by); ctx.moveTo(bx, by - 4); ctx.lineTo(bx, by + 4); ctx.moveTo(bx + sb, by - 4); ctx.lineTo(bx + sb, by + 4); ctx.stroke();
+    ctx.fillStyle = 'rgba(203, 213, 225, .8)'; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+    ctx.fillText('5 cm', bx + sb / 2, by - 5);
+  }
+
+  function drawTracks() {
+    for (const tr of tracks) {
+      const along = (clock - tr.t0) * SPEED;          // cm of track formed so far
+      if (along <= 0) continue;
+      const pt = tr.pt;
+      for (const d of tr.drops) {
+        if (d.s > along) break;
+        const age = clock - (tr.t0 + d.s / SPEED);
+        const a = Math.max(0, 1 - age / FADE);
+        if (a <= 0) continue;
+        // droplets grow a little as the trail ages
+        const r = Math.max(0.6, d.r * pt.width * g.s * 0.9 + 0.4) * (1 + age * 0.08);
+        ctx.fillStyle = `rgba(241, 245, 249, ${(a * (0.35 + 0.6 * pt.ion)).toFixed(3)})`;
+        ctx.beginPath(); ctx.arc(X(d.x), Y(d.y), r, 0, 2 * Math.PI); ctx.fill();
+      }
+    }
+  }
+
+  function drawNeutrals() {
+    if (!showNeutral) return;
+    ctx.save();
+    ctx.setLineDash([6, 6]); ctx.lineWidth = 1.2;
+    for (const n of neutrals) {
+      const along = (clock - n.t0) * SPEED, len = Math.hypot(n.x1 - n.x0, n.y1 - n.y0);
+      const age = clock - n.t0 - len / SPEED;
+      const a = Math.max(0, 1 - Math.max(0, age) / FADE);
+      if (a <= 0 || along <= 0) continue;
+      const f = Math.min(1, along / len);
+      ctx.strokeStyle = `rgba(250, 204, 21, ${(0.8 * a).toFixed(3)})`;
+      ctx.beginPath(); ctx.moveTo(X(n.x0), Y(n.y0)); ctx.lineTo(X(n.x0 + (n.x1 - n.x0) * f), Y(n.y0 + (n.y1 - n.y0) * f)); ctx.stroke();
+      ctx.fillStyle = `rgba(250, 204, 21, ${(0.9 * a).toFixed(3)})`; ctx.font = '13px system-ui, sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
+      ctx.fillText(n.sym, X(n.x0) + 6, Y(n.y0) - 4);
+    }
+    ctx.restore();
+  }
+
+  // the selected track: its circle at the start, and its radius
+  function drawSelection() {
+    const tr = selected;
+    if (!tr || clock < tr.t0) return;
+    const a = tr.ang0, st = tr.start;
+    ctx.save();
+    ctx.strokeStyle = C.mark; ctx.fillStyle = C.mark; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(X(st.x), Y(st.y), 5, 0, 2 * Math.PI); ctx.stroke();
+    if (tr.B !== 0) {
+      const r = tr.p0 / (3 * Math.abs(tr.pt.q) * Math.abs(tr.B));
+      const turn = -Math.sign(tr.pt.q * tr.B);      // +1 turning anticlockwise
+      const cx = st.x - turn * Math.sin(a) * r, cy = st.y + turn * Math.cos(a) * r;
+      ctx.setLineDash([5, 5]);
+      ctx.beginPath(); ctx.arc(X(cx), Y(cy), r * g.s, 0, 2 * Math.PI); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.beginPath(); ctx.moveTo(X(cx), Y(cy)); ctx.lineTo(X(st.x), Y(st.y)); ctx.stroke();
+      ctx.font = '600 13px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+      const lx = (X(cx) + X(st.x)) / 2, ly = (Y(cy) + Y(st.y)) / 2;
+      ctx.fillText(`r = ${r < 100 ? r.toFixed(1) : Math.round(r)} cm`, lx, ly - 4);
+    }
+    ctx.restore();
+  }
+
+  function draw() {
+    drawChamber();
+    drawNeutrals();
+    drawTracks();
+    drawSelection();
+  }
+
+  // ---- Picking a track ----
+  const local = e => { const r = scene.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
+  function pick(px, py) {
+    let best = null, bd = 12;
+    for (const tr of tracks) {
+      const along = (clock - tr.t0) * SPEED;
+      for (let i = 0; i < tr.pts.length; i += 3) {
+        const q = tr.pts[i];
+        if (q.s > along) break;
+        const d = Math.hypot(X(q.x) - px, Y(q.y) - py);
+        if (d < bd) { bd = d; best = tr; }
+      }
+    }
+    return best;
+  }
+  scene.addEventListener('pointerdown', e => {
+    const [x, y] = local(e);
+    const tr = pick(x, y);
+    if (tr) { selected = tr; updateWorking(); draw(); }
+  });
+  scene.addEventListener('pointermove', e => { const [x, y] = local(e); scene.style.cursor = pick(x, y) ? 'pointer' : ''; });
+
+  // ---- Controls ----
+  document.querySelectorAll('[data-ev]').forEach(b => b.addEventListener('click', () => { fire(b.dataset.ev); if (!playing) setPlaying(true); }));
+  document.querySelectorAll('[data-b]').forEach(b => b.addEventListener('click', () => {
+    Bdir = Number(b.dataset.b);
+    document.querySelectorAll('[data-b]').forEach(o => o.setAttribute('aria-pressed', String(o === b)));
+    $('B').disabled = Bdir === 0;
+    update();
+  }));
+  $('B').addEventListener('input', () => { Bmag = Number($('B').value); update(); });
+  $('neutral-btn').addEventListener('click', () => { showNeutral = !showNeutral; $('neutral-btn').setAttribute('aria-pressed', String(showNeutral)); draw(); });
+  function setPlaying(p) { playing = p; $('pause-btn').textContent = playing ? '⏸' : '▶'; }
+  $('pause-btn').addEventListener('click', () => setPlaying(!playing));
+  $('clear-btn').addEventListener('click', () => { tracks = []; neutrals = []; events = []; selected = null; updateWorking(); draw(); });
+  window.addEventListener('keydown', e => {
+    if (e.code === 'Space' && e.target === document.body) { e.preventDefault(); setPlaying(!playing); }
+  });
+
+  // ---- Working ----
+  const line = (lhs, ...rhs) => `<span class="lhs">${lhs}</span><span>=</span><span>${rhs.join(' = ')}</span>`;
+  const frac = (p, q) => `<span class="frac"><span>${p}</span><span>${q}</span></span>`;
+  const head = text => `<span class="head">${text}</span>`;
+  const sci = (v, dp = 2) => {
+    const e = Math.floor(Math.log10(Math.abs(v)));
+    return `${(v / 10 ** e).toFixed(dp)} × 10<sup>${e < 0 ? '−' + -e : e}</sup>`;
+  };
+  const SYM = { alpha: 'α', em: 'e<sup>−</sup>', ep: 'e<sup>+</sup>', p: 'p', pim: 'π<sup>−</sup>' };
+  function updateWorking() {
+    const tr = selected;
+    let rows = '';
+    if (!tr) { $('derivation').innerHTML = head('Selected track') + line('r = p/BQ', '—'); return; }
+    const pt = tr.pt, key = Object.keys(PART).find(k => PART[k] === pt);
+    const qC = Math.abs(pt.q) * 1.60e-19;
+    rows += head(`Selected track: ${pt.name} (${SYM[key]}), charge ${pt.q > 0 ? '+' : '−'}${Math.abs(pt.q) === 1 ? '' : Math.abs(pt.q)}e`);
+    if (tr.B === 0) {
+      rows += line('r', 'no curvature: B = 0');
+    } else {
+      const r = tr.p0 / (3 * Math.abs(pt.q) * Math.abs(tr.B));
+      const turn = -Math.sign(pt.q * tr.B) > 0 ? 'anticlockwise' : 'clockwise';
+      rows += line('bends', `${turn} in B ${tr.B < 0 ? 'into' : 'out of'} the page`);
+      rows += line('r (at the start)', `${r.toFixed(r < 100 ? 1 : 0)} cm`);
+      const pSI = Math.abs(tr.B) * qC * r / 100;
+      rows += line('p', 'BQr', `${Math.abs(tr.B).toFixed(2)} T × ${sci(qC)} C × ${(r / 100).toFixed(r < 100 ? 3 : 2)} m`, `${sci(pSI)} kg m s<sup>−1</sup>`);
+      rows += line('p', frac(`${sci(pSI)} kg m s<sup>−1</sup>`, `5.34 × 10<sup>−22</sup> kg m s<sup>−1</sup> per MeV/c`), `${(pSI / MEVC).toFixed(pSI / MEVC < 10 ? 2 : 0)} MeV/c`);
+    }
+    const ev = tr.ev;
+    if (ev.kind === 'pair') {
+      rows += head('γ → e<sup>−</sup> + e<sup>+</sup>');
+      rows += line('charge', '0', '(−1) + (+1)');
+      rows += line('E<sub>γ</sub> needed', '2m<sub>e</sub>c<sup>2</sup>', '2 × 0.511 MeV', '1.02 MeV at least');
+      rows += line('E<sub>γ</sub> here', `${ev.info.Eg.toFixed(1)} MeV`);
+    } else if (ev.kind === 'lambda') {
+      rows += head('Λ<sup>0</sup> → p + π<sup>−</sup>');
+      rows += line('charge', '0', '(+1) + (−1)');
+      rows += line('baryon number', '1', '1 + 0');
+    } else if (ev.kind === 'beta+') {
+      rows += head('β<sup>+</sup> decay: p → n + e<sup>+</sup> + ν<sub>e</sub>');
+      rows += line('charge', '+1', '0 + (+1) + 0');
+    } else if (ev.kind === 'beta-') {
+      rows += head('β<sup>−</sup> decay: n → p + e<sup>−</sup> + ν̄<sub>e</sub>');
+      rows += line('charge', '0', '(+1) + (−1) + 0');
+    }
+    $('derivation').innerHTML = rows;
+  }
+
+  function update() {
+    $('B-value').textContent = `${Bmag.toFixed(2)} T`;
+    draw();
+  }
+
+  let lastFrame = null;
+  function frame(now) {
+    if (lastFrame !== null && playing) {
+      clock += Math.min(0.1, (now - lastFrame) / 1000);
+      // forget what has faded
+      tracks = tracks.filter(tr => clock - tr.t0 - tr.len / SPEED < FADE);
+      if (selected && !tracks.includes(selected)) { selected = null; updateWorking(); }
+      neutrals = neutrals.filter(n => clock - n.t0 < FADE + 2);
+      draw();
+    }
+    lastFrame = now;
+    requestAnimationFrame(frame);
+  }
+
+  const simulation = $('simulation'), screenToggle = $('screen-toggle');
+  function syncFullscreen() {
+    const expanded = document.fullscreenElement === simulation || document.body.classList.contains('page-fullscreen');
+    simulation.classList.toggle('expanded', expanded);
+    screenToggle.setAttribute('aria-pressed', String(expanded));
+    screenToggle.title = expanded ? 'Exit full screen' : 'Enter full screen';
+    resize(); draw();
+  }
+  screenToggle.addEventListener('click', async () => {
+    if (document.fullscreenElement === simulation) {
+      await document.exitFullscreen();
+    } else if (document.body.classList.contains('page-fullscreen')) {
+      document.body.classList.remove('page-fullscreen');
+      syncFullscreen();
+    } else {
+      try {
+        await simulation.requestFullscreen();
+      } catch {
+        // Embedded pages and mobile browsers can restrict native fullscreen.
+        document.body.classList.add('page-fullscreen');
+        syncFullscreen();
+      }
+    }
+  });
+  document.addEventListener('fullscreenchange', syncFullscreen);
+  window.addEventListener('keydown', ev => {
+    if (ev.key === 'Escape' && document.body.classList.contains('page-fullscreen')) screenToggle.click();
+  });
+  window.addEventListener('resize', () => { resize(); draw(); });
+  resize();
+  update();
+  updateWorking();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

@@ -174,7 +174,7 @@
           <input type="range" id="L-slider" min="1" max="8" step="0.1" value="4">
         </div>
         <div class="buttons">
-          <button id="pause-btn" title="Play / pause (Space)">▶</button>
+          <button id="pause-btn" title="Play / pause (Space)">⏸</button>
           <button id="reset-btn" title="Reset t">↺</button>
           <span class="clock">t = <span id="t-value">0.00</span> s</span>
         </div>
@@ -213,7 +213,7 @@
   let lambda = 4;            // wavelength in m
   let t = 0;                 // simulation time in s
   let focusX = 1;            // x of the focus point in m
-  let running = false;
+  let running = true;
   let longitudinal = false;
   let lastFrame = null;
 

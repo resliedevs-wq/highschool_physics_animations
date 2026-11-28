@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>5.4 Ultrasound imaging</title>
+<style>
+  :root {
+    --bg: #f7f7f5;
+    --panel: #ffffff;
+    --ink: #1f2328;
+    --muted: #6b7280;
+    --grid: #e5e7eb;
+    --axis: #9ca3af;
+    --mark: #d97706;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+  }
+  main { max-width: 1100px; margin: 0 auto; padding: 20px; }
+  .card {
+    background: var(--panel);
+    border-radius: 10px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.08);
+    padding: 14px 18px;
+    margin-bottom: 14px;
+  }
+  .frac {
+    display: inline-flex; flex-direction: column;
+    vertical-align: middle; text-align: center;
+    font-size: .85em; line-height: 1.15; margin: 0 2px;
+  }
+  .frac > span { padding: 0 3px; }
+  .frac > span:first-child { border-bottom: 1.5px solid currentColor; }
+  .intro h1 { font-size: 1.25rem; margin: 0 0 8px; }
+  .intro .formulas {
+    display: flex; gap: 3em; justify-content: center; flex-wrap: wrap;
+    font-family: "Cambria Math", "Times New Roman", serif;
+    font-size: 1.4rem; line-height: 2.4; margin: 0 0 6px;
+  }
+  .intro dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; margin: 0; }
+  .intro dt { font-family: "Cambria Math", "Times New Roman", serif; font-size: 1.1rem; text-align: center; }
+  .intro dd { margin: 0; }
+  canvas { display: block; width: 100%; }
+  #scene { height: 440px; touch-action: none; border-radius: 6px; }
+  .row { display: flex; gap: 12px 18px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
+  .row .right { margin-left: auto; display: flex; gap: 10px; }
+  button {
+    font: inherit;
+    height: 2.4em; min-width: 2.4em; padding: 0 10px;
+    border-radius: 6px;
+    border: 1px solid #d1d5db;
+    background: #fff;
+    cursor: pointer;
+  }
+  button:hover { background: #f3f4f6; }
+  .toggle[aria-pressed="true"] { background: var(--ink); color: #fff; border-color: var(--ink); }
+  .table-wrap { overflow-x: auto; }
+  table.materials { border-collapse: collapse; font-variant-numeric: tabular-nums; margin: 0 auto; }
+  table.materials th, table.materials td { padding: 4px 14px; text-align: right; border-bottom: 1px solid var(--grid); white-space: nowrap; }
+  table.materials th:first-child, table.materials td:first-child { text-align: left; }
+  table.materials th { font-weight: 600; font-size: .95rem; }
+  .derivation {
+    display: grid;
+    grid-template-columns: auto auto 1fr;
+    column-gap: .4em;
+    align-items: center;
+    font-family: "Cambria Math", "Times New Roman", serif;
+    font-size: 1.3rem;
+    line-height: 2.4;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    overflow-x: auto;
+  }
+  .derivation .head {
+    grid-column: 1 / -1;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-size: 1rem; font-weight: 600; line-height: 1.6; margin-top: .3em;
+  }
+  .derivation .lhs { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; font-size: 1rem; }
+  .screen-tools { display: flex; justify-content: flex-end; margin-top: 8px; }
+  #screen-toggle { display: inline-grid; place-items: center; }
+  #screen-toggle svg { width: 18px; height: 18px; }
+  #screen-toggle .exit, #screen-toggle[aria-pressed="true"] .enter { display: none; }
+  #screen-toggle[aria-pressed="true"] .exit { display: block; }
+  .sim-panel { min-width: 0; }
+  .sim-panel + .sim-panel { margin-top: 12px; }
+  #simulation.expanded {
+    width: 100%; height: 100%; margin: 0; border-radius: 0;
+    display: grid; justify-content: center;
+    grid-template-columns: minmax(0, 1600px);
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+  .expanded .sim-content { display: flex; flex-direction: column; min-height: 0; overflow: auto; }
+  .expanded .sim-panel { flex: none; }
+  /* Give the scene one sixth of the unused height above it, up to 120px. */
+  .expanded .sim-content::before { content: ""; flex: 1 0 0; max-height: 120px; }
+  .expanded .sim-content::after { content: ""; flex: 5 0 0; order: 1; }
+  body.page-fullscreen { overflow: hidden; }
+  body.page-fullscreen main > :not(#simulation) { display: none; }
+  body.page-fullscreen #simulation { position: fixed; inset: 0; z-index: 10; }
+  #simulation.expanded #scene { height: clamp(360px, 74vh, 900px); }
+</style>
+</head>
+<body>
+<main>
+  <section class="card intro">
+    <h1>5.4 Ultrasound imaging</h1>
+    <div class="formulas">
+      <span>Z = ρc</span>
+      <span><span class="frac"><span>I<sub>R</sub></span><span>I<sub>0</sub></span></span> = <span class="frac"><span>(Z<sub>1</sub> − Z<sub>2</sub>)<sup>2</sup></span><span>(Z<sub>1</sub> + Z<sub>2</sub>)<sup>2</sup></span></span></span>
+      <span>I = I<sub>0</sub> e<sup>−μx</sup></span>
+    </div>
+    <dl>
+      <dt>Z</dt><dd>specific acoustic impedance of a medium</dd>
+      <dt>ρ</dt><dd>density of the medium</dd>
+      <dt>c</dt><dd>speed of sound in the medium</dd>
+      <dt>I<sub>R</sub>/I<sub>0</sub></dt><dd>intensity reflection coefficient: the fraction of the intensity reflected at a boundary between media of impedance Z<sub>1</sub> and Z<sub>2</sub></dd>
+      <dt>μ</dt><dd>attenuation coefficient of the medium</dd>
+      <dt>x</dt><dd>distance travelled through the medium</dd>
+    </dl>
+  </section>
+
+  <section class="card" id="simulation" aria-label="5.4 Ultrasound imaging simulation">
+    <div class="sim-content">
+      <div class="sim-panel">
+        <canvas id="scene" aria-label="Probe on the body, A-scan and B-scan"></canvas>
+        <div class="row">
+          <button id="gel-btn" class="toggle" aria-pressed="true">Gel</button>
+          <button id="scan-btn">Scan across</button>
+          <button id="clear-btn">Clear image</button>
+        </div>
+      </div>
+    </div>
+    <div class="screen-tools">
+      <button id="screen-toggle" aria-label="Full screen" aria-pressed="false" title="Enter full screen">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <path class="enter" d="M9 4H4v5m11-5h5v5M4 15v5h5m11-5v5h-5"/>
+          <path class="exit" d="M4 9h5V4m6 0v5h5M9 20v-5H4m11 5v-5h5"/>
+        </svg>
+      </button>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="table-wrap"><table class="materials" id="materials"></table></div>
+  </section>
+
+  <div class="card derivation" id="derivation"></div>
+</main>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const css = getComputedStyle(document.documentElement);
+  const color = name => css.getPropertyValue(name).trim();
+  const C = { ink: color('--ink'), muted: color('--muted'), mark: color('--mark') };
+
+  // ---- Materials: Z = ρc; μ is the intensity attenuation coefficient at about 3 MHz ----
+  const MAT = {
+    air:    { name: 'air',    rho: 1.29, c: 330,  mu: 0,    fill: '#ffffff', speckle: 0 },
+    gel:    { name: 'gel',    rho: 1000, c: 1500, mu: 0,    fill: '#bae6fd', speckle: 0 },
+    fat:    { name: 'fat',    rho: 950,  c: 1450, mu: 0.14, fill: '#fde68a', speckle: 0.5 },
+    muscle: { name: 'muscle', rho: 1075, c: 1580, mu: 0.25, fill: '#f4a6a0', speckle: 1 },
+    kidney: { name: 'kidney', rho: 1040, c: 1560, mu: 0.22, fill: '#c2410c', speckle: 0.25 },
+    bone:   { name: 'bone',   rho: 1910, c: 4080, mu: 3.0,  fill: '#f5f5f4', speckle: 0.5 },
+  };
+  for (const m of Object.values(MAT)) m.Z = m.rho * m.c;
+  const alphaOf = (a, b) => ((a.Z - b.Z) / (a.Z + b.Z)) ** 2;          // intensity reflection coefficient
+
+  // ---- The body (cm): x across, z down from the skin ----
+  const XMAX = 16, ZMAX = 12;
+  const zFat = x => 1.2 + 0.25 * Math.sin(0.55 * x);
+  const zFatSlope = x => 0.25 * 0.55 * Math.cos(0.55 * x);
+  const KID = { x: 6, z: 6.2, a: 2.6, b: 1.6 };
+  const BONE = { x: 12, z: 4.5, r: 1.0 };
+  function materialAt(x, z) {
+    if ((x - BONE.x) ** 2 + (z - BONE.z) ** 2 < BONE.r ** 2) return MAT.bone;
+    if (((x - KID.x) / KID.a) ** 2 + ((z - KID.z) / KID.b) ** 2 < 1) return MAT.kidney;
+    return z < zFat(x) ? MAT.fat : MAT.muscle;
+  }
+  // how squarely a boundary faces the probe (cos of the angle between its normal and the beam)
+  function facing(x, z, m1, m2) {
+    let gx, gz;
+    if (m1 === MAT.bone || m2 === MAT.bone) { gx = x - BONE.x; gz = z - BONE.z; }
+    else if (m1 === MAT.kidney || m2 === MAT.kidney) { gx = (x - KID.x) / KID.a ** 2; gz = (z - KID.z) / KID.b ** 2; }
+    else { gx = -zFatSlope(x); gz = 1; }
+    return Math.abs(gz) / Math.hypot(gx, gz);
+  }
+
+  let gel = true;
+
+  // ---- One scan line: send a pulse straight down at x and work out the echoes ----
+  const ROWS = 600, DZ = ZMAX / ROWS;              // 0.2 mm rows
+  const COLS = 640, DX = XMAX / COLS;              // 0.25 mm columns
+  const DR = 70;                                    // dB shown, from black to white
+  const SPECKLE = 10 ** (-52 / 10);                 // tissue backscatter, as a fraction of I0, for speckle = 1
+  const hash = (i, j) => { let h = (i * 374761393 + j * 668265263) | 0; h = (h ^ (h >>> 13)) * 1274126177 | 0; return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
+  function scanLine(x, col) {
+    const I = new Float32Array(ROWS);              // echo intensity returning from each row, as a fraction of I0
+    const bounds = [];
+    const couple = gel ? MAT.gel : MAT.air;
+    // into the body: through the gel (or air) to the skin
+    let T = 1;                                      // fraction of the intensity still going, one way, after the boundaries
+    const addEcho = (z, frac) => {
+      // a pulse about 0.6 mm long: spread over a few rows
+      const i0 = z / DZ;
+      for (let i = Math.floor(i0 - 3); i <= Math.ceil(i0 + 3); i++) {
+        if (i < 0 || i >= ROWS) continue;
+        I[i] += frac * Math.exp(-(((i - i0) / 1.3) ** 2));
+      }
+    };
+    if (!gel) {
+      // probe face against air, then air against skin: almost nothing gets through either
+      const a1 = alphaOf(MAT.gel, MAT.air);
+      bounds.push({ z: 0, from: { name: 'probe' }, to: MAT.air, alpha: a1, Z1: MAT.gel.Z, probe: true });
+      addEcho(0, a1);
+      T *= 1 - a1;
+    }
+    let prev = couple, nep = 0;                     // nep: attenuation so far, one way (μx summed)
+    for (let i = 0; i < ROWS; i++) {
+      const z = (i + 0.5) * DZ;
+      const m = materialAt(x, z);
+      if (m !== prev) {
+        const a = alphaOf(prev, m), zb = i * DZ;
+        const face = prev === couple ? 1 : facing(x, zb, prev, m);
+        bounds.push({ z: zb, from: prev, to: m, alpha: a, nep });
+        // specular echo, weaker from surfaces that slope away from the beam
+        addEcho(zb, T * T * a * Math.exp(-2 * nep) * (0.03 + 0.97 * face ** 8));
+        T *= 1 - a;
+        prev = m;
+      }
+      nep += m.mu * DZ;
+      // speckle: scattering from the tissue itself, random but fixed for each place
+      if (m.speckle) {
+        const u = Math.max(1e-6, hash(col, i));
+        I[i] += m.speckle * SPECKLE * -Math.log(u) * T * T * Math.exp(-2 * nep);
+      }
+    }
+    // shown on a log scale, as real scanners do
+    const b = new Float32Array(ROWS);
+    for (let i = 0; i < ROWS; i++) b[i] = I[i] > 0 ? Math.max(0, Math.min(1, (10 * Math.log10(I[i]) + DR) / DR)) : 0;
+    return { b, bounds };
+  }
+
+  // ---- The B-scan image: one column per probe position, kept until cleared ----
+  const img = document.createElement('canvas'); img.width = COLS; img.height = ROWS;
+  const ic = img.getContext('2d');
+  const imgData = ic.createImageData(COLS, ROWS);
+  const scanned = new Uint8Array(COLS);
+  function clearImage() {
+    imgData.data.fill(0);
+    for (let k = 3; k < imgData.data.length; k += 4) imgData.data[k] = 255;
+    scanned.fill(0);
+    ic.putImageData(imgData, 0, 0);
+  }
+  function scanColumn(col) {
+    if (col < 0 || col >= COLS) return;
+    const { b } = scanLine((col + 0.5) * DX, col);
+    for (let i = 0; i < ROWS; i++) {
+      const v = Math.round(255 * Math.pow(b[i], 1.1)), k = (i * COLS + col) * 4;
+      imgData.data[k] = imgData.data[k + 1] = imgData.data[k + 2] = v;
+    }
+    scanned[col] = 1;
+  }
+
+  // ---- Probe ----
+  const PROBE_W = 1.2;                              // cm, as drawn
+  let probeX = 3, lastCol = null, sweeping = null;
+  const colOf = x => Math.max(0, Math.min(COLS - 1, Math.floor(x / DX)));
+  function moveProbe(x) {
+    probeX = Math.max(0.05, Math.min(XMAX - 0.05, x));
+    const col = colOf(probeX);
+    // fill every column the probe passed over
+    if (lastCol === null) scanColumn(col);
+    else for (let c = Math.min(lastCol, col); c <= Math.max(lastCol, col); c++) scanColumn(c);
+    lastCol = col;
+    ic.putImageData(imgData, 0, 0);
+    current = scanLine(probeX, col);
+  }
+  let current = null;
+
+  // ---- Layout: body | A-scan | B-scan, all on one depth scale ----
+  const scene = $('scene'), ctx = scene.getContext('2d');
+  // Wide: body | A-scan | B-scan side by side. Narrow: the B-scan goes under the body and the
+  // A-scan strip is left out.
+  const L = { W: 0, H: 0, s: 1, skin: 0, iskin: 0, bx: 0, ax: 0, aw: 0, ix: 0, narrow: false };
+  function resize() {
+    const dpr = window.devicePixelRatio || 1;
+    L.narrow = scene.getBoundingClientRect().width < 700;
+    if (L.narrow) {
+      const s = (scene.getBoundingClientRect().width - 50) / XMAX;
+      scene.style.height = `${Math.round(78 + 2 * ZMAX * s + 60)}px`;
+    } else scene.style.height = '';
+    const r = scene.getBoundingClientRect();
+    L.W = r.width; L.H = r.height;
+    scene.width = Math.round(r.width * dpr); scene.height = Math.round(r.height * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    L.skin = 78;
+    if (L.narrow) {
+      L.s = (L.W - 50) / XMAX;
+      L.bx = 40; L.ix = 40; L.aw = 0;
+      L.iskin = L.skin + ZMAX * L.s + 40;
+    } else {
+      const aw = Math.max(70, L.W * 0.09), gaps = 36 + 26 + 26 + 14;
+      L.s = Math.min((L.H - L.skin - 26) / ZMAX, (L.W - aw - gaps) / (2 * XMAX));
+      const total = 2 * XMAX * L.s + aw + gaps;
+      L.bx = 36 + (L.W - total) / 2;
+      L.ax = L.bx + XMAX * L.s + 26; L.aw = aw;
+      L.ix = L.ax + aw + 26;
+      L.iskin = L.skin;
+    }
+    paintBody();
+  }
+  const BX = x => L.bx + x * L.s, ZY = z => L.skin + z * L.s, IX = x => L.ix + x * L.s, IY = z => L.iskin + z * L.s;
+
+  // tissues, drawn once per size by sampling the same material map the scan uses
+  const bodyImg = document.createElement('canvas');
+  function paintBody() {
+    const dpr = window.devicePixelRatio || 1;
+    const w = Math.ceil(XMAX * L.s * dpr), h = Math.ceil(ZMAX * L.s * dpr);
+    bodyImg.width = w; bodyImg.height = h;
+    const bc = bodyImg.getContext('2d'), d = bc.createImageData(w, h);
+    const rgb = {};
+    for (const [k, m] of Object.entries(MAT)) rgb[k] = [1, 3, 5].map(i => parseInt(m.fill.slice(i, i + 2), 16));
+    for (let py = 0; py < h; py++) {
+      for (let px = 0; px < w; px++) {
+        const m = materialAt((px + 0.5) / (L.s * dpr), (py + 0.5) / (L.s * dpr));
+        const c = rgb[m.name], k = (py * w + px) * 4;
+        d.data[k] = c[0]; d.data[k + 1] = c[1]; d.data[k + 2] = c[2]; d.data[k + 3] = 255;
+      }
+    }
+    bc.putImageData(d, 0, 0);
+  }
+  function drawBody() {
+    const w = XMAX * L.s, h = ZMAX * L.s;
+    ctx.drawImage(bodyImg, L.bx, L.skin, w, h);
+    ctx.strokeStyle = '#9ca3af'; ctx.lineWidth = 1; ctx.strokeRect(L.bx + 0.5, L.skin + 0.5, w, h);
+    // labels
+    ctx.font = '12px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = 'rgba(31,35,40,.75)';
+    ctx.fillText('fat', BX(1.8), ZY(0.6));
+    ctx.fillText('muscle', BX(2.2), ZY(3.2));
+    ctx.fillStyle = '#fff'; ctx.fillText('kidney', BX(KID.x), ZY(KID.z));
+    ctx.fillStyle = 'rgba(31,35,40,.75)'; ctx.fillText('bone', BX(BONE.x), ZY(BONE.z));
+    // depth scale
+    ctx.fillStyle = C.muted; ctx.strokeStyle = C.muted; ctx.textAlign = 'right'; ctx.font = '11px system-ui, sans-serif';
+    ctx.beginPath();
+    for (let z = 0; z <= ZMAX; z++) { const y = Math.round(ZY(z)) + 0.5; ctx.moveTo(L.bx - 5, y); ctx.lineTo(L.bx, y); if (z % 2 === 0) ctx.fillText(String(z), L.bx - 8, y); }
+    ctx.stroke();
+    ctx.save(); ctx.translate(L.bx - 28, ZY(ZMAX / 2)); ctx.rotate(-Math.PI / 2); ctx.textAlign = 'center'; ctx.fillText('depth / cm', 0, 0); ctx.restore();
+  }
+
+  function drawProbe() {
+    const x0 = BX(probeX - PROBE_W / 2), x1 = BX(probeX + PROBE_W / 2), w = x1 - x0;
+    // the beam down from the probe
+    ctx.fillStyle = 'rgba(29, 78, 216, .12)';
+    ctx.fillRect(BX(probeX) - 3, L.skin, 6, ZMAX * L.s);
+    ctx.strokeStyle = 'rgba(29, 78, 216, .55)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(Math.round(BX(probeX)) + 0.5, L.skin); ctx.lineTo(Math.round(BX(probeX)) + 0.5, ZY(ZMAX)); ctx.stroke();
+    // gel, or a thin layer of trapped air
+    const layer = 5;
+    if (gel) { ctx.fillStyle = '#7dd3fc'; ctx.fillRect(x0 - 6, L.skin - layer, w + 12, layer); }
+    else { ctx.fillStyle = '#fff'; ctx.fillRect(x0, L.skin - layer, w, layer); ctx.strokeStyle = '#cbd5e1'; ctx.strokeRect(x0 + 0.5, L.skin - layer + 0.5, w - 1, layer - 1); }
+    // probe body and cable
+    const top = L.skin - layer - 46;
+    ctx.fillStyle = '#374151';
+    ctx.beginPath(); ctx.moveTo(x0, L.skin - layer); ctx.lineTo(x1, L.skin - layer); ctx.lineTo(x1 - 4, top); ctx.lineTo(x0 + 4, top); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#9ca3af'; ctx.fillRect(x0 + 2, L.skin - layer - 5, w - 4, 4);
+    ctx.strokeStyle = '#374151'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo((x0 + x1) / 2, top); ctx.bezierCurveTo((x0 + x1) / 2, top - 16, (x0 + x1) / 2 + 30, top - 10, (x0 + x1) / 2 + 40, 6); ctx.stroke();
+    ctx.fillStyle = C.ink; ctx.font = '600 12px system-ui, sans-serif'; ctx.textBaseline = 'middle';
+    const label = `probe  x = ${probeX.toFixed(1)} cm`;
+    const left = x0 - 8 - ctx.measureText(label).width > 4;      // beside the probe, on whichever side has room
+    ctx.textAlign = left ? 'right' : 'left';
+    ctx.fillText(label, left ? x0 - 8 : x1 + 8, top + 18);
+  }
+
+  // A-scan for the line under the probe: echo strength across, depth down
+  function drawAscan() {
+    if (L.narrow) return;
+    const x0 = L.ax, w = L.aw, y0 = L.iskin, h = ZMAX * L.s;
+    ctx.fillStyle = '#06130c'; ctx.fillRect(x0, y0, w, h);
+    ctx.strokeStyle = 'rgba(120, 220, 160, .18)'; ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let z = 0; z <= ZMAX; z += 2) { const y = Math.round(IY(z)) + 0.5; ctx.moveTo(x0, y); ctx.lineTo(x0 + w, y); }
+    ctx.stroke();
+    if (current) {
+      ctx.save();
+      ctx.beginPath(); ctx.rect(x0, y0, w, h); ctx.clip();
+      ctx.strokeStyle = '#a7ffbf'; ctx.lineWidth = 1.2; ctx.shadowColor = 'rgba(110,255,150,.7)'; ctx.shadowBlur = 5;
+      ctx.beginPath();
+      for (let i = 0; i < ROWS; i++) {
+        const x = x0 + 4 + (w - 8) * current.b[i], y = y0 + (i + 0.5) * DZ * L.s;
+        i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+      }
+      ctx.stroke();
+      ctx.restore();
+    }
+    ctx.fillStyle = C.muted; ctx.font = '12px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+    ctx.fillText('A-scan', x0 + w / 2, y0 - 6);
+  }
+
+  function drawBscan() {
+    const w = XMAX * L.s, h = ZMAX * L.s;
+    ctx.fillStyle = '#000'; ctx.fillRect(L.ix, L.iskin, w, h);
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(img, L.ix, L.iskin, w, h);
+    // where the probe is
+    const x = Math.round(IX(probeX)) + 0.5;
+    ctx.fillStyle = C.mark;
+    ctx.beginPath(); ctx.moveTo(x - 6, L.iskin - 9); ctx.lineTo(x + 6, L.iskin - 9); ctx.lineTo(x, L.iskin - 1); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = C.muted; ctx.font = '12px system-ui, sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'bottom';
+    ctx.fillText('B-scan', L.ix, L.iskin - 12);
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, L.W, L.H);
+    drawBody();
+    drawProbe();
+    drawAscan();
+    drawBscan();
+  }
+
+  // ---- Dragging the probe along the skin ----
+  let dragging = false, grab = 0;
+  const local = e => { const r = scene.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
+  const onProbe = (x, y) => Math.abs(x - BX(probeX)) < PROBE_W / 2 * L.s + 10 && y > L.skin - 70 && y < L.skin + 10;
+  scene.addEventListener('pointerdown', e => {
+    const [x, y] = local(e);
+    if (!onProbe(x, y)) return;
+    stopSweep();
+    dragging = true; grab = x - BX(probeX);
+    scene.setPointerCapture(e.pointerId); scene.style.cursor = 'grabbing';
+  });
+  scene.addEventListener('pointermove', e => {
+    const [x, y] = local(e);
+    if (dragging) { moveProbe((x - grab - L.bx) / L.s); update(); return; }
+    scene.style.cursor = onProbe(x, y) ? 'grab' : '';
+  });
+  const endDrag = () => { dragging = false; scene.style.cursor = ''; };
+  scene.addEventListener('pointerup', endDrag);
+  scene.addEventListener('pointercancel', endDrag);
+
+  // ---- Controls ----
+  $('gel-btn').addEventListener('click', () => {
+    gel = !gel;
+    $('gel-btn').setAttribute('aria-pressed', String(gel));
+    clearImage(); lastCol = null; moveProbe(probeX); update();
+  });
+  $('clear-btn').addEventListener('click', () => { clearImage(); lastCol = null; moveProbe(probeX); update(); });
+  function stopSweep() { sweeping = null; $('scan-btn').textContent = 'Scan across'; }
+  $('scan-btn').addEventListener('click', () => {
+    if (sweeping) { stopSweep(); return; }
+    lastCol = null; moveProbe(0.05);
+    sweeping = { speed: (XMAX - 0.1) / 5 };          // across in 5 s
+    $('scan-btn').textContent = 'Stop';
+    update();
+  });
+
+  // ---- Tables and working ----
+  const sci = (v, dp = 2) => {
+    const e = Math.floor(Math.log10(Math.abs(v)));
+    return `${(v / 10 ** e).toFixed(dp)} × 10<sup>${e < 0 ? '−' + -e : e}</sup>`;
+  };
+  function fillMaterials() {
+    let html = '<tr><th>medium</th><th>ρ / kg m<sup>−3</sup></th><th>c / m s<sup>−1</sup></th><th>Z = ρc / kg m<sup>−2</sup> s<sup>−1</sup></th><th>μ / cm<sup>−1</sup></th></tr>';
+    for (const m of Object.values(MAT)) {
+      html += `<tr><td>${m.name}</td><td>${m.rho}</td><td>${m.c}</td><td>${sci(m.Z)}</td><td>${m.mu ? m.mu.toFixed(2) : '—'}</td></tr>`;
+    }
+    $('materials').innerHTML = html;
+  }
+  const line = (lhs, ...rhs) => `<span class="lhs">${lhs}</span><span>=</span><span>${rhs.join(' = ')}</span>`;
+  const frac = (p, q) => `<span class="frac"><span>${p}</span><span>${q}</span></span>`;
+  const head = text => `<span class="head">${text}</span>`;
+  const z6 = Z => (Z / 1e6).toFixed(Z < 1e5 ? 5 : 2);
+  const pct = a => a >= 0.9995 ? '0.999' : a < 0.001 ? a.toExponential(1).replace('e-', ' × 10<sup>−') + '</sup>' : a.toFixed(3);
+  function updateWorking() {
+    if (!current) return;
+    let rows = head(`Boundaries under the probe at x = ${probeX.toFixed(1)} cm (Z in 10<sup>6</sup> kg m<sup>−2</sup> s<sup>−1</sup>)`);
+    for (const bd of current.bounds) {
+      const a = bd.from, b = bd.to;
+      const Z1 = bd.probe ? MAT.gel.Z : a.Z, Z2 = b.Z;
+      const name = bd.probe ? 'probe → air' : `${a.name} → ${b.name}`;
+      rows += line(`${name}, ${bd.z.toFixed(1)} cm`,
+        frac('(Z<sub>1</sub> − Z<sub>2</sub>)<sup>2</sup>', '(Z<sub>1</sub> + Z<sub>2</sub>)<sup>2</sup>'),
+        frac(`(${z6(Z1)} − ${z6(Z2)})<sup>2</sup>`, `(${z6(Z1)} + ${z6(Z2)})<sup>2</sup>`), pct(bd.alpha));
+    }
+    // attenuation through the fat on the way in
+    const fat = current.bounds.find(bd => bd.from === MAT.fat);
+    if (fat) {
+      const top = current.bounds.find(bd => bd.to === MAT.fat);
+      const x = fat.z - (top ? top.z : 0);
+      rows += head('Attenuation in the fat');
+      rows += line('I / I<sub>0</sub>', 'e<sup>−μx</sup>', `e<sup>−${MAT.fat.mu} × ${x.toFixed(2)}</sup>`, Math.exp(-MAT.fat.mu * x).toFixed(3));
+    }
+    $('derivation').innerHTML = rows;
+  }
+
+  function update() {
+    draw();
+    updateWorking();
+  }
+
+  let lastFrame = null;
+  function frame(now) {
+    if (lastFrame !== null && sweeping) {
+      const dt = Math.min(0.1, (now - lastFrame) / 1000);
+      const nx = probeX + sweeping.speed * dt;
+      if (nx >= XMAX - 0.05) { moveProbe(XMAX - 0.05); stopSweep(); }
+      else moveProbe(nx);
+      update();
+    }
+    lastFrame = now;
+    requestAnimationFrame(frame);
+  }
+
+  const simulation = $('simulation'), screenToggle = $('screen-toggle');
+  function syncFullscreen() {
+    const expanded = document.fullscreenElement === simulation || document.body.classList.contains('page-fullscreen');
+    simulation.classList.toggle('expanded', expanded);
+    screenToggle.setAttribute('aria-pressed', String(expanded));
+    screenToggle.title = expanded ? 'Exit full screen' : 'Enter full screen';
+    resize(); draw();
+  }
+  screenToggle.addEventListener('click', async () => {
+    if (document.fullscreenElement === simulation) {
+      await document.exitFullscreen();
+    } else if (document.body.classList.contains('page-fullscreen')) {
+      document.body.classList.remove('page-fullscreen');
+      syncFullscreen();
+    } else {
+      try {
+        await simulation.requestFullscreen();
+      } catch {
+        // Embedded pages and mobile browsers can restrict native fullscreen.
+        document.body.classList.add('page-fullscreen');
+        syncFullscreen();
+      }
+    }
+  });
+  document.addEventListener('fullscreenchange', syncFullscreen);
+  window.addEventListener('keydown', ev => {
+    if (ev.key === 'Escape' && document.body.classList.contains('page-fullscreen')) screenToggle.click();
+  });
+  window.addEventListener('resize', () => { resize(); draw(); });
+  resize();
+  fillMaterials();
+  clearImage();
+  moveProbe(probeX);
+  update();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

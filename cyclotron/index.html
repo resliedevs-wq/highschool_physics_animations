@@ -148,11 +148,15 @@
             <input type="range" id="B" min="0.2" max="1.5" step="0.05" value="0.5">
           </div>
           <div class="slider">
-            <label for="V"><span>Peak p.d. V</span><span id="V-value"></span></label>
+            <label for="V"><span id="V-label">Peak p.d. V</span><span id="V-value"></span></label>
             <input type="range" id="V" min="20" max="100" step="5" value="50">
           </div>
         </div>
         <div class="row">
+          <div class="switch" role="group" aria-label="Supply">
+            <button data-supply="ac" aria-pressed="true">AC</button>
+            <button data-supply="dc" aria-pressed="false">DC</button>
+          </div>
           <button id="fast-btn" class="toggle" aria-pressed="false">5× faster</button>
           <div class="right">
             <button id="pause-btn" title="Play / pause (Space)">⏸</button>
@@ -196,52 +200,72 @@
   const freq = () => P().q * B / (2 * Math.PI * P().m);
   const radiusFor = Ek => Math.sqrt(2 * P().m * Ek) / (P().q * B);
 
-  // ---- The path: crossing k gives energy QV; then a half-turn in a dee, alternately right and left.
+  let dc = false;
+
+  // ---- The path, as segments timed in turns (one turn = one period of the particle, 1/f) ----
   // A positive particle with B into the page goes round anticlockwise (up on the right, down on the left).
-  // Each half-turn takes T/2 whatever its radius; the gap crossings are drawn as short straight lines.
+  // Each half-turn in a dee takes T/2 whatever its radius; crossing the gap is drawn as a short straight
+  // line taking CROSS/2 of a turn.
+  // AC: the p.d. has turned round by each crossing, so every crossing adds QV and the path spirals out.
+  // DC: the field in the gap always points to the right, so the particle gains QV going right and loses
+  // it all coming back; it stops at the far side of the gap and is pushed back into the same dee.
+  const CROSS = 0.06;
   let path = null;
   function buildPath() {
-    const dE = P().q * Vkv * 1e3;
-    const halves = [];
-    let y = 0;
-    for (let k = 0; k < 4000; k++) {
-      const Ek = (k + 1) * dE, r = radiusFor(Ek), right = k % 2 === 0;
-      const cy = right ? y + r : y - r;
-      // a half-turn that would reach past the deflector isn't made: the one before it is the last
-      if (halves.length && Math.abs(cy) + r > R_OUT) break;
-      halves.push({ k, Ek, r, right, y0: y, cy });
+    const g = GAP / 2, dE = P().q * Vkv * 1e3;
+    const segs = [];
+    let y = 0, t = 0, n = 0;
+    const cross = (x0, x1, Eafter, ease) => { n++; segs.push({ kind: 'cross', x0, x1, y, t0: t, dur: CROSS / 2, E: Eafter, n, ease }); t += CROSS / 2; };
+    const arc = (right, Ek) => {
+      const r = radiusFor(Ek), cy = right ? y + r : y - r;
+      segs.push({ kind: 'arc', right, r, cy, y0: y, t0: t, dur: 0.5 - CROSS / 2, E: Ek, n });
+      t += 0.5 - CROSS / 2;
       y = right ? y + 2 * r : y - 2 * r;
+    };
+    const fits = (right, Ek) => { const r = radiusFor(Ek), cy = right ? y + r : y - r; return Math.abs(cy) + r <= R_OUT; };
+    if (!dc) {
+      for (let k = 0; k < 4000; k++) {
+        const Ek = (k + 1) * dE, right = k % 2 === 0;
+        // a half-turn that would reach past the deflector isn't made: the one before it is the last
+        if (k > 0 && !fits(right, Ek)) break;
+        cross(k === 0 ? 0 : (right ? -g : g), right ? g : -g, Ek, 'none');
+        arc(right, Ek);
+      }
+      const last = segs[segs.length - 1];
+      path = { segs, end: last.t0 + last.dur / 2, exit: { x: last.right ? g + last.r : -g - last.r, y: last.cy, dir: last.right ? 1 : -1 } };
+    } else {
+      cross(0, g, dE, 'none');
+      arc(true, dE);
+      for (let k = 0; k < 4000; k++) {
+        if (!fits(true, dE)) break;
+        cross(g, -g, 0, 'out');           // slowing down against the field, to rest at the far side
+        cross(-g, g, dE, 'in');           // pushed back across, speeding up
+        arc(true, dE);
+      }
+      path = { segs, end: t, exit: null };
     }
-    path = { halves, dE };
+  }
+  // where the particle is after a number of turns
+  function stateAt(turns) {
+    const segs = path.segs;
+    let lo = 0, hi = segs.length - 1;
+    while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (segs[mid].t0 <= turns) lo = mid; else hi = mid - 1; }
+    const sg = segs[lo], u = Math.max(0, Math.min(1, (turns - sg.t0) / sg.dur));
+    const g = GAP / 2;
+    if (sg.kind === 'cross') {
+      const w = sg.ease === 'out' ? 1 - (1 - u) ** 2 : sg.ease === 'in' ? u * u : u;
+      return { x: sg.x0 + (sg.x1 - sg.x0) * w, y: sg.y, seg: sg };
+    }
+    const a = u * Math.PI;
+    if (sg.right) return { x: g + sg.r * Math.sin(a), y: sg.cy - sg.r * Math.cos(a), seg: sg };
+    return { x: -g - sg.r * Math.sin(a), y: sg.cy + sg.r * Math.cos(a), seg: sg };
   }
 
-  // ---- Time: on screen one turn takes TURN seconds (5× faster: TURN / 5) ----
-  const TURN = 1.2;
-  const CROSS = 0.06;                  // fraction of a turn spent crossing the gap, on screen
-  let clock = 0, playing = true, fast = false, doneAt = null;
-  // where the particle is at screen time t (in turns since it left the source)
-  function stateAt(turns) {
-    const g = GAP / 2, hs = path.halves;
-    const halfIdx = Math.floor(turns * 2), within = turns * 2 - halfIdx;     // which half-turn, how far into it
-    // the first crossing starts from the source in the middle of the gap
-    if (halfIdx >= hs.length) return null;
-    const h = hs[halfIdx];
-    const c = CROSS;                    // the first part of each half-turn is the crossing
-    if (within < c) {
-      const u = within / c;
-      const x0 = halfIdx === 0 ? 0 : (h.right ? -g : g), x1 = h.right ? g : -g;
-      return { x: x0 + (x1 - x0) * u, y: h.y0, inGap: true, h };
-    }
-    const a = (within - c) / (1 - c) * Math.PI;                 // angle turned in the dee
-    if (h.right) return { x: g + h.r * Math.sin(a), y: h.cy - h.r * Math.cos(a), inGap: false, h };
-    return { x: -g - h.r * Math.sin(a), y: h.cy + h.r * Math.cos(a), inGap: false, h };
-  }
-  // the beam leaves from the outermost point of the last half-turn, along its tangent
-  function exitPoint() {
-    const h = path.halves[path.halves.length - 1], g = GAP / 2;
-    return h.right ? { x: g + h.r, y: h.cy, dir: 1 } : { x: -g - h.r, y: h.cy, dir: -1 };
-  }
-  const totalTurns = () => (path.halves.length - 0.5) / 2;      // to the outermost point of the last half-turn
+  // ---- Time: one fixed slow-down for every particle and field, so a higher f is seen as faster turning ----
+  const SLOW = 1e7;
+  const screenPerTurn = () => SLOW / freq();                    // seconds on screen for one turn
+  let clock = 0, playing = true, fast = false;                  // clock: seconds on screen since the start
+  const turnsNow = () => clock / screenPerTurn();
 
   // ---- Scene ----
   const scene = $('scene'), ctx = scene.getContext('2d');
@@ -263,7 +287,7 @@
   const SX = x => g2.cx + x * g2.s, SY = y => g2.cy - y * g2.s;
 
   // p.d. across the gap (left dee minus right dee): V cos 2πft, positive drives the particle to the right
-  const pdAt = turns => Math.cos(2 * Math.PI * turns);
+  const pdAt = turns => dc ? 1 : Math.cos(2 * Math.PI * turns);
 
   function deePath(right) {
     const g = GAP / 2 * g2.s, R = R_DEE * g2.s;
@@ -313,12 +337,18 @@
     ctx.stroke();
     ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(xs, yb, 13, 0, 2 * Math.PI); ctx.fill(); ctx.stroke();
     ctx.beginPath();
-    for (let i = 0; i <= 20; i++) { const x = xs - 7 + 14 * i / 20, y = yb - 4 * Math.sin(2 * Math.PI * i / 20); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
+    if (dc) {
+      // a cell: long plate (+) on the left dee's side, short plate (−) on the right
+      ctx.moveTo(xs - 3, yb - 8); ctx.lineTo(xs - 3, yb + 8); ctx.moveTo(xs + 3, yb - 4); ctx.lineTo(xs + 3, yb + 4);
+    } else {
+      for (let i = 0; i <= 20; i++) { const x = xs - 7 + 14 * i / 20, y = yb - 4 * Math.sin(2 * Math.PI * i / 20); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
+    }
     ctx.stroke();
     // ion source
     ctx.fillStyle = '#374151'; ctx.beginPath(); ctx.arc(g2.cx, g2.cy, 3, 0, 2 * Math.PI); ctx.fill();
     ctx.fillStyle = C.muted; ctx.font = '12px system-ui, sans-serif'; ctx.textBaseline = 'top'; ctx.textAlign = 'left';
     ctx.fillText('B into the page', 12, 10);
+    ctx.fillText(`slowed ${SLOW.toLocaleString('en-GB')}×`, 12, 28);
   }
   function drawCrosses() {
     const step = 34, R = R_DEE * g2.s;
@@ -335,32 +365,31 @@
 
   // the path travelled so far, then the particle
   function drawPath(turns) {
-    const done = Math.min(turns, totalTurns());
+    const done = Math.min(turns, path.end);
     const steps = Math.max(2, Math.ceil(done * 2 * 60));
     ctx.save();
     ctx.strokeStyle = 'rgba(124, 58, 237, .45)'; ctx.lineWidth = 1.4; ctx.lineJoin = 'round';
     ctx.beginPath();
     for (let i = 0; i <= steps; i++) {
       const st = stateAt(done * i / steps);
-      if (!st) break;
       i ? ctx.lineTo(SX(st.x), SY(st.y)) : ctx.moveTo(SX(st.x), SY(st.y));
     }
     ctx.stroke();
     ctx.restore();
   }
+  // AC only: the beam leaves from the outermost point of the last half-turn, along its tangent
   function drawExit(turns) {
-    const ex = exitPoint(), over = turns - totalTurns();
-    // the beam leaves along the tangent: upwards on the right, downwards on the left (screen y)
-    const sy = -ex.dir;
-    // deflector plate just outside the beam, along its way out
+    const ex = path.exit;
+    if (!ex) return;
+    const sy = -ex.dir;                   // upwards on the right, downwards on the left (screen y)
     const x = SX(ex.x) + ex.dir * 7, y = SY(ex.y);
     ctx.strokeStyle = '#374151'; ctx.lineWidth = 3;
     ctx.beginPath(); ctx.moveTo(x, y - sy * 4); ctx.lineTo(x + ex.dir * 3, y + sy * 46); ctx.stroke();
     ctx.fillStyle = C.muted; ctx.font = '12px system-ui, sans-serif'; ctx.textAlign = ex.dir > 0 ? 'left' : 'right'; ctx.textBaseline = 'middle';
     ctx.fillText('deflector', x + ex.dir * 9, y + sy * 26);
+    const over = (turns - path.end) * screenPerTurn();         // seconds on screen since it left
     if (over <= 0) return;
-    const travel = over * TURN * 0.6 * g2.H;
-    const y1 = y + sy * Math.min(travel, g2.H);
+    const y1 = y + sy * Math.min(over * 0.8 * g2.H, g2.H);
     ctx.strokeStyle = 'rgba(124, 58, 237, .6)'; ctx.lineWidth = 1.6;
     ctx.beginPath(); ctx.moveTo(SX(ex.x), y); ctx.lineTo(SX(ex.x), y1); ctx.stroke();
     if (Math.abs(y1 - y) < g2.H) drawParticle(SX(ex.x), y1);
@@ -374,25 +403,25 @@
 
   function draw() {
     ctx.clearRect(0, 0, g2.W, g2.H);
-    const turns = clock / TURN;
-    drawDees(Math.min(turns, totalTurns() + 2));
+    const turns = turnsNow();
+    drawDees(turns);
     drawPath(turns);
     drawExit(turns);
-    const st = stateAt(Math.min(turns, totalTurns()));
-    if (st && turns <= totalTurns()) drawParticle(SX(st.x), SY(st.y));
+    if (turns <= path.end || dc) { const st = stateAt(Math.min(turns, path.end)); drawParticle(SX(st.x), SY(st.y)); }
     drawPlot(turns);
   }
 
-  // ---- Graph: p.d. across the gap against time, with the moments the particle crosses ----
+  // ---- Graph: p.d. across the gap against time (a fixed 1 µs window), with the moments the particle crosses ----
+  const WINDOW = 1e-6, GRID = 1e-7;
   function drawPlot(turns) {
     const W = g2.pW, H = g2.pH, left = 62, right = W - 12, mid = H / 2, amp = H / 2 - 16;
     pc.clearRect(0, 0, W, H);
-    const span = 3;                                         // periods shown
-    const t1 = Math.max(span, turns), t0 = t1 - span;
-    const X = t => left + (t - t0) / span * (right - left);
+    const f = freq(), tNow = turns / f;                       // real seconds since the start
+    const t1 = Math.max(WINDOW, tNow), t0 = t1 - WINDOW;
+    const X = t => left + (t - t0) / WINDOW * (right - left);
     pc.strokeStyle = '#e5e7eb'; pc.lineWidth = 1;
     pc.beginPath();
-    for (let k = Math.ceil(t0 * 2) / 2; k <= t1; k += 0.5) { const x = Math.round(X(k)) + 0.5; pc.moveTo(x, mid - amp); pc.lineTo(x, mid + amp); }
+    for (let k = Math.ceil(t0 / GRID); k * GRID <= t1; k++) { const x = Math.round(X(k * GRID)) + 0.5; pc.moveTo(x, mid - amp); pc.lineTo(x, mid + amp); }
     pc.stroke();
     pc.strokeStyle = '#9ca3af';
     pc.beginPath(); pc.moveTo(left, mid + 0.5); pc.lineTo(right, mid + 0.5); pc.moveTo(left + 0.5, mid - amp - 4); pc.lineTo(left + 0.5, mid + amp + 4); pc.stroke();
@@ -401,24 +430,24 @@
     pc.textAlign = 'left'; pc.textBaseline = 'top';
     pc.fillText('p.d. across the gap', left + 6, 2);
     pc.textAlign = 'right'; pc.textBaseline = 'bottom';
-    pc.fillText(`time (one gridline = T/2 = ${fmtTime(1 / freq() / 2)})`, right, H);
-    // the sine wave up to now
-    const tEnd = Math.min(turns, t1);
+    pc.fillText(`time (one gridline = 100 ns${dc ? '' : `; T = ${fmtTime(1 / f)}`})`, right, H);
+    // the p.d. up to now
+    const tEnd = Math.min(tNow, t1);
     pc.strokeStyle = C.pd; pc.lineWidth = 2;
     pc.beginPath();
-    for (let x = left; x <= X(tEnd); x++) {
-      const t = t0 + (x - left) / (right - left) * span;
-      const y = mid - amp * pdAt(t);
+    for (let x = left; x <= X(tEnd); x += 0.5) {
+      const t = t0 + (x - left) / (right - left) * WINDOW;
+      const y = mid - amp * pdAt(t * f);
       x === left ? pc.moveTo(x, y) : pc.lineTo(x, y);
     }
     pc.stroke();
-    // a dot each time the particle crossed the gap
-    const last = Math.min(Math.floor(turns * 2), path.halves.length - 1);
+    // a dot each time the particle starts across the gap
     pc.fillStyle = C.particle;
-    for (let k = Math.max(0, Math.ceil(t0 * 2)); k <= last; k++) {
-      const t = k / 2;
+    for (const sg of path.segs) {
+      if (sg.kind !== 'cross' || sg.t0 > turns) continue;
+      const t = sg.t0 / f;
       if (t < t0) continue;
-      pc.beginPath(); pc.arc(X(t), mid - amp * pdAt(t), 4, 0, 2 * Math.PI); pc.fill();
+      pc.beginPath(); pc.arc(X(t), mid - amp * pdAt(sg.t0), 4, 0, 2 * Math.PI); pc.fill();
     }
   }
   function fmtTime(s) {
@@ -427,7 +456,13 @@
   }
 
   // ---- Controls ----
-  function restart() { buildPath(); clock = 0; doneAt = null; update(); }
+  function restart() { buildPath(); clock = 0; update(); }
+  document.querySelectorAll('[data-supply]').forEach(b => b.addEventListener('click', () => {
+    dc = b.dataset.supply === 'dc';
+    document.querySelectorAll('[data-supply]').forEach(o => o.setAttribute('aria-pressed', String(o === b)));
+    $('V-label').textContent = dc ? 'p.d. V' : 'Peak p.d. V';
+    restart();
+  }));
   document.querySelectorAll('[data-p]').forEach(b => b.addEventListener('click', () => {
     kind = b.dataset.p;
     document.querySelectorAll('[data-p]').forEach(o => o.setAttribute('aria-pressed', String(o === b)));
@@ -452,24 +487,35 @@
     const m = v / 10 ** e;
     return e === 0 ? m.toFixed(dp) : `${m.toFixed(dp)} × 10<sup>${e < 0 ? '−' + -e : e}</sup>`;
   };
-  let shownCrossings = -1;
+  let shownSeg = null;
   function updateWorking(force) {
-    const turns = clock / TURN;
-    const n = Math.min(path.halves.length, Math.floor(turns * 2) + 1);     // crossings so far
-    if (!force && n === shownCrossings) return;
-    shownCrossings = n;
-    const p = P(), f = freq(), qV = p.q * Vkv * 1e3;
+    const st = stateAt(Math.min(turnsNow(), path.end)), sg = st.seg;
+    if (!force && sg === shownSeg) return;
+    shownSeg = sg;
+    const p = P(), f = freq(), qV = p.q * Vkv * 1e3, keV = (qV / E / 1e3).toFixed(0);
     const qText = p.q === E ? '1.60 × 10<sup>−19</sup> C' : '3.20 × 10<sup>−19</sup> C';
-    let rows = head('Frequency of the alternating p.d.');
-    rows += line('f', frac('BQ', '2πm'), frac(`${B.toFixed(2)} T × ${qText}`, `2π × ${p.ms}`), `${(f / 1e6).toFixed(2)} MHz`);
-    rows += head(`Now: after ${n} crossing${n === 1 ? '' : 's'} of the gap`);
-    const Ek = n * qV, mom = Math.sqrt(2 * p.m * Ek);
-    rows += line('E<sub>k</sub>', `n QV`, `${n} × ${(qV / E / 1e3).toFixed(0)} keV`, `${(Ek / MEV).toFixed(2)} MeV`);
-    rows += line('p', '√(2mE<sub>k</sub>)', `${sci(mom)} kg m s<sup>−1</sup>`);
-    rows += line('r', frac('p', 'BQ'), frac(`${sci(mom)} kg m s<sup>−1</sup>`, `${B.toFixed(2)} T × ${qText}`), `${(mom / (B * p.q) * 100).toFixed(1)} cm`);
-    const EkMax = (B * p.q * R_OUT) ** 2 / (2 * p.m);
-    rows += head(`Leaving at r = ${(R_OUT * 100).toFixed(1)} cm`);
-    rows += line('E<sub>k</sub>', frac('(BQr)<sup>2</sup>', '2m'), `${(EkMax / MEV).toFixed(2)} MeV`);
+    let rows = '';
+    const Ek = sg.E;
+    if (!dc) {
+      rows += head('Frequency of the alternating p.d.');
+      rows += line('f', frac('BQ', '2πm'), frac(`${B.toFixed(2)} T × ${qText}`, `2π × ${p.ms}`), `${(f / 1e6).toFixed(2)} MHz`);
+      rows += head(`Now: after ${sg.n} crossing${sg.n === 1 ? '' : 's'} of the gap`);
+      rows += line('E<sub>k</sub>', `n QV`, `${sg.n} × ${keV} keV`, `${(Ek / MEV).toFixed(2)} MeV`);
+    } else {
+      rows += head('Now');
+      const gaining = sg.kind === 'arc' || sg.ease !== 'out';
+      rows += line('E<sub>k</sub>', gaining ? `0 + QV` : `QV − QV`, gaining ? `${keV} keV` : '0');
+    }
+    if (Ek > 0) {
+      const mom = Math.sqrt(2 * p.m * Ek);
+      rows += line('p', '√(2mE<sub>k</sub>)', `${sci(mom)} kg m s<sup>−1</sup>`);
+      rows += line('r', frac('p', 'BQ'), frac(`${sci(mom)} kg m s<sup>−1</sup>`, `${B.toFixed(2)} T × ${qText}`), `${(mom / (B * p.q) * 100).toFixed(1)} cm`);
+    }
+    if (!dc) {
+      const EkMax = (B * p.q * R_OUT) ** 2 / (2 * p.m);
+      rows += head(`Leaving at r = ${(R_OUT * 100).toFixed(1)} cm`);
+      rows += line('E<sub>k</sub>', frac('(BQr)<sup>2</sup>', '2m'), `${(EkMax / MEV).toFixed(2)} MeV`);
+    }
     $('derivation').innerHTML = rows;
   }
 
@@ -485,8 +531,8 @@
     if (lastFrame !== null && playing) {
       const dt = Math.min(0.1, (now - lastFrame) / 1000);
       clock += dt * (fast ? 5 : 1);
-      const turns = clock / TURN;
-      if (turns > totalTurns() + 1.6) { clock = 0; }
+      // start again 1.6 s (on screen) after the beam has left, or after the DC run has reached the top
+      if ((turnsNow() - path.end) * screenPerTurn() > 1.6) clock = 0;
       updateWorking(false);
       draw();
     }

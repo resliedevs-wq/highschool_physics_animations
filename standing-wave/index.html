@@ -182,7 +182,7 @@
           <input type="range" id="n-slider" min="1" max="6" step="1" value="2">
         </div>
         <div class="buttons">
-          <button id="pause-btn" title="Play / pause (Space)">▶</button>
+          <button id="pause-btn" title="Play / pause (Space)">⏸</button>
           <button id="reset-btn" title="Reset t">↺</button>
           <span class="clock">t = <span id="t-value">0.00</span> s <span class="speed" id="speed"></span></span>
         </div>
@@ -223,7 +223,7 @@
   const points = [{ name: 'P', x: 2 }, { name: 'Q', x: 6 }];   // two focus points
   let showQ = false;
   let active = 0;            // the point the arrow keys move
-  let running = false, lastFrame = null;
+  let running = true, lastFrame = null;
   const layers = { right: true, left: true, virtual: true, standing: true };
 
   const $ = id => document.getElementById(id);

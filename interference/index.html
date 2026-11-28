@@ -207,7 +207,7 @@
             <button id="view-top" aria-pressed="false">Top</button>
           </div>
           <button id="crest-btn" aria-pressed="false">Crest lines</button>
-          <button id="pause-btn" title="Play / pause (Space)">▶</button>
+          <button id="pause-btn" title="Play / pause (Space)">⏸</button>
           <button id="reset-btn" title="Reset t">↺</button>
           <span class="clock">t = <span id="t-value">0.00</span> s</span>
         </div>
@@ -244,7 +244,7 @@
   // ---- State ----
   let d = 5, lambda = 2.5, A2 = 1, phi0 = 0, t = 0;    // phi0: how far S2 is behind S1, in rad
   let focus = { x: 0, y: 6 };
-  let running = false, lastFrame = null;
+  let running = true, lastFrame = null;
   let crestLines = false;
   const cam = { az: -Math.PI / 2, el: 35 * Math.PI / 180, elTarget: 35 * Math.PI / 180, dist: 32, fov: 40 * Math.PI / 180 };
 

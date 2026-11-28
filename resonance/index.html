@@ -171,7 +171,7 @@
       <div class="sim-panel sim-controls controls">
         <button id="osc-btn" aria-pressed="true">Stop oscillator</button>
         <div class="buttons">
-          <button id="pause-btn" title="Play / pause (Space)">▶</button>
+          <button id="pause-btn" title="Play / pause (Space)">⏸</button>
           <button id="reset-btn" title="Start again from t = 0">↺</button>
         </div>
         <div class="switch" role="group" aria-label="Playback speed">
@@ -231,7 +231,7 @@
     { n: 2, color: COLORS.a, runs: [] },
     { n: 1.5, color: COLORS.b, runs: [] },
   ];
-  let t = 0, running = false, lastFrame = null, speed = 2;
+  let t = 0, running = true, lastFrame = null, speed = 2;
   let oscOn = true;
   let history = [];          // { t, now: largest |y| at t, amp: largest |y| over the last period } per string
   let stops = [];            // times the oscillator button was set to stop
